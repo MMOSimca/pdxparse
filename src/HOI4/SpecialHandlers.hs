@@ -1579,6 +1579,7 @@ swapLeaderTrait stmt@[pdx| %_ = @scr |] =
     where
         addLine st [pdx| add = $txt |] = st { st_add = txt }
         addLine st [pdx| remove = $txt |] = st { st_remove = txt }
+        addLine st [pdx| ideology = %_ |] = st -- restricts the swap to a leader of this ideology
         addLine st stmt = trace ("Unknown in swapTrait: " ++ show stmt) st
         ppST st = do
             traitaddloc <- getGameL10n (st_add st)
