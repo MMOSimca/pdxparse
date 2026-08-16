@@ -3143,10 +3143,11 @@ data FreeBuildingSlots = FreeBuildingSlots
         ,   fbs_size :: Double
         ,   fbs_comp :: Text
         ,   fbs_include_locked :: Bool
+        ,   fbs_province :: Maybe Int
         }
 
 newFBS :: FreeBuildingSlots
-newFBS = FreeBuildingSlots undefined undefined undefined False
+newFBS = FreeBuildingSlots undefined undefined undefined False Nothing
 freeBuildingSlots  :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
 freeBuildingSlots stmt@[pdx| %_ = @scr |]
     = msgToPP =<< pp_fbs =<< foldM addLine newFBS scr
@@ -3165,12 +3166,14 @@ freeBuildingSlots stmt@[pdx| %_ = @scr |]
             return fbs { fbs_comp = comp, fbs_size = amt}
         addLine fbs [pdx| include_locked = %_ |] =
             return fbs { fbs_include_locked = True }
+        addLine fbs [pdx| province = !num |] =
+            return fbs { fbs_province = Just num }
         addLine fbs stmt
             = trace ("unknown section in free_building_slots: " ++ show stmt) $ return fbs
         pp_fbs fbs = do
-            buildloc <- getGameL10n $ fbs_building fbs
             let buildicon = iconText $ fbs_building fbs
-                buildiconloc = buildicon <> " " <> buildloc
+                provloc = maybe "" (\p -> " in province (" <> T.pack (show p) <> ")") (fbs_province fbs)
+                buildiconloc = buildicon <> provloc
             return $ MsgFreeBuildingSlots (fbs_comp fbs) (fbs_size fbs) buildiconloc (fbs_include_locked fbs)
 freeBuildingSlots stmt = preStatement stmt
 
