@@ -8,7 +8,7 @@
 *.dyn_hi-boot
 *.dyn_o
 cabal.sandbox.config
-output/
+output*/
 dist/
 dist-newstyle/
 .vscode/
