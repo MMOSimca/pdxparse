@@ -1918,6 +1918,12 @@ hasDlc [pdx| %_ = ?dlc |]
             ,("No Step Back", "nsb")
             ,("By Blood Alone", "bba")
             ,("Arms Against Tyranny", "aat")
+            ,("Trial of Allegiance", "toa")
+            ,("Gotterdamnerung", "gtd")
+            ,("Graveyard of Empires", "goe")
+            ,("No Compromise, No Surrender", "ncns")
+            ,("Peace for Our Time", "pfot")
+            ,("Thunder at Our Gates", "taog")
             ]
         dlc_icon = maybe "" iconText mdlc_key
 hasDlc stmt = preStatement stmt
