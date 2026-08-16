@@ -748,6 +748,8 @@ data ScriptMessage
     | MsgUnlockDecisionTooltip {scriptMessageWhat :: Text, scriptMessageKey :: Text}
     | MsgIsPuppet {scriptMessageYn :: Bool}
     | MsgAddDynamicModifier {scriptMessageWhat :: Text, scriptMessageWho :: Text, scriptMessageDaysText :: Text}
+    | MsgModifyDynamicModifier
+    | MsgSetDynamicModifier
     | MsgIsFactionLeader {scriptMessageYn :: Bool}
     | MsgHasWargoalAgainst {scriptMessageWhom :: Text,scriptMessageWhat :: Text}
     | MsgHasWargoalAgainstType {scriptMessageWhom :: Text, scriptMessageWhat :: Text, scriptMessageWhere :: Text}
@@ -4825,6 +4827,10 @@ instance RenderMessage Script ScriptMessage where
                 , _days
                 , " providing the following effects:"
                 ]
+        MsgModifyDynamicModifier
+            -> "Modify the Dynamic Modifier by:"
+        MsgSetDynamicModifier
+            -> "Set the Dynamic Modifier to:"
         MsgIsFactionLeader {scriptMessageYn  = _yn}
             -> mconcat
                 [ "Is"

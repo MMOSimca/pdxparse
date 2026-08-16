@@ -15,6 +15,9 @@ module HOI4.SpecialHandlers (
     ,   addDynamicModifier
     ,   removeDynamicModifier
     ,   hasDynamicModifier
+    ,   ScriptChunk (..)
+    ,   chunkDynModVars
+    ,   ppDynModChunk
     ,   addPowerBalanceModifier
     ,   addFieldMarshalRole
     ,   addAdvisorRole
@@ -1169,6 +1172,103 @@ removeDynamicModifier stmt@[pdx| %_ = @dyn |] = do
         [stmtd@[pdx| %_ = $txt |]] ->  withLocAtom MsgRemoveDynamicMod stmtd
         _-> preStatement stmt
 removeDynamicModifier stmt = preStatement stmt
+
+-----------------------------------------------------------------
+-- Dynamic modifiers whose values are held in script variables --
+-----------------------------------------------------------------
+
+-- | How a run of variable writes changes the dynamic modifier behind them.
+data DynModOp = DynModSet | DynModAdd | DynModSub deriving (Eq)
+
+-- | An effect script, with runs of statements that write to the variables
+-- behind a dynamic modifier pulled out, so they can be shown as one effect box
+-- instead of as a list of raw variable arithmetic.
+data ScriptChunk
+    = PlainStmt GenericStatement
+    | DynModChunk HOI4DynamicModifier Bool [(Text, Double)]
+      -- ^ The modifier, whether its values are set rather than added to, and
+      --   the modifier keys affected with their new values.
+
+-- | Split a script into chunks, grouping each run of consecutive statements
+-- that write to the variables of one and the same dynamic modifier.
+chunkDynModVars :: (HOI4Info g, Monad m) => GenericScript -> PPT g m [ScriptChunk]
+chunkDynModVars scr
+    | not (any (isJust . dynModVarOp) scr) = return (map PlainStmt scr)
+    | otherwise = do
+        varTable <- dynModVarTable <$> getDynamicModifiers
+        return $ reverse $ foldl' (addChunk varTable) [] scr
+    where
+        addChunk table chunks stmt = case resolve table =<< dynModVarOp stmt of
+            Nothing -> PlainStmt stmt : chunks
+            Just (dmod, key, isSet, val) -> case chunks of
+                DynModChunk dmod' isSet' mods : rest
+                    | dmodName dmod' == dmodName dmod && isSet' == isSet ->
+                        DynModChunk dmod' isSet' (mods ++ [(key, val)]) : rest
+                -- The tooltip right before such a run is the game's way of
+                -- announcing which modifier is about to change; the effect box
+                -- says as much, so drop it rather than say it twice.
+                PlainStmt prev : rest | isCustomTooltip prev ->
+                    DynModChunk dmod isSet [(key, val)] : rest
+                _ -> DynModChunk dmod isSet [(key, val)] : chunks
+        resolve table (op, var, val) = do
+            (dmod, key) <- HM.lookup var table
+            return (dmod, key, op == DynModSet, if op == DynModSub then negate val else val)
+        isCustomTooltip [pdx| custom_effect_tooltip = %_ |] = True
+        isCustomTooltip _ = False
+
+-- | Map each variable that a dynamic modifier reads a value from to that
+-- modifier and the modifier key it supplies.
+dynModVarTable :: HashMap Text HOI4DynamicModifier -> HashMap Text (HOI4DynamicModifier, Text)
+dynModVarTable = HM.fromList . concatMap entries . HM.elems
+    where
+        entries dmod = mapMaybe (entry dmod) (dmodEffects dmod)
+        entry dmod [pdx| $key = $var |] = Just (var, (dmod, key))
+        entry _ _ = Nothing
+
+-- | Recognise an effect that writes a plain number to a single variable, i.e.
+-- @add_to_variable = { some_var = 0.025 }@ or the @var@/@value@ spelling of it.
+-- Anything more involved is left to the ordinary variable handler.
+dynModVarOp :: GenericStatement -> Maybe (DynModOp, Text, Double)
+dynModVarOp [pdx| $lhs = @scr |] = case theop of
+        Nothing -> Nothing
+        Just op -> case foldl' addLine (Nothing, Nothing, False) scr of
+            (Just var, Just val, False) -> Just (op, var, val)
+            _ -> Nothing
+    where
+        theop = case lhs of
+            "set_variable" -> Just DynModSet
+            "add_to_variable" -> Just DynModAdd
+            "subtract_from_variable" -> Just DynModSub
+            _ -> Nothing
+        -- The third component flags anything unexpected in the statement.
+        addLine acc@(mvar, mval, bad) stmt = case stmt of
+            [pdx| var = ?v |]
+                | isNothing mvar -> (Just v, mval, bad)
+            [pdx| value = !n |]
+                | isNothing mval -> (mvar, Just n, bad)
+            [pdx| tooltip = %_ |] -> acc
+            [pdx| $v = !n |]
+                | isNothing mvar && isNothing mval -> (Just v, Just n, bad)
+            _ -> (mvar, mval, True)
+dynModVarOp _ = Nothing
+
+-- | Present a run of writes to a dynamic modifier's variables as an effect box
+-- listing what the modifier grants after the change.
+ppDynModChunk :: forall g m. (HOI4Info g, Monad m) =>
+    HOI4DynamicModifier -> Bool -> [(Text, Double)] -> PPT g m IndentedMessages
+ppDynModChunk dmod isSet mods = do
+    curind <- getCurrentIndent
+    let curindent = fromMaybe 1 curind
+        name = fromMaybe (dmodName dmod) (dmodLocName dmod)
+    headmsg <- msgToPP $ if isSet then MsgSetDynamicModifier else MsgModifyDynamicModifier
+    modicon <- maybe (return "") (getGameInterface "idea_unknown") (dmodIcon dmod)
+    modmsg <- withCurrentIndentCustom 1 $ \_ ->
+        fold <$> traverse (modifierMSG False "" . modStmt) mods
+    return $ headmsg
+        ++ ((0, MsgEffectBox name (dmodName dmod) modicon "") : modmsg)
+        ++ [(0, MsgEffectBoxEnd curindent)]
+    where
+        modStmt (key, val) = Statement (GenericLhs key []) OpEq (FloatRhs val)
 
 flagTextMaybe :: (HOI4Info g, Monad m) => Text -> PPT g m (Maybe Text)
 flagTextMaybe txt = eflag (Just HOI4Country) (Left txt)

@@ -61,9 +61,16 @@ ppIndent stmt = indentUp $ ppOne stmt
 flagTextMaybe :: (HOI4Info g, Monad m) => Text -> PPT g m (Text,Text)
 flagTextMaybe = fmap (mempty,) . flagText (Just HOI4Country)
 
--- | Extract the appropriate message(s) from a script.
+-- | Extract the appropriate message(s) from a script. Statements are handled
+-- one at a time, except for runs of writes to a dynamic modifier's variables,
+-- which only make sense together.
 ppMany :: (HOI4Info g, Monad m) => GenericScript -> PPT g m IndentedMessages
-ppMany scr = indentUp (concat <$> mapM ppOne scr)
+ppMany scr = indentUp (concat <$> (mapM ppChunk =<< chunkDynModVars scr))
+
+-- | Extract the appropriate message(s) from one chunk of a script.
+ppChunk :: (HOI4Info g, Monad m) => ScriptChunk -> PPT g m IndentedMessages
+ppChunk (PlainStmt stmt) = ppOne stmt
+ppChunk (DynModChunk dmod isSet mods) = ppDynModChunk dmod isSet mods
 
 -- | Table of handlers for statements. Dispatch on strings is /much/ quicker
 -- using a lookup table than a huge @case@ expression, which uses @('==')@ on
