@@ -4840,9 +4840,11 @@ instance RenderMessage Script ScriptMessage where
                 , _whom
                 , ifThenElseT (T.null _what) "" "<!-- ",_what," -->"
                 ]
-        MsgHasWargoalAgainstType {scriptMessageWhom = _whom, scriptMessageWhat = _what}
+        MsgHasWargoalAgainstType {scriptMessageWhat = _what, scriptMessageWhere = _where}
             -> mconcat
                 [ "Has a {{icon|war goal}} "
+                , _where
+                , " war goal against "
                 , _what
                 ]
         MsgAddBuildingConstruction {scriptMessageYn = _yn, scriptMessageIcon = _icon, scriptMessageWhat = _type, scriptMessageAmt = _amt, scriptMessageProv = _prov}

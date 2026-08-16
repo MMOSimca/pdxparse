@@ -2997,7 +2997,7 @@ prioritize stmt = preStatement stmt
 
 hasWarGoalAgainst :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
 hasWarGoalAgainst stmt@[pdx| %_ = $txt |] = withFlag MsgHasWargoalAgainst stmt
-hasWarGoalAgainst stmt@[pdx| %_ = @scr |] = textAtom "target" "type" MsgHasWargoalAgainstType tryLoc stmt
+hasWarGoalAgainst stmt@[pdx| %_ = @scr |] = textAtom "target" "type" MsgHasWargoalAgainstType (fmap Just . flagText (Just HOI4Country)) stmt
 hasWarGoalAgainst stmt = preStatement stmt
 
 -------------------------------------
