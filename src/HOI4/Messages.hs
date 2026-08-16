@@ -1243,24 +1243,20 @@ instance RenderMessage Script ScriptMessage where
             -> "<!-- Change in leader description -->"
         MsgSetPortraits
             -> "<!-- Change in portrait -->"
-        MsgGainLosePosIcon {scriptMessageIcon = _icon, scriptMessageLoc = _loc, scriptMessageAmt = _amt}
+        MsgGainLosePosIcon {scriptMessageIcon = _icon, scriptMessageAmt = _amt}
             -> mconcat
                 [ gainOrLose _amt
                 , " "
-                , _icon
-                , " "
                 , toMessage $ templateColor (colourNum True _amt)
                 , " "
-                , _loc
+                , _icon
                 ]
-        MsgGainLoseLocIconVar {scriptMessageIcon = _icon, scriptMessageLoc = _loc, scriptMessageAmtText = _amtT}
+        MsgGainLoseLocIconVar {scriptMessageIcon = _icon, scriptMessageAmtText = _amtT}
             -> mconcat
                 [ "Gain or Lose "
-                , _icon
-                , " "
                 , typewriterText _amtT
                 , " "
-                , _loc
+                , _icon
                 ]
         MsgAddExtraStateSharedBuildingSlots {scriptMessageIcon = _icon, scriptMessageAmt = _amt}
             -> mconcat
@@ -1269,8 +1265,6 @@ instance RenderMessage Script ScriptMessage where
                 , toMessage $ templateColor (colourNum True _amt)
                 , " "
                 , _icon
-                , " "
-                , plural _amt "building slot" "building slots"
                 ]
         MsgAddExtraStateSharedBuildingSlotsVar {scriptMessageIcon = _icon, scriptMessageAmtText = _amtT}
             -> mconcat
@@ -1278,17 +1272,14 @@ instance RenderMessage Script ScriptMessage where
                 , typewriterText _amtT
                 , " "
                 , _icon
-                , " building slots"
                 ]
-        MsgGainLocPC {scriptMessageIcon = _icon, scriptMessageLoc = _loc, scriptMessageAmt = _amt}
+        MsgGainLocPC {scriptMessageIcon = _icon, scriptMessageAmt = _amt}
             -> mconcat
                 [ gainOrLose _amt
                 , " "
                 , toMessage $ templateColor (reducedNum (colourPc True) _amt)
                 , " "
                 , _icon
-                , " "
-                , _loc
                 ]
         MsgCreateFaction {scriptMessageWhat = _what}
             -> mconcat
@@ -2499,8 +2490,6 @@ instance RenderMessage Script ScriptMessage where
             -> mconcat
                 [ "Has autonomy level of "
                 , _icon
-                , " "
-                , _what
                 ]
         MsgAddOpinion {scriptMessageModid = _modid, scriptMessageWhat = _what, scriptMessageWhom = _whom}
             -> mconcat
@@ -2618,9 +2607,7 @@ instance RenderMessage Script ScriptMessage where
         MsgHasDLC {scriptMessageIcon = _icon, scriptMessageDlc = _dlc}
             -> mconcat
                 [ "DLC "
-                , _icon
-                , " "
-                , _dlc
+                , if T.null _icon then _dlc else _icon
                 , " is enabled"
                 ]
         MsgSetDemilitarizedZone {scriptMessageYn = _yn}
@@ -3006,18 +2993,14 @@ instance RenderMessage Script ScriptMessage where
             -> mconcat
                 [ "{{icon|"
                 , _icon
-                ,"}} "
-                , _what
-                , ": "
+                ,"|1}}: "
                 , toMessage (bold (plainPcMin _amt))
                 ]
         MsgSetPopularityVar {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageAmtText = _amtT}
             -> mconcat
                 [ "{{icon|"
                 , _icon
-                ,"}} "
-                , _what
-                , ": "
+                ,"|1}}: "
                 , typewriterText _amtT
                 ]
         MsgStateId {scriptMessageWhat = _what}
@@ -3226,9 +3209,7 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgAddNamedThreat {scriptMessageIcon = _icon, scriptMessageAmt = _amt, scriptMessageWhom = _whom}
             -> mconcat
-                [ "{{icon|world tension}} "
-                , _icon
-                , " is "
+                [ "{{icon|world tension|1}} is "
                 , toMessage (increasedOrDecreased _amt)
                 , " by "
                 , toMessage $ templateColor (colourNumSign False _amt)
@@ -3907,9 +3888,7 @@ instance RenderMessage Script ScriptMessage where
         MsgHasGovernment {scriptMessageIcon = _icon, scriptMessageWhat = _what}
             -> mconcat
                 [ "Current ruling party is "
-                , if T.null _icon then "the same as" else _icon
-                , " "
-                , _what
+                , if T.null _icon then "the same as " <> _what else _icon
                 ]
         MsgIsHistoricalFocusOn { scriptMessageYn = _yn }
             -> mconcat
@@ -4245,8 +4224,6 @@ instance RenderMessage Script ScriptMessage where
                 , toMessage $ bold (plainNum _amt)
                 , " "
                 , _icon
-                , " "
-                , _what
                 , ifThenElseT (T.null _where) "" " to "
                 , _where
                 ]
@@ -4256,8 +4233,6 @@ instance RenderMessage Script ScriptMessage where
                 , typewriterText _amtT
                 , " "
                 , _icon
-                , " "
-                , _what
                 , ifThenElseT (T.null _where) "" " to "
                 , _where
                 ]
@@ -4268,8 +4243,6 @@ instance RenderMessage Script ScriptMessage where
                 , toMessage $ bold (reducedNum plainPc _amt)
                 , " "
                 , _icon
-                , " "
-                , _what
                 , " party popularity"
                 ]
         MsgAddPopularityVar {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageAmtText = _amtT}
@@ -4278,8 +4251,6 @@ instance RenderMessage Script ScriptMessage where
                 , typewriterText _amtT
                 , " "
                 , _icon
-                , " "
-                , _what
                 , " party popularity"
                 ]
         MsgAddPowerBalanceValue { scriptMessageLoc = _loc, scriptMessageKey = _key, scriptMessageAmt = _amt }
@@ -4559,8 +4530,6 @@ instance RenderMessage Script ScriptMessage where
             -> mconcat
                 [ "The "
                 ,  _icon
-                , " "
-                , _what
                 , " receives "
                 , toMessage $ templateColor (colourNum False _amt)
                 , " "
@@ -4572,8 +4541,6 @@ instance RenderMessage Script ScriptMessage where
             -> mconcat
                 [ "The "
                 ,  _icon
-                , " "
-                , _what
                 , " receives "
                 , typewriterText _amtT
                 , " levels of damage"
@@ -4644,8 +4611,6 @@ instance RenderMessage Script ScriptMessage where
                 , toMessage (bold (plainNumMin _amt))
                 , " off map "
                 , _icon
-                , " "
-                , _what
                 ]
         MsgAddOffsiteBuildingVar {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageAmtText = _amtT}
             -> mconcat
@@ -4653,8 +4618,6 @@ instance RenderMessage Script ScriptMessage where
                 , typewriterText _amtT
                 , " off map "
                 , _icon
-                , " "
-                , _what
                 ]
         MsgReleaseAutonomy {scriptMessageWho = _who, scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageAmt = _amt}
             -> mconcat
@@ -4662,8 +4625,6 @@ instance RenderMessage Script ScriptMessage where
                 , _who
                 , " as "
                 , _icon
-                , " "
-                , _what
                 , if _amt > 0 then " at {{icon|autonomy|1}} " else ""
                 , if _amt > 0 then toMessage (reducedNum plainPcMin _amt) else ""
                 ]
@@ -4673,8 +4634,6 @@ instance RenderMessage Script ScriptMessage where
                 , _who
                 , " to "
                 , _icon
-                , " "
-                , _what
                 , if _amt > 0 then " at {{icon|autonomy|1}} " else ""
                 , if _amt > 0 then toMessage (reducedNum plainPcMin _amt) else ""
                 , _war
@@ -4682,18 +4641,14 @@ instance RenderMessage Script ScriptMessage where
         MsgSetPolitics {scriptMessageIcon = _icon, scriptMessageWho = _who, scriptMessageMonths = _months}
             -> mconcat
                 [ "Set the ruling party to "
-                , _icon
-                , " "
-                , _who
+                , if T.null _icon then _who else _icon
                 , if _months > 0 then " with elections every " else ""
                 , if _months > 0 then formatMonths _months else ""
                 ]
         MsgSetPoliticsVar {scriptMessageIcon = _icon, scriptMessageWho = _who, scriptMessageAmtText = _amtT}
             -> mconcat
                 [ "Set the ruling party to "
-                , _icon
-                , " "
-                , _who
+                , if T.null _icon then _who else _icon
                 ," with elections every "
                 , _amtT
                 ]
@@ -4749,9 +4704,7 @@ instance RenderMessage Script ScriptMessage where
             -> mconcat
                 [ "Set the {{icon|"
                 , _icon
-                , "}} "
-                , _icon
-                , " party name to ("
+                , "|1}} party name to ("
                 , _who
                 , ") "
                 , _what
@@ -4891,8 +4844,6 @@ instance RenderMessage Script ScriptMessage where
             -> mconcat
                 [ "Has a {{icon|war goal}} "
                 , _what
-                , " war goal against"
-                , _whom
                 ]
         MsgAddBuildingConstruction {scriptMessageYn = _yn, scriptMessageIcon = _icon, scriptMessageWhat = _type, scriptMessageAmt = _amt, scriptMessageProv = _prov}
             -> mconcat
@@ -4900,8 +4851,6 @@ instance RenderMessage Script ScriptMessage where
                 , toMessage (bold (plainNumMin _amt))
                 , " "
                 , _icon
-                , " "
-                , _type
                 ,_prov
                 ]
         MsgAddBuildingConstructionVar {scriptMessageYn = _yn, scriptMessageIcon = _icon, scriptMessageWhat = _type, scriptMessageAmtText = _amtT, scriptMessageProv = _prov}
@@ -4910,16 +4859,12 @@ instance RenderMessage Script ScriptMessage where
                 , typewriterText _amtT
                 , " "
                 , _icon
-                , " "
-                , _type
                 ,_prov
                 ]
         MsgSetBuildingLevel {scriptMessageIcon = _icon, scriptMessageWhat = _type, scriptMessageAmt = _amt, scriptMessageProv = _prov}
             -> mconcat
                 [ "Set "
                 , _icon
-                , " "
-                , _type
                 , " to level "
                 , toMessage (bold (plainNumMin _amt))
                 ,_prov
@@ -4928,8 +4873,6 @@ instance RenderMessage Script ScriptMessage where
             -> mconcat
                 [ "Set "
                 , _icon
-                , " "
-                , _type
                 , " to level "
                 , typewriterText _amtT
                 ,_prov
@@ -4938,8 +4881,6 @@ instance RenderMessage Script ScriptMessage where
             -> mconcat
                 [ "Remove "
                 , _icon
-                , " "
-                , _what
                 , " by up to "
                 , toMessage $ templateColor (colourNumSign True (negate _amt))
                 ]
@@ -4947,8 +4888,6 @@ instance RenderMessage Script ScriptMessage where
             -> mconcat
                 [ "Remove "
                 , _icon
-                , " "
-                , _what
                 , " by up to "
                 , typewriterText _amtT
                 ]

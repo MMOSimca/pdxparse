@@ -253,6 +253,8 @@ icon what = case HM.lookup what scriptIconFileTable of
     _ ->  if isPronoun what then
             ""
         else
+            -- The "1" parameter makes the wiki template append its localized
+            -- term for the icon, so callers must not add the name themselves.
             template "icon" [HM.findWithDefault what what scriptIconTable, "1"]
 iconText :: Text -> Text
 iconText = Doc.doc2text . icon
