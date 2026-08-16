@@ -119,6 +119,7 @@ ideaAddSection iidea stmt
                 _-> trace "bad idea picture" iidea
             "name"      -> case rhs of
                 GenericRhs txt [] -> iidea { id_name = txt }
+                StringRhs txt -> iidea { id_name = txt }
                 _-> trace "bad idea name" iidea
             "modifier"  -> case rhs of
                 CompoundRhs [] -> iidea

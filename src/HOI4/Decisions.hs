@@ -267,6 +267,13 @@ parseHOI4Decision _ _ = throwError "unrecognized form for decision (LHS)"
 decisionAddSection :: (IsGameData (GameData g),  MonadError Text m) =>
     Maybe HOI4Decision -> GenericStatement -> PPT g m (Maybe HOI4Decision)
 decisionAddSection Nothing _ = return Nothing
+-- desc needs localization, so it can't be handled in the pure code below
+decisionAddSection dec [pdx| desc = %rhs |] = case rhs of
+    GenericRhs txt [] -> do
+        mloc <- getGameL10nIfPresent txt
+        return $ (\d -> d { dec_desc = maybe (dec_desc d) Just mloc }) <$> dec
+    -- compound desc (text with triggers); keep the default localization
+    _ -> return dec
 decisionAddSection dec stmt
     = return $ (`decisionAddSection'` stmt) <$> dec
     where -- the QQ pdx patternmatching takes to long to compile with this many patterns so using case of here
@@ -402,6 +409,9 @@ decisionAddSection dec stmt
                 _ -> trace "DEBUG: bad decisions cancel_if_not_visible" dec
             "name" -> case rhs of -- is used over the localized id
                 GenericRhs txt _ -> dec {dec_name = txt}
+                -- literal display name (e.g. the DEBUG balance-of-power decisions);
+                -- keep dec_name as the id since it's used as the output filename
+                StringRhs txt -> dec {dec_name_loc = txt}
                 _ -> trace "DEBUG: bad decisions name" dec
             "ai_hint_pp_cost" -> dec
             "cosmetic_tag" -> dec -- no clue
