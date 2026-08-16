@@ -314,8 +314,13 @@ escapedChar = "0" $> '\0'
 -- @
 statement :: Parser lhs -> Parser rhs -> Parser (Statement lhs rhs)
 statement customLhs customRhs
+    -- Anonymous blocks: a bare { ... } used as a list element, e.g. the
+    -- optional_assets = { { icon = ... model = ... } } syntax introduced in
+    -- newer HOI4 versions. Represent them as "anonymous_block = { ... }".
+    = (Statement (GenericLhs "anonymous_block" []) OpEq . CompoundRhs
+        <$> compoundRhs customLhs customRhs)
     -- TODO: Make this more "haskell-like"
-    = do
+    <|> do
         l <- lhs customLhs
         skipSpace
         mnext <- Ap.peekChar
