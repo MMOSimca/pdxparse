@@ -238,6 +238,10 @@ nationalFocusAddSection vars nf stmt
             "relative_position_id" -> nf
             "text_icon" -> nf -- unknown what it does for now. AAT
             "dynamic" -> nf
+            "enable_automatic_bypass" -> nf --bool
+            "bypass_if_unavailable" -> nf --bool
+            "bypass_effect" -> nf -- effect executed when the focus is bypassed
+            "overlay" -> nf -- graphical overlay on the focus icon
             other -> trace ("unknown national focus section: " ++ show other ++ " for " ++ show stmt) nf
         nationalFocusAddSection' nf _
             = trace "unrecognised form for national focus section" nf
