@@ -780,201 +780,201 @@ instance RenderMessage Script ScriptMessage where
         -- scope messages
         -- trigger scope messages
         MsgAllAlliedCountry
-            -> "[SCOPE]All allied countries:"
+            -> "All allied countries:"
         MsgAllArmyLeader
-            -> "[SCOPE]All employed army leaders:"
+            -> "All employed army leaders:"
         MsgAllCharacter
-            -> "[SCOPE]All recruited characters:"
+            -> "All recruited characters:"
         MsgAllControlledState
-            -> "[SCOPE]All controlled states:"
+            -> "All controlled states:"
         MsgAllCoreState
-            -> "[SCOPE]All core states:"
+            -> "All core states:"
         MsgAllCountry
-            -> "[SCOPE]All countries in the world:"
+            -> "All countries in the world:"
         MsgAllCountryWithOriginalTag {scriptMessageWho = _who}
             -> mconcat
-                ["[SCOPE]All countries with the same original tag as "
+                ["All countries with the same original tag as "
                 , _who
                 , ":"
                 ]
         MsgAllEnemyCountry
-            -> "[SCOPE]All enemy countries:"
+            -> "All enemy countries:"
         MsgAllGuaranteedCountry
-            -> "[SCOPE]All guaranteed countries:"
+            -> "All guaranteed countries:"
         MsgAllNavyLeader
-            -> "[SCOPE]All employed navy leaders:"
+            -> "All employed navy leaders:"
         MsgAllNeighborCountry
-            -> "[SCOPE]All neighbouring countries:"
+            -> "All neighbouring countries:"
         MsgAllNeighborState
-            -> "[SCOPE]All neighbouring states:"
+            -> "All neighbouring states:"
         MsgAllOccupiedCountry
-            -> "[SCOPE]All occupied countries:"
+            -> "All occupied countries:"
         MsgAllOperativeLeader
-            -> "[SCOPE]All employed operatives:"
+            -> "All employed operatives:"
         MsgAllOtherCountry
-            -> "[SCOPE]All other countries:"
+            -> "All other countries:"
         MsgAllOwnedState
-            -> "[SCOPE]All owned states:"
+            -> "All owned states:"
         MsgAllState
-            -> "[SCOPE]All states:"
+            -> "All states:"
         MsgAllSubjectCountries
-            -> "[SCOPE]All subject countries:"
+            -> "All subject countries:"
         MsgAllUnitLeader
-            -> "[SCOPE]All employed unit leaders:"
+            -> "All employed unit leaders:"
         MsgAnyAlliedCountry
-            -> "[SCOPE]Any allied country:"
+            -> "Any allied country:"
         MsgAnyArmyLeader
-            -> "[SCOPE]Any employed army leader:"
+            -> "Any employed army leader:"
         MsgAnyCharacter
-            -> "[SCOPE]Any recruited character:"
+            -> "Any recruited character:"
         MsgAnyControlledState
-            -> "[SCOPE]Any controlled state:"
+            -> "Any controlled state:"
         MsgAnyCoreState
-            -> "[SCOPE]Any core state:"
+            -> "Any core state:"
         MsgAnyCountry
-            -> "[SCOPE]Any country in the world:"
+            -> "Any country in the world:"
         MsgAnyCountryDivision
-            -> "[SCOPE]Any division owned:"
+            -> "Any division owned:"
         MsgAnyCountryWithCore
-            -> "[SCOPE]Any country with core on state:"
+            -> "Any country with core on state:"
         MsgAnyCountryWithOriginalTag {scriptMessageWho = _who}
             -> mconcat
-                ["[SCOPE]Any country with the same original tag as "
+                ["Any country with the same original tag as "
                 , _who
                 , ":"
                 ]
         MsgAnyEnemyCountry
-            -> "[SCOPE]Any enemy country:"
+            -> "Any enemy country:"
         MsgAnyGuaranteedCountry
-            -> "[SCOPE]Any guaranteed country:"
+            -> "Any guaranteed country:"
         MsgAnyHomeAreaNeighborCountry
-            -> "[SCOPE]Any neighbouring country with direct land connection:"
+            -> "Any neighbouring country with direct land connection:"
         MsgAnyNavyLeader
-            -> "[SCOPE]Any employed navy leader:"
+            -> "Any employed navy leader:"
         MsgAnyNeighborCountry
-            -> "[SCOPE]Any neighbouring country:"
+            -> "Any neighbouring country:"
         MsgAnyNeighborState
-            -> "[SCOPE]Any neighbouring state:"
+            -> "Any neighbouring state:"
         MsgAnyOccupiedCountry
-            -> "[SCOPE]Any occupied country:"
+            -> "Any occupied country:"
         MsgAnyOperativeLeader
-            -> "[SCOPE]Any employed operative:"
+            -> "Any employed operative:"
         MsgAnyOtherCountry
-            -> "[SCOPE]Any other country:"
+            -> "Any other country:"
         MsgAnyOwnedState
-            -> "[SCOPE]Any owned state:"
+            -> "Any owned state:"
         MsgAnyState
-            -> "[SCOPE]Any state:"
+            -> "Any state:"
         MsgAnyStateDivision
-            -> "[SCOPE]Any Division in the state:"
+            -> "Any Division in the state:"
         MsgAnySubjectCountry
-            -> "[SCOPE]Any subject country:"
+            -> "Any subject country:"
         MsgAnyUnitLeader
-            -> "[SCOPE]Any employed unit leader:"
+            -> "Any employed unit leader:"
         -- effect scope messages
         MsgEveryArmyLeader
-            -> "[SCOPE]Every employed army leader:"
+            -> "Every employed army leader:"
         MsgEveryCharacter
-            -> "[SCOPE]Every recruited character:"
+            -> "Every recruited character:"
         MsgEveryControlledState
-            -> "[SCOPE]Every controlled state:"
+            -> "Every controlled state:"
         MsgEveryCoreState
-            -> "[SCOPE]Every core state:"
+            -> "Every core state:"
         MsgEveryCountry
-            -> "[SCOPE]Every country in the world:"
+            -> "Every country in the world:"
         MsgEveryCountryDivision
-            -> "[SCOPE]Every division owned:"
+            -> "Every division owned:"
         MsgEveryCountryWithOriginalTag  {scriptMessageWho = _who}
             -> mconcat
-                ["[SCOPE]Every country in the world which is or originally was "
+                ["Every country in the world which is or originally was "
                 , _who
                 , ":"
                 ]
         MsgEveryEnemyCountry
-            -> "[SCOPE]Every enemy country:"
+            -> "Every enemy country:"
         MsgEveryNavyLeader
-            -> "[SCOPE]Every employed navy leader:"
+            -> "Every employed navy leader:"
         MsgEveryNeighborCountry
-            -> "[SCOPE]Every neighbouring country:"
+            -> "Every neighbouring country:"
         MsgEveryNeighborState
-            -> "[SCOPE]Every neighbouring state:"
+            -> "Every neighbouring state:"
         MsgEveryOccupiedCountry
-            -> "[SCOPE]Every occupied country:"
+            -> "Every occupied country:"
         MsgEveryOperative
-            -> "[SCOPE]Every employed operative:"
+            -> "Every employed operative:"
         MsgEveryOtherCountry
-            -> "[SCOPE]Every other country:"
+            -> "Every other country:"
         MsgEveryOwnedState
-            -> "[SCOPE]Every owned state:"
+            -> "Every owned state:"
         MsgEveryPossibleCountry
-            -> "[SCOPE]Every country that exist and could exist:"
+            -> "Every country that exist and could exist:"
         MsgEveryState
-            -> "[SCOPE]Every state:"
+            -> "Every state:"
         MsgEveryStateDivision
-            -> "[SCOPE]Every division in state:"
+            -> "Every division in state:"
         MsgEverySubjectCountry
-            -> "[SCOPE]Every subject country:"
+            -> "Every subject country:"
         MsgEveryUnitLeader
-            -> "[SCOPE]Every employed unit leader:"
+            -> "Every employed unit leader:"
         MsgGlobalEveryArmyLeader
-            -> "[SCOPE]Every employed  army leaderin the world:"
+            -> "Every employed army leader in the world:"
         MsgRandomArmyLeader
-            -> "[SCOPE]One random employed army leader:"
+            -> "One random employed army leader:"
         MsgRandomCharacter
-            -> "[SCOPE]One random recruited character:"
+            -> "One random recruited character:"
         MsgRandomControlledState
-            -> "[SCOPE]One random controlled state:"
+            -> "One random controlled state:"
         MsgRandomCoreState
-            -> "[SCOPE]One random core state:"
+            -> "One random core state:"
         MsgRandomCountry
-            -> "[SCOPE]One random country in the world:"
+            -> "One random country in the world:"
         MsgRandomCountryDivision
-            -> "[SCOPE]One random owned division:"
+            -> "One random owned division:"
         MsgRandomCountryWithOriginalTag  {scriptMessageWho = _who}
             -> mconcat
-                ["[SCOPE]One random country in the world which is or originally was "
+                ["One random country in the world which is or originally was "
                 , _who
                 , ":"
                 ]
         MsgRandomEnemyCountry
-            -> "[SCOPE]One random enemy country:"
+            -> "One random enemy country:"
         MsgRandomNavyLeader
-            -> "[SCOPE]One random employed navy leader:"
+            -> "One random employed navy leader:"
         MsgRandomNeighborCountry
-            -> "[SCOPE]One random neighbouring country:"
+            -> "One random neighbouring country:"
         MsgRandomNeighborState
-            -> "[SCOPE]One random neighbouring state:"
+            -> "One random neighbouring state:"
         MsgRandomOccupiedCountry
-            -> "[SCOPE]One random occupied country:"
+            -> "One random occupied country:"
         MsgRandomOperative
-            -> "[SCOPE]One random employed operative:"
+            -> "One random employed operative:"
         MsgRandomOtherCountry
-            -> "[SCOPE]One random other country:"
+            -> "One random other country:"
         MsgRandomOwnedControlledState
-            -> "[SCOPE]One random owned and controlled state:"
+            -> "One random owned and controlled state:"
         MsgRandomOwnedState
-            -> "[SCOPE]One random owned state:"
+            -> "One random owned state:"
         MsgRandomState
-            -> "[SCOPE]One random state:"
+            -> "One random state:"
         MsgRandomStateDivision
-            -> "[SCOPE]One random division in state:"
+            -> "One random division in state:"
         MsgRandomSubjectCountry
-            -> "[SCOPE]One random subject country:"
+            -> "One random subject country:"
         MsgRandomUnitLeader
-            -> "[SCOPE]One random employed unit leader:"
+            -> "One random employed unit leader:"
         -- dual scope messages
         MsgROOT
             -> "[SCOPE]ROOT"
         MsgROOTSCOPECountry
-            -> "[SCOPE]Our country"
+            -> "Our country"
         MsgROOTSCOPEState
-            -> "[SCOPE]The currently considered state"
+            -> "The currently considered state"
         MsgROOTSCOPECharacter
-            -> "[SCOPE]The currently considered character"
+            -> "The currently considered character"
         MsgROOTSCOPEOperative
-            -> "[SCOPE]The currently considered operative"
+            -> "The currently considered operative"
         MsgROOTSCOPEUnitLeader
-            -> "[SCOPE]The currently considered unit leader"
+            -> "The currently considered unit leader"
         MsgROOTCountry
             -> "our country"
         MsgROOTOperative
@@ -991,19 +991,19 @@ instance RenderMessage Script ScriptMessage where
         MsgPREVPREVPREV
             -> "[SCOPE]PREV.PREV.PREV<!-- manually check scope -->"
         MsgPREVSCOPECharacter
-            -> "[SCOPE]The previously mentioned character"
+            -> "The previously mentioned character"
         MsgPREVSCOPECountry
-            -> "[SCOPE]Previously mentioned country"
+            -> "Previously mentioned country"
         MsgPREVSCOPEOperative
-            -> "[SCOPE]The previously mentioned operative"
+            -> "The previously mentioned operative"
         MsgPREVSCOPEState
-            -> "[SCOPE]The previously mentioned state"
+            -> "The previously mentioned state"
         MsgPREVSCOPEUnitLeader
-            -> "[SCOPE]The previously mentioned unit leader"
+            -> "The previously mentioned unit leader"
         MsgPREVSCOPEFROM
-            -> "[SCOPE]The previously mentioned FROM scope"
+            -> "The previously mentioned FROM scope"
         MsgPREVSCOPEMisc
-            -> "[SCOPE]The previously mentioned var, event_target, array"
+            -> "The previously mentioned var, event_target, array"
         MsgPREVSCOPECustom
             -> "[SCOPE]Previously mentioned Custom Scope<!-- check game script for where it points to -->"
         MsgPREVSCOPECustom2
@@ -1055,11 +1055,11 @@ instance RenderMessage Script ScriptMessage where
             -> "MISC (scope of variable, event_target, array)"
 
         MsgCapitalSCOPE
-            -> "[SCOPE]Capital state:"
+            -> "Capital state:"
         MsgCapital
             -> "capital state"
         MsgControllerSCOPE
-            -> "[SCOPE]State controller:"
+            -> "State controller:"
         MsgController
             -> "state controller"
         MsgControllerOf { scriptMessageWhat = _what}
@@ -1068,7 +1068,7 @@ instance RenderMessage Script ScriptMessage where
                 , _what
                 ]
         MsgOverlordSCOPE
-            -> "[SCOPE]Overlord:"
+            -> "Overlord:"
         MsgOverlord
             -> "overlord"
         MsgOverlordOf { scriptMessageWhat = _what}
@@ -1077,7 +1077,7 @@ instance RenderMessage Script ScriptMessage where
                 , _what
                 ]
         MsgFactionLeaderSCOPE
-            -> "[SCOPE]Faction leader:"
+            -> "Faction leader:"
         MsgFactionLeader
             -> "faction leader"
         MsgFactionLeaderOf { scriptMessageWhat = _what}
@@ -1087,14 +1087,14 @@ instance RenderMessage Script ScriptMessage where
                 , " is in"
                 ]
         MsgOwnerSCOPE
-            -> "[SCOPE]State owner/Unit owner:"
+            -> "State owner/Unit owner:"
         MsgOwnerStateSCOPE
-            -> "[SCOPE]State owner:"
+            -> "State owner:"
         MsgOwnerUnitSCOPE
-            -> "[SCOPE]Unit owner:"
+            -> "Unit owner:"
         MsgOwnerOfSCOPE { scriptMessageWhat = _what}
             -> mconcat
-                [ "[SCOPE]Owner of "
+                [ "Owner of "
                 , _what
                 , ":"
                 ]
@@ -1111,13 +1111,12 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgState {scriptMessageWhere = _where}
             -> mconcat
-                [ "[Scope]"
-                , _where
+                [ _where
                 , ":"
                 ]
         MsgSCOPEEventTarget {scriptMessageTag = _tag}
             -> mconcat
-                [ "[SCOPE]Event target "
+                [ "Event target "
                 , typewriterText _tag
                 , ":"
                 ]
@@ -1128,7 +1127,7 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgSCOPEVariable {scriptMessageTag = _tag}
             -> mconcat
-                [ "[SCOPE]Variable "
+                [ "Variable "
                 , typewriterText _tag
                 , ":"
                 ]
@@ -1141,25 +1140,25 @@ instance RenderMessage Script ScriptMessage where
         -- arrays
         MsgAllOfScopes  {scriptMessageWhat = _what}
             -> mconcat
-                ["[SCOPE]All scopes in the array "
+                ["All scopes in the array "
                 , typewriterText _what
                 , ":"
                 ]
         MsgAnyOfScopes  {scriptMessageWhat = _what}
             -> mconcat
-                ["[SCOPE]Any scope in the array "
+                ["Any scope in the array "
                 , typewriterText _what
                 , ":"
                 ]
         MsgForEachScopeLoop  {scriptMessageWhat = _what}
             -> mconcat
-                ["[SCOPE]Every scope in the array "
+                ["Every scope in the array "
                 , typewriterText _what
                 , ":"
                 ]
         MsgRandomScopeInArray  {scriptMessageWhat = _what}
             -> mconcat
-                ["[SCOPE]One random scope in the array "
+                ["One random scope in the array "
                 , typewriterText _what
                 , ":"
                 ]
