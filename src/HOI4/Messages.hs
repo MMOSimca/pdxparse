@@ -36,6 +36,15 @@ module HOI4.Messages (
 
 import Data.Monoid ((<>))
 
+import Control.Monad.State (gets)
+
+import Data.Char (isAlphaNum, isSpace)
+import Data.HashMap.Strict (HashMap)
+import qualified Data.HashMap.Strict as HM
+import Data.HashSet (HashSet)
+import qualified Data.HashSet as HS
+import Data.List (sortOn)
+import Data.Maybe (catMaybes)
 import Data.Text (Text)
 import qualified Data.Text as T
 
@@ -46,7 +55,8 @@ import Text.Shakespeare.I18N (RenderMessage (..))
 import Abstract (GenericStatement)
 import qualified Doc
 import MessageTools -- import everything
-import SettingsTypes (PPT, getLangs, GameData (..), IsGameData (..))
+import SettingsTypes (PPT, getLangs, GameData (..), IsGameData (..), Settings (..))
+import Yaml (LocEntry (..))
 
 -- | Dummy type required by the Shakespeare machinery.
 data Script = Script
@@ -4943,7 +4953,138 @@ type StatementHandler g m = GenericStatement -> PPT g m IndentedMessages
 messageText :: (IsGameData (GameData g), Monad m) => ScriptMessage -> PPT g m Text
 messageText msg = do
     mlangs <- getLangs
-    return $ renderMessage Script mlangs msg
+    buildingsToIcons $ renderMessage Script mlangs msg
+
+-- | Script keys of the game's buildings. Buildings are shown as their icon
+-- rather than their name, so their names have to be recognised wherever the
+-- localization colours them, see 'buildingsToIcons'.
+buildingKeys :: [Text]
+buildingKeys =
+    ["infrastructure", "industrial_complex", "arms_factory", "dockyard"
+    ,"air_base", "naval_base", "bunker", "coastal_bunker", "anti_air_building"
+    ,"synthetic_refinery", "radar_station", "rocket_site", "nuclear_reactor"
+    ,"fuel_silo", "supply_node", "rail_way", "energy_infrastructure"
+    ,"industrial_infrastructure", "naval_headquarters", "naval_supply_hub"
+    ,"nuclear_facility", "air_facility", "naval_facility", "land_facility"
+    ,"stronghold_network", "mega_gun_emplacement"
+    ]
+
+-- | Every name the localization knows a building by, in lower case. A building
+-- is named both by its own entry ("Railways") and by the construction speed
+-- modifier that mentions it ("Railway"), and the two don't always agree, so
+-- collect both. The localization also names buildings mid-sentence in lower
+-- case ("2 land forts"), so names are compared without regard to case.
+buildingNames :: HashMap Text LocEntry -> HashSet Text
+buildingNames l10n = HS.fromList
+    [ form
+    | bld <- buildingKeys
+    , name <- map T.toLower (namesOf bld)
+    , not (T.null name) && not ("$" `T.isInfixOf` name)
+    , form <- [name, plural name]
+    ]
+    where
+        namesOf bld = catMaybes $
+            rawLoc bld : map (\pfx -> colouredPart =<< rawLoc (pfx <> bld <> "_factor"))
+                             ["modifier_production_speed_", "modifier_state_production_speed_"]
+        rawLoc key = content <$> HM.lookup key l10n
+        -- The text a colour marker applies to, e.g. "Railway" of "§YRailway§!".
+        colouredPart t = case T.breakOn "§" t of
+            (_, marked) | T.length marked > 2 ->
+                Just . fst . T.breakOn "§" $ T.drop 2 marked
+            _ -> Nothing
+        -- The localization pluralizes building names as it writes them
+        -- ("Civilian Factories"), and the icon template has a key for the
+        -- plurals as well as for the singulars.
+        plural name = case T.unsnoc name of
+            Just (stem, 'y') | maybe True (`notElem` ("aeiou" :: String)) (snd <$> T.unsnoc stem)
+                -> stem <> "ies"
+            _ -> name <> "s"
+
+-- | Replace coloured building names with the building's icon. The game gives
+-- building names a colour wherever they turn up in its localization; the wiki
+-- always shows the icon for a building instead, never its name in colour. The
+-- name is kept as the icon's key, so a description saying "Railways" gets the
+-- icon for railways rather than the one for a single railway.
+buildingsToIcons :: (IsGameData (GameData g), Monad m) => Text -> PPT g m Text
+buildingsToIcons t
+    | not ("{{color|" `T.isInfixOf` t) = return t
+    | otherwise = do
+        lang <- gets (language . getSettings)
+        l10n <- gets (gameL10n . getSettings)
+        return $ substColoured (buildingNames (HM.findWithDefault HM.empty lang l10n)) t
+
+-- | Rewrite each building named inside a @{{color|X|...}}@ to that building's
+-- icon. A colour template rarely holds only the name, so the icon is lifted out
+-- of it and whatever shared it with the building is put back around the icon.
+substColoured :: HashSet Text -> Text -> Text
+substColoured names = go
+    where
+        go t = case T.breakOn "{{color|" t of
+            (before, rest)
+                | T.null rest -> before
+                | otherwise -> case splitTemplate (T.drop 8 rest) of
+                    -- Unterminated template: nothing sensible to do, leave it.
+                    Nothing -> before <> rest
+                    Just (code, body, after) -> before <> coloured code body <> go after
+        -- The comment naming a substituted localization key is stripped before
+        -- looking for a building: it holds the building's key, which would
+        -- match the name it was substituted for a second time. It is redundant
+        -- anyway once the icon says which building this is.
+        coloured code body = case splitBuilding (stripLocKeys body) of
+            -- Nothing of ours in it, so leave the colour template as it was.
+            Nothing -> "{{color|" <> code <> "|" <> go body <> "}}"
+            -- A building in it takes the colour template away with it: the icon
+            -- carries the name, and anything that shared the template is left
+            -- as plain text.
+            Just found -> lifted found
+        lifted (before, name, after) =
+            go before <> "{{icon|" <> T.toLower name <> "|1}}"
+                <> maybe (go after) lifted (splitBuilding after)
+        stripLocKeys t = case T.breakOn "<!--Localisation key:" t of
+            (before, rest)
+                | T.null rest -> before
+                | otherwise -> before <> stripLocKeys (T.drop 3 (snd (T.breakOn "-->" rest)))
+        -- The first building named in the text, and what surrounds it. Only
+        -- whole words count, so "Land Forts" is the plural and not the
+        -- singular with a stray "s" left over.
+        splitBuilding body = case sortOn fst (concatMap namedAt (HS.toList names)) of
+            [] -> Nothing
+            (((idx, _), len):_) ->
+                Just (T.take idx body, T.take len (T.drop idx body), T.drop (idx + len) body)
+            where
+                namedAt name =
+                    [ ((T.length before, negate len), len)
+                    | (before, at) <- T.breakOnAll name (T.toLower body)
+                    , not (wordEnd before)
+                    , not (wordStart (T.drop len at))
+                    -- Lowercasing can shift what is where, so only trust the
+                    -- position if the name is really there in the original.
+                    , T.toLower (T.take len (T.drop (T.length before) body)) == name
+                    ]
+                    where len = T.length name
+        wordEnd t = maybe False (isWordChar . snd) (T.unsnoc t)
+        wordStart t = maybe False (isWordChar . fst) (T.uncons t)
+        -- Underscores count, so that a script name that happens to contain a
+        -- building's, such as "[?built_a_dockyard]", is left alone.
+        isWordChar c = isAlphaNum c || c == '_'
+
+-- | Split the innards of a template, given the text just after its @{{name|@,
+-- into its first argument, the rest of it, and whatever follows the template.
+splitTemplate :: Text -> Maybe (Text, Text, Text)
+splitTemplate t = do
+    let (arg, rest) = T.breakOn "|" t
+    body <- T.stripPrefix "|" rest
+    (inside, after) <- takeToClose (1::Int) "" body
+    return (arg, inside, after)
+    where
+        takeToClose n acc s =
+            let (before, close) = T.breakOn "}}" s
+                n' = n - 1 + T.count "{{" before
+            in if T.null close
+                then Nothing
+                else if n' <= 0
+                    then Just (acc <> before, T.drop 2 close)
+                    else takeToClose n' (acc <> before <> "}}") (T.drop 2 close)
 
 -- | Select correct icon for balance of power
 bopicon :: Double -> Text

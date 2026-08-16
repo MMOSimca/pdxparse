@@ -3,6 +3,7 @@ module HOI4.Handlers (
         preStatement
     ,   preStatementText'
     ,   plainStatement
+    ,   iconText
     ,   plainMsg
     ,   plainMsg'
     ,   msgToPP
@@ -894,6 +895,9 @@ withNonlocAtom2 submsg msg [pdx| %_ = ?txt |] = do
 withNonlocAtom2 _ _ stmt = preStatement stmt
 
 -- | Table of script atom -> icon key. Only ones that are different are listed.
+-- This is for buildings and the like named by a script atom; buildings named by
+-- the localization keep their localized name as their icon key, see
+-- 'HOI4.Messages.buildingsToIcons'.
 scriptIconTable :: HashMap Text Text
 scriptIconTable = HM.fromList
     [("industrial_complex"  , "cic")
