@@ -61,7 +61,7 @@ but the parsing of the extra files is not content-aware.
 ## Known Issues
 
 * HoI4
-    * Decisions don't have a propper format in the output
+    * ~~Decisions don't have a propper format in the output~~
     * Multiple RHS scopes don't get parsed(e.g. PREV.PREV)
     * Various lines don't have custom messages yet
     * no icons in modifier statements
@@ -90,7 +90,7 @@ Feel extremely free to help with any of these or the issues, I honestly doubt I 
 * maybe load technology for has_tech
 * handle or ignore add_ai_strategy?
 * Expand info on add_field_marshal_role ?
-* Expand info of set_building_level
+* ~~Expand info of set_building_level~~
 * Find cleaner solution for missing closing brackets in files
 
 ## Thanks
