@@ -2349,6 +2349,7 @@ addBuildingConstruction stmt@[pdx| %_ = @scr |] =
             | otherwise = abc
         addLine' abc [pdx| level > !num |] = abc { addbc_province_comp = "higher than", addbc_province_level = Just num }
         addLine' abc [pdx| level < !num |] = abc { addbc_province_comp = "lower than", addbc_province_level = Just num }
+        addLine' abc [pdx| first = %_ |] = abc -- picks the first valid province after reduction
         addLine' abc [pdx| $other = %_ |] = trace ("unknown section in add_building_construction@province: " ++ show other) abc
         addLine' abc stmt = trace ("Unknown form in add_building_construction@province: " ++ show stmt) abc
 
