@@ -51,7 +51,7 @@ import HOI4.Handlers (flagText)
 
 -- | Empty event value. Starts off Nothing/empty everywhere.
 newHOI4Event :: HOI4Scope -> FilePath -> HOI4Event
-newHOI4Event escope = HOI4Event Nothing [] [] escope Nothing Nothing Nothing Nothing False False False Nothing Nothing Nothing
+newHOI4Event escope = HOI4Event Nothing [] [] escope Nothing Nothing Nothing Nothing Nothing False False False Nothing Nothing Nothing
 -- | Empty event option vaule. Starts off Nothing everywhere.
 newHOI4Option :: HOI4Option
 newHOI4Option = HOI4Option Nothing Nothing Nothing Nothing
@@ -255,6 +255,10 @@ eventAddSection mevt stmt = sequence (eventAddSection' <$> mevt <*> pure stmt) w
         CompoundRhs [] -> return evt
         CompoundRhs immediate -> return evt { hoi4evt_immediate = Just immediate }
         _ -> throwError "bad immediate section"
+    eventAddSection' evt stmt@[pdx| after = %rhs |] = case rhs of
+        CompoundRhs [] -> return evt
+        CompoundRhs after -> return evt { hoi4evt_after = Just after }
+        _ -> throwError "bad after section"
     eventAddSection' evt stmt@[pdx| option = %rhs |] =  case rhs of
         CompoundRhs option -> do
             newHOI4Options <- addHOI4Option (hoi4evt_options evt) option
@@ -417,6 +421,7 @@ ppEvent evt = maybe
         showmajor_pp'd <- evtArg "trigger" hoi4evt_show_major ppScript
         mmtth_pp'd <- mapM (ppMtth isTriggeredOnly) (hoi4evt_mean_time_to_happen evt)
         immediate_pp'd <- setIsInEffect True (evtArg "immediate" hoi4evt_immediate ppScript)
+        after_pp'd <- setIsInEffect True (evtArg "after" hoi4evt_after ppScript)
         triggered_pp <- ppTriggeredBy eid trigger_pp'd
         -- Keep track of incomplete events
         when (not isTriggeredOnly && isNothing mmtth_pp'd && null trigger_pp'd) $
@@ -467,6 +472,7 @@ ppEvent evt = maybe
             (if conditional then ["| option conditions = yes", PP.line] else []) ++
             -- option_conditions = no (not implemented yet)
             ["| options = ", options_pp'd, PP.line] ++
+            after_pp'd ++
             ["| collapse = no", PP.line
             ,"}}", PP.line
             ,"<section end=", evtId, "/>", PP.line

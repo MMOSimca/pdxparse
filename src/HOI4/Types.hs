@@ -278,6 +278,8 @@ data HOI4Event = HOI4Event {
     ,   hoi4evt_mean_time_to_happen :: Maybe GenericScript
     -- | Commands to execute as soon as the event fires.
     ,   hoi4evt_immediate :: Maybe GenericScript
+    -- | Commands to execute after an option has been chosen.
+    ,   hoi4evt_after :: Maybe GenericScript
     -- | Whether this is a hidden event (it will have no options).
     ,   hoi4evt_hide_window :: Bool
     -- | Whether this event can only happen once per campaign
