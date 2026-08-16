@@ -766,6 +766,10 @@ data ScriptMessage
     | MsgHasWargoalAgainstType {scriptMessageWhom :: Text, scriptMessageWhat :: Text, scriptMessageWhere :: Text}
     | MsgAddBuildingConstruction {scriptMessageYn :: Bool, scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmt :: Double, scriptMessageProv :: Text}
     | MsgAddBuildingConstructionVar {scriptMessageYn :: Bool, scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmtText :: Text, scriptMessageProv :: Text}
+    | MsgConstructBuildingInRandomProvince {scriptMessageIcon :: Text, scriptMessageAmt :: Double}
+    | MsgCanConstructBuilding {scriptMessageIcon :: Text, scriptMessageWhat :: Text}
+    | MsgBuildingLevel {scriptMessageIcon :: Text, scriptMessageAmt :: Double, scriptMessageCompare :: Text}
+    | MsgBuildingLevelVar {scriptMessageIcon :: Text, scriptMessageAmtText :: Text, scriptMessageCompare :: Text}
     | MsgSetBuildingLevel {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmt :: Double, scriptMessageProv :: Text}
     | MsgSetBuildingLevelVar {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmtText :: Text, scriptMessageProv :: Text}
     | MsgRemoveBuilding {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmt :: Double}
@@ -1411,11 +1415,11 @@ instance RenderMessage Script ScriptMessage where
                 [ "Tooltip: "
                 , _what
                 ]
+        -- A custom effect tooltip is the game's own sentence for an effect, so
+        -- it is given as it stands: a label in front of it would be neither the
+        -- game's text nor anything the script could have said instead.
         MsgCustomEffectTooltip {scriptMessageWhat = _what}
-            -> mconcat
-                [ "Custom effect tooltip: "
-                , _what
-                ]
+            -> _what
         MsgRemoveStateClaim {scriptMessageWhat = _what}
             -> mconcat
                 [ "Loses a claim on "
@@ -4864,6 +4868,38 @@ instance RenderMessage Script ScriptMessage where
                 , " war goal against "
                 , _what
                 ]
+        MsgConstructBuildingInRandomProvince {scriptMessageIcon = _icon, scriptMessageAmt = _amt}
+            -> mconcat
+                [ "Add "
+                , toMessage (bold (plainNumMin _amt))
+                , " "
+                , _icon
+                , " in a random province"
+                ]
+        MsgCanConstructBuilding {scriptMessageIcon = _icon, scriptMessageWhat = _what}
+            -> mconcat
+                [ "Can have a "
+                , _icon
+                , " built in it"
+                ]
+        MsgBuildingLevel {scriptMessageIcon = _icon, scriptMessageAmt = _amt, scriptMessageCompare = _comp}
+            -> mconcat
+                [ "Has "
+                , _comp
+                , " "
+                , toMessage (bold (plainNumMin _amt))
+                , " "
+                , _icon
+                ]
+        MsgBuildingLevelVar {scriptMessageIcon = _icon, scriptMessageAmtText = _amtT, scriptMessageCompare = _comp}
+            -> mconcat
+                [ "Has "
+                , _comp
+                , " "
+                , typewriterText _amtT
+                , " "
+                , _icon
+                ]
         MsgAddBuildingConstruction {scriptMessageYn = _yn, scriptMessageIcon = _icon, scriptMessageWhat = _type, scriptMessageAmt = _amt, scriptMessageProv = _prov}
             -> mconcat
                 [ ifThenElseT _yn "Add " "Start construction of "
@@ -4954,10 +4990,15 @@ type IndentedMessages = [IndentedMessage]
 type StatementHandler g m = GenericStatement -> PPT g m IndentedMessages
 
 -- | Convert a single message to Text.
+--
+-- Whatever the message is made of, any colour the localization asked for has
+-- arrived here as a @{{color}}@ template. Buildings are picked out of those
+-- first, because the colour is how the localization names one; the rest are
+-- rewritten the way the wiki writes the same emphasis.
 messageText :: (IsGameData (GameData g), Monad m) => ScriptMessage -> PPT g m Text
 messageText msg = do
     mlangs <- getLangs
-    buildingsToIcons $ renderMessage Script mlangs msg
+    wikifyLocColours <$> buildingsToIcons (renderMessage Script mlangs msg)
 
 -- | Script keys of the game's buildings. Buildings are shown as their icon
 -- rather than their name, so their names have to be recognised wherever the
@@ -5075,7 +5116,9 @@ substColoured names = go
 -- | Rewrite the colour templates that a localization's @§@ codes turn into the
 -- way the wiki writes the same emphasis. The game's green and red for good and
 -- bad news have templates of their own, and the yellow it picks a term out of a
--- sentence with is bold on the wiki. Any other colour is left as it was.
+-- sentence with is bold on the wiki. Its highlight is green as well: the wiki
+-- writes in green some of what the game highlights. Any other colour is left as
+-- it was.
 wikifyLocColours :: Text -> Text
 wikifyLocColours = go
     where
@@ -5089,6 +5132,7 @@ wikifyLocColours = go
                         before <> recoloured code (go body) <> go after
         recoloured code body = case T.toUpper code of
             "G" -> "{{green|" <> body <> "}}"
+            "H" -> "{{green|" <> body <> "}}"
             "R" -> "{{red|" <> body <> "}}"
             "Y" -> "'''" <> body <> "'''"
             _ -> "{{color|" <> code <> "|" <> body <> "}}"

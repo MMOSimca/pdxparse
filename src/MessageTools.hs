@@ -4,6 +4,7 @@ module MessageTools (
     -- ** Plain formatting
         plainNum, plainNumMin, roundNum, roundNumSign, plainNumSign
     ,   roundNumNoSpace
+    ,   fixedNumText
     ,   plainPc, plainPcMin, roundPc, plainPcSign
     -- ** Coloured formatting
     -- | These functions take an additional 'Bool' argument that specifies
@@ -113,6 +114,22 @@ instance PPSep Double where
                          <> PP.text (TL.pack . ppNumSep' False $
                              replicate (negate expn) '0' -- zeroes after decimal
                              ++ concatMap show fracDigits))
+
+-- | Format a number to a fixed number of decimal places, with thousands
+-- separators, keeping any trailing zeroes. Unlike 'ppNumSep', which writes out
+-- the places a number happens to have, this writes the places it is asked for:
+-- the localization says how precisely a value is meant to be read, which is not
+-- always how precisely it was written in script.
+fixedNumText :: Int -> Double -> Text
+fixedNumText places n = T.pack $
+    (if rounded < 0 then "−" else "")
+        <> ppNumSep' True (show whole)
+        <> (if places > 0 then "." <> ppNumSep' False (pad (show frac)) else "")
+    where
+        scale = 10 ^ max 0 places :: Integer
+        rounded = round (n * fromIntegral scale) :: Integer
+        (whole, frac) = abs rounded `divMod` scale
+        pad s = replicate (places - length s) '0' <> s
 
 -- | Format a number as is, except add thousands separators.
 plainNum :: Double -> Doc

@@ -14,6 +14,7 @@ module HOI4.Handlers (
     ,   ppMtth
     ,   compound
     ,   compoundMessage
+    ,   compoundMessageScope
     ,   compoundMessageExtractTag
     ,   compoundMessageExtract
     ,   compoundMessageExtractNum
@@ -21,6 +22,7 @@ module HOI4.Handlers (
     ,   compoundMessageTagged
     ,   withLocAtom
     ,   withLocAtomNonEmpty
+    ,   customEffectTooltip
     ,   withLocAtom'
     ,   withLocAtomCompound
     ,   withLocAtomKey
@@ -88,6 +90,8 @@ module HOI4.Handlers (
     ,   exportVariable
 --    ,   aiAttitude
     ,   addBuildingConstruction
+    ,   buildingLevel
+    ,   constructBuildingInRandomProvince
     ,   setBuildingLevel
     ,   addNamedThreat
     ,   createWargoal
@@ -150,7 +154,7 @@ module HOI4.Handlers (
     ,   eflag
     ) where
 
-import Data.Char (toLower, isUpper, isDigit)
+import Data.Char (toLower, isAlpha, isUpper, isDigit)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
@@ -185,8 +189,9 @@ import QQ -- everything
 -- everything
 import SettingsTypes ( PPT, IsGameData (..), GameData (..), IsGameState (..), GameState (..)
                      , indentUp, withCurrentIndent, withCurrentIndentZero, alsoIndent'
-                     , getGameL10n, getGameL10nIfPresent, withCurrentFile
-                     , getGameInterface, getGameInterfaceIfPresent )
+                     , getGameL10n, getGameL10nArgs, getGameL10nIfPresent, withCurrentFile
+                     , getGameInterface, getGameInterfaceIfPresent, unsnoc
+                     , LocArg (..) )
 import HOI4.Templates
 import {-# SOURCE #-} HOI4.Common (ppScript, ppMany, extractStmt, matchLhsText)
 import HOI4.Types -- everything
@@ -623,6 +628,103 @@ compoundMessage header [pdx| %_ = @scr |]
         return ((i, header) : script_pp'd)
 compoundMessage _ stmt = preStatement stmt
 
+-- | Handler for @prioritize@, which names the states a scope should pick from
+-- first. Defined here rather than with the other handlers below because
+-- 'compoundMessageScope' folds it into the header line it belongs to, and a
+-- Template Haskell splice further down would otherwise put it out of scope.
+prioritize :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+prioritize stmt@[pdx| %_ = @arr |] = do
+                let states = mapMaybe stateFromArray arr
+                    stateFromArray (StatementBare (IntLhs e)) = Just e
+                    stateFromArray stmt = trace ("Unknown in prioritize array statement: " ++ show stmt) Nothing
+                statesloc <- traverse getStateLoc states
+                let stateslocced = T.pack $ T.unpack (plural (length statesloc) "state " "states ") ++ intercalate ", " (map T.unpack statesloc)
+                msgToPP $ MsgPrioritize stateslocced
+prioritize stmt = preStatement stmt
+
+-- | Generic handler for a compound statement that picks out one thing to work
+-- with and narrows the choice with a @limit@ block, e.g. @random_owned_state@.
+--
+-- The conditions in the @limit@ are clauses about the thing being picked, so
+-- where there are few enough of them to read on one line they are joined onto
+-- the header as a relative clause, the way the wiki writes it, instead of
+-- standing under a heading of their own that puts them two levels further in
+-- than the effects they qualify. Only headers that name one thing at a time can
+-- take the clause, which in HOI4 is every scope except the @all_@ triggers.
+compoundMessageScope :: (HOI4Info g, Monad m) =>
+    ScriptMessage -- ^ Message to use as the block header
+    -> StatementHandler g m
+compoundMessageScope header stmt@[pdx| %_ = @scr |]
+    = withCurrentIndent $ \i -> do
+        let (mlimit, unlimited) = extractStmt (matchLhsText "limit") scr
+            (mprio, rest) = extractStmt (matchLhsText "prioritize") unlimited
+        mclause <- maybe (return Nothing) limitClause mlimit
+        case mclause of
+            Nothing -> do
+                script_pp'd <- ppMany scr
+                return ((i, header) : script_pp'd)
+            Just clause -> do
+                headtext <- messageText header
+                priomsgs <- maybe (return []) prioritize mprio
+                priotexts <- map T.strip <$> traverse (messageText . snd) priomsgs
+                script_pp'd <- ppMany rest
+                let aside = if null priotexts then ""
+                        else " (" <> T.intercalate ", " priotexts <> ")"
+                    heading = T.dropWhileEnd (== ':') (T.stripEnd headtext)
+                        <> aside <> " that " <> clause <> ":"
+                return ((i, MsgUnprocessed heading) : script_pp'd)
+compoundMessageScope _ stmt = preStatement stmt
+
+-- | The most conditions that will be joined onto a header line rather than
+-- listed under it. Past a handful the line is harder to read than the list.
+limitClauseMax :: Int
+limitClauseMax = 3
+
+-- | The conditions of a @limit@ block written as one clause, if they will read
+-- as one: a handful of conditions, none of them a block with conditions of its
+-- own, and every one of them written as something the scope does or is.
+limitClause :: (HOI4Info g, Monad m) => GenericStatement -> PPT g m (Maybe Text)
+limitClause [pdx| %_ = @scr |] = do
+    msgs <- setIsInEffect False (ppMany scr)
+    texts <- map T.strip <$> traverse (messageText . snd) msgs
+    let flat = case map fst msgs of
+            [] -> False
+            (i:is) -> all (i ==) is
+    return $ if not flat || length texts > limitClauseMax || any (not . isClause) texts
+        then Nothing
+        else Just (joinClauses (map lowerFirst texts))
+limitClause _ = return Nothing
+
+-- | Whether a condition is written as a statement about the thing it applies to,
+-- and so can be read on from a header. A condition we failed to make sense of
+-- came out as a @<pre>@ and has to keep the line where it can be seen, and one
+-- written as a label and a value -- @Scripted Trigger: …@ -- is not a statement
+-- about anything.
+isClause :: Text -> Bool
+isClause t = not (T.null t) && not ("<pre>" `T.isInfixOf` t) && not labelled
+    where
+        labelled = case T.breakOn ": " t of
+            (before, rest) -> not (T.null rest) && T.length before <= 30
+                                && T.all (\c -> isAlpha c || c == ' ') before
+
+-- | Join clauses into a list the way it would be written out: a serial comma
+-- between all but the last two, which take an "and".
+joinClauses :: [Text] -> Text
+joinClauses ts = case unsnoc ts of
+    Just (front@(_:_), end) -> T.intercalate ", " front <> " and " <> end
+    _ -> fold ts
+
+-- | Lower the first letter of a clause so that it reads on from whatever it is
+-- being joined to. A first word in capitals is a tag or an abbreviation and is
+-- left as it is.
+lowerFirst :: Text -> Text
+lowerFirst t
+    | T.length firstWord > 1, T.all isUpper firstWord = t
+    | otherwise = case T.uncons t of
+        Just (c, rest) -> T.cons (toLower c) rest
+        Nothing -> t
+    where firstWord = T.takeWhile isAlpha t
+
 -- | Generic handler for a simple compound statement with extra info.
 compoundMessageExtractTag :: (HOI4Info g, Monad m) =>
     Text
@@ -761,6 +863,67 @@ withLocAtomNonEmpty msg stmt@[pdx| %_ = ?key |] = do
     loc <- getGameL10n key
     if T.null (T.strip loc) then return [] else msgToPP (msg loc)
 withLocAtomNonEmpty _ stmt = preStatement stmt
+
+-- | Handler for @custom_effect_tooltip@. A tooltip is usually a localization key
+-- on its own, but it can also be a block naming the key together with values for
+-- the arguments its text is written with.
+--
+-- Tooltips are worth the trouble of reading: script hides the machinery of an
+-- effect in a @hidden_effect@ and puts a tooltip next to it saying in one
+-- sentence what the machinery comes to, so the text a tooltip names is the
+-- game's own summary of an effect we would otherwise have to spell out.
+customEffectTooltip :: (HOI4Info g, Monad m) => StatementHandler g m
+customEffectTooltip stmt@[pdx| %_ = @scr |] =
+    case extractStmt (matchLhsText "localization_key") scr of
+        (Just [pdx| %_ = ?key |], rest) -> do
+            args <- HM.fromList . catMaybes <$> traverse locArg rest
+            customTooltipText =<< getGameL10nArgs args key
+        _ -> preStatement stmt
+customEffectTooltip [pdx| %_ = ?key |] = customTooltipText =<< getGameL10n key
+customEffectTooltip stmt = preStatement stmt
+
+-- | Emit a tooltip's text, or nothing at all if it has none: scripts use
+-- tooltips whose text is only whitespace (@generic_skip_one_line_tt@ and
+-- friends) to space the tooltip out in game, and on the wiki they are noise. A
+-- tooltip written over several lines keeps its breaks, written the way the wiki
+-- writes a break inside a list item.
+customTooltipText :: (HOI4Info g, Monad m) => Text -> PPT g m IndentedMessages
+customTooltipText loc
+    | T.null stripped = return []
+    | otherwise = msgToPP (MsgCustomEffectTooltip (Doc.nl2br stripped))
+    where stripped = T.strip loc
+
+-- | The value a tooltip gives for one of the arguments its text is written with,
+-- ready to be written into that text.
+locArg :: (HOI4Info g, Monad m) => GenericStatement -> PPT g m (Maybe (Text, LocArg))
+-- An argument can be a tooltip in its own right, written the same way.
+locArg [pdx| $name = @scr |] = case extractStmt (matchLhsText "localization_key") scr of
+    (Just [pdx| %_ = ?key |], rest) -> do
+        inner <- HM.fromList . catMaybes <$> traverse locArg rest
+        Just . (,) name . LocText <$> getGameL10nArgs inner key
+    _ -> return Nothing
+locArg [pdx| $name = !num |] = return (Just (name, LocNum num))
+locArg [pdx| $name = ?val |] = Just . (,) name . LocText <$> locArgValue val
+locArg _ = return Nothing
+
+-- | Read one tooltip argument's value. Most of them name localization of their
+-- own. The rest are the game reading something out of its own state, where the
+-- script says how to find it but not what it will say; those are left as written
+-- for a human to fill in, except for a state's name, which we can look up.
+locArgValue :: (HOI4Info g, Monad m) => Text -> PPT g m Text
+locArgValue val
+    -- A promoted scope, e.g. "[70.GetName]".
+    | Just inner <- T.stripPrefix "[" =<< T.stripSuffix "]" unquoted
+        = case T.breakOn "." inner of
+            (sid, _) | not (T.null sid), T.all isDigit sid
+                -> getStateLoc (read (T.unpack sid))
+            _ -> return script
+    -- A sub-tooltip the game writes itself, e.g. "tech_effect|jungle_training_tech".
+    | "|" `T.isInfixOf` unquoted = return script
+    | otherwise = getGameL10n unquoted
+    where
+        unquoted = T.dropAround (== '"') val
+        script = "<tt>" <> unquoted <> "</tt>"
 
 withLocAtomCompound :: (HOI4Info g, Monad m) =>
     (Text -> ScriptMessage)
@@ -934,6 +1097,21 @@ scriptIconFileTable :: HashMap Text Text
 scriptIconFileTable = HM.fromList
     [
     ]
+
+-- | Handler for a building's own name used as a trigger, which compares how many
+-- levels of the building the state has.
+buildingLevel :: (HOI4Info g, Monad m) => Text -> StatementHandler g m
+buildingLevel building = numericCompare "more than" "fewer than"
+    (MsgBuildingLevel (iconText building)) (MsgBuildingLevelVar (iconText building))
+
+-- | Handler for @construct_building_in_random_province@, whose block names the
+-- building to put up and how many levels of it.
+constructBuildingInRandomProvince :: (HOI4Info g, Monad m) => StatementHandler g m
+constructBuildingInRandomProvince stmt@[pdx| %_ = @scr |] = case scr of
+    [[pdx| $building = !level |]] ->
+        msgToPP $ MsgConstructBuildingInRandomProvince (iconText building) level
+    _ -> preStatement stmt
+constructBuildingInRandomProvince stmt = preStatement stmt
 
 -- Given a script atom, return the corresponding icon key, if any.
 iconKey :: Text -> Maybe Text
@@ -2127,11 +2305,19 @@ setVariable msgWW msgWV stmt@[pdx| %_ = @scr |]
         addLine sv _ = trace ("failed to parse var: " ++ show stmt) sv
         toTT :: Text -> Text
         toTT t = "<tt>" <> t <> "</tt>"
+        -- The modifier localization a tooltip names has a slot for the value
+        -- being written, which the game fills in as it draws the tooltip and the
+        -- statement has just told us.
+        rightArg :: SetVariable -> HashMap Text LocArg
+        rightArg sv = case (sv_value sv, sv_which2 sv) of
+            (Just val, _) -> HM.singleton "RIGHT" (LocNum val)
+            (_, Just var) -> HM.singleton "RIGHT" (LocText (toTT var))
+            _ -> HM.empty
         pp_sv :: SetVariable -> PPT g m IndentedMessages
         pp_sv sv = do
             ttmsg <- case sv_tooltip sv of
                 Just tt -> do
-                    ttloc <- getGameL10n tt
+                    ttloc <- getGameL10nArgs (rightArg sv) tt
                     indentUp $ msgToPP $ MsgVariableTooltip ttloc
                 Nothing -> return []
             case (sv_which sv, sv_which2 sv, sv_value sv) of
@@ -3007,16 +3193,6 @@ setNationality :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
 setNationality stmt@[pdx| %_ = $txt |] = withFlag MsgSetNationality stmt
 setNationality stmt@[pdx| %_ = @scr |] = taTypeFlag "character" "target_country" MsgSetNationalityChar stmt
 setNationality stmt = preStatement stmt
-
-prioritize :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
-prioritize stmt@[pdx| %_ = @arr |] = do
-                let states = mapMaybe stateFromArray arr
-                    stateFromArray (StatementBare (IntLhs e)) = Just e
-                    stateFromArray stmt = trace ("Unknown in prioritize array statement: " ++ show stmt) Nothing
-                statesloc <- traverse getStateLoc states
-                let stateslocced = T.pack $ T.unpack (plural (length statesloc) "state " "states ") ++ intercalate ", " (map T.unpack statesloc)
-                msgToPP $ MsgPrioritize stateslocced
-prioritize stmt = preStatement stmt
 
 hasWarGoalAgainst :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
 hasWarGoalAgainst stmt@[pdx| %_ = $txt |] = withFlag MsgHasWargoalAgainst stmt

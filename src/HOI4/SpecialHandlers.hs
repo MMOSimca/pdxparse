@@ -1258,7 +1258,7 @@ ppIdeaSlotChunk [pdx| %_ = $key |] ideas@(_:_) = do
     loc <- T.strip <$> getGameL10n key
     -- Without a heading there is nothing for the ideas to be listed under.
     if T.null loc then concatMapM showIdea ideas else do
-        headmsg <- plainMsg (wikifyLocColours loc)
+        headmsg <- plainMsg loc
         ideamsg <- concatMapM showIdeaUnderHeading ideas
         return $ headmsg ++ ideamsg
 ppIdeaSlotChunk tt ideas = concatMapM ppOne (tt : ideas)

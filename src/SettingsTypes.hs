@@ -17,7 +17,9 @@ module SettingsTypes (
     ,   getCurrentIndent
     ,   withCurrentIndent, withCurrentIndentZero, withCurrentIndentCustom
     ,   alsoIndent, alsoIndent'
+    ,   LocArg (..)
     ,   getGameL10n
+    ,   getGameL10nArgs
     ,   getGameL10nDefault
     ,   getGameL10nIfPresent
     ,   getGameInterface
@@ -38,11 +40,11 @@ import Control.Monad.Identity (Identity (..))
 import Control.Monad.Reader (Reader, ReaderT (..), MonadReader (..), asks)
 import Control.Monad.State (StateT (..), gets)
 
-import Control.Applicative (Alternative (..))
+import Control.Applicative (Alternative (..), optional)
 
 import Data.Array ((!))
 import Data.Foldable (fold)
-import Data.Maybe (isNothing, fromJust, listToMaybe, fromMaybe)
+import Data.Maybe (isJust, isNothing, fromJust, listToMaybe, fromMaybe)
 
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -58,7 +60,10 @@ import qualified Data.HashMap.Strict as HM
 import Data.Attoparsec.Text (Parser, (<?>))
 import qualified Data.Attoparsec.Text as Ap
 import Data.Functor (($>))
-import Data.Char (isAlpha, isSpace)
+import Data.Char (digitToInt, isAlpha, isDigit, isSpace)
+
+import Doc (doc2text)
+import MessageTools (PPSep (..), fixedNumText)
 
 import Abstract () -- everything
 import Yaml (L10n, L10nLang,LocEntry (..))
@@ -288,8 +293,9 @@ data FormattedTextFragment
   = PlainText Text -- ^ unformatted text and text that isn't handled
   | ColoredText Text FormatText -- ^ contains the color key and text that is formatted using §
   | IconText Text -- ^ key to text icon using £
-  | KeyText Text -- ^ contains text enclosed by $ for EU4 it's scalar identifiers for HOI4 it's another localization key,
-                 --   $$ is for the actual dollar sign being displayed
+  | KeyText Text (Maybe Text) -- ^ contains text enclosed by $ for EU4 it's scalar identifiers for HOI4 it's another localization key,
+                 --   $$ is for the actual dollar sign being displayed. A placeholder may ask for
+                 --   a format after a @|@, e.g. @$STATE|Y$@, see 'formatLocValue'.
 
 type FormatText = [FormattedTextFragment]
 
@@ -390,27 +396,35 @@ getCurrentLang = gets (HM.findWithDefault HM.empty . language . getSettings) <*>
 -- For EU4 and HOI4 £ and § are both used for text icons and colors respectively
 -- $ is used for nested strings and in EU4 for keys
 handleLocFormat :: (IsGameData (GameData g), Monad m) => Text -> PPT g m Text
-handleLocFormat text = do
-    game <- gets (gameString . getSettings)
-    handleGameFormat game text
+handleLocFormat = handleLocFormatArgs HM.empty
 
-handleGameFormat :: (IsGameData (GameData g), Monad m) => Text -> Text -> PPT g m Text
-handleGameFormat g t
+-- | As 'handleLocFormat', but with values for the arguments the text names.
+-- Most localization stands on its own, and its @$NAME$@ placeholders are keys to
+-- other localization; a tooltip that is written with arguments
+-- (@custom_effect_tooltip = { localization_key = … STATE = … }@) says in the
+-- script what to put in each of its own placeholders instead.
+handleLocFormatArgs :: (IsGameData (GameData g), Monad m) => HashMap Text LocArg -> Text -> PPT g m Text
+handleLocFormatArgs args text = do
+    game <- gets (gameString . getSettings)
+    handleGameFormat args game text
+
+handleGameFormat :: (IsGameData (GameData g), Monad m) => HashMap Text LocArg -> Text -> Text -> PPT g m Text
+handleGameFormat args g t
     | g == "HOI4" = do
         case parseFormat t of
             Left err -> return $ trace ("parse failed on: " ++ err) t
-            Right tformat -> mconcat <$> traverse unpackTextfragment tformat
+            Right tformat -> mconcat <$> traverse (unpackTextfragment args) tformat
     | g == "EU4" =
         case removeFormat t of
             Left err -> return t
             Right clean -> return clean
     | otherwise = return t
 
-unpackTextfragment :: (IsGameData (GameData g), Monad m) => FormattedTextFragment -> PPT g m Text
-unpackTextfragment = \case
+unpackTextfragment :: (IsGameData (GameData g), Monad m) => HashMap Text LocArg -> FormattedTextFragment -> PPT g m Text
+unpackTextfragment args = \case
     PlainText t -> return t
     ColoredText k t -> do
-        thandled <- mconcat <$> traverse unpackTextfragment t
+        thandled <- mconcat <$> traverse (unpackTextfragment args) t
         return $ "{{color|" <> k <> "|" <> thandled <> "}}"
     IconText k -> do
         let kpref = if "GFX_" `T.isPrefixOf` k then k else "GFX_" <> k
@@ -418,11 +432,75 @@ unpackTextfragment = \case
         case gfx of
             Just f -> return $ "[[File:" <> f <> ".png]]"
             Nothing -> return $ "£" <> k
-    KeyText k -> do
-        mloc <- getGameL10nIfPresent k
-        case mloc of
-            Just t -> return $ "<!--Localisation key:" <> k <> "-->" <> t
-            Nothing -> return $ "$" <> k <> "$"
+    KeyText k mfmt -> case HM.lookup k args of
+        Just val -> return $ formatLocValue mfmt val
+        Nothing -> do
+            mloc <- getGameL10nIfPresent k
+            case mloc of
+                Just t -> return $ "<!--Localisation key:" <> k <> "-->"
+                                        <> formatLocValue mfmt (LocText t)
+                -- A placeholder that asks for a format is a slot for a value the
+                -- game works out as it draws the text, and the words around it
+                -- are written to be read with the value in place. Where we have
+                -- no value to put there, leaving the slot empty reads better than
+                -- printing the name of it -- and script that borrows one of these
+                -- texts often writes the value itself, just after the slot.
+                Nothing | isJust mfmt -> return ""
+                        | otherwise -> return $ "$" <> k <> "$"
+
+-- | A value to write into one of a localization's placeholders. Text goes in as
+-- it is; a number is written the way the placeholder asks for it, which is the
+-- only place that says how it is meant to be read.
+data LocArg
+    = LocText Text
+    | LocNum Double
+
+-- | Apply the format a placeholder asks for, given as the characters after its
+-- @|@: a colour for the value, and for a number how to write it. See
+-- 'formatLocNumber' for the latter.
+formatLocValue :: Maybe Text -> LocArg -> Text
+formatLocValue mfmt arg = case colour of
+    Just col -> "{{color|" <> T.singleton col <> "|" <> body <> "}}"
+    Nothing -> body
+    where
+        fmt = fromMaybe "" mfmt
+        body = case arg of
+            LocText t -> t
+            LocNum n -> formatLocNumber fmt n
+        -- A colour named outright wins; failing that, @=@ asks for the colour
+        -- that says whether the value is good news, which only a number has.
+        colour = case T.find (`elem` locColourCodes) fmt of
+            Just col -> Just col
+            Nothing -> case arg of
+                LocNum n | T.any ('=' ==) fmt -> Just $ case compare (goodSign * n) 0 of
+                    LT -> 'R'
+                    EQ -> 'Y'
+                    GT -> 'G'
+                _ -> Nothing
+        -- Most values are good news when they go up, but some are named for the
+        -- trouble they measure and marked with a @-@, e.g. a resource penalty.
+        goodSign = if T.any ('-' ==) fmt then -1 else 1
+
+-- | Write a number the way a placeholder's format asks for it. A digit says how
+-- many decimal places to write it to. A @%@ marks a factor to be read as a
+-- percentage, so it is scaled; @%%@ marks a value that is a percentage already
+-- and only needs the sign on it. Any of @=@, @+@ or @-@ asks for the number to
+-- be written as a change, so the sign goes on it even when it is positive.
+formatLocNumber :: Text -> Double -> Text
+formatLocNumber fmt n = sign <> written <> pcSign
+    where
+        percents = T.count "%" fmt
+        pcSign = if percents > 0 then "%" else ""
+        scaled = if percents == 1 then n * 100 else n
+        written = case T.find isDigit fmt of
+            Just d -> fixedNumText (digitToInt d) scaled
+            Nothing -> doc2text (ppNumSep scaled)
+        sign = if scaled > 0 && T.any (`elem` ("=+-" :: String)) fmt then "+" else ""
+
+-- | The colour codes the localization writes, whether after a @§@ or inside a
+-- placeholder's format.
+locColourCodes :: String
+locColourCodes = "YGRHLTWObgB"
 
 parseFormat :: Text -> Either String FormatText
 parseFormat = Ap.parseOnly parseFormat'
@@ -431,7 +509,7 @@ parseFormat' :: Parser FormatText
 parseFormat' = many (PlainText  <$> Ap.takeWhile1 (not . \c -> '§' == c || '£' == c || '$' == c)
         <|> PlainText   <$> (Ap.string "$$" *> "$")
         <|> ColoredText <$> colKey <*> colText
-        <|> KeyText     <$> keyText
+        <|> uncurry KeyText <$> keyText
         <|> IconText    <$> iconText)
     <?> "format characters"
 
@@ -442,11 +520,18 @@ colText :: Parser FormatText
 colText = many (PlainText <$> Ap.takeWhile1 (not . \c -> '§' == c || '£' == c || '$' == c)
         <|> PlainText   <$> (Ap.string "$$" *> "$")
         <|> ColoredText <$> colKey <*> colText
-        <|> KeyText     <$> keyText
+        <|> uncurry KeyText <$> keyText
         <|> IconText    <$> iconText) <* Ap.option "e" (Ap.string "§!")
 
-keyText :: Parser Text
-keyText = "$" *> Ap.takeWhile1 (Ap.inClass "a-zA-Z._0-9-") <* Ap.char '$'
+-- | A @$NAME$@ placeholder, with the format it asks for if it names one:
+-- @$NAME|Y$@ wants its text in yellow. The format is kept rather than dropped
+-- because a placeholder that is not recognised as one takes the rest of the
+-- text down with it -- nothing else in 'parseFormat'' can begin with a @$@, so
+-- the parse stops there and everything after is lost.
+keyText :: Parser (Text, Maybe Text)
+keyText = (,) <$> ("$" *> Ap.takeWhile1 (Ap.inClass "a-zA-Z._0-9-"))
+              <*> optional (Ap.char '|' *> Ap.takeWhile (Ap.inClass "a-zA-Z0-9%+*=.|-"))
+              <* Ap.char '$'
 
 iconText :: Parser Text
 iconText = "£" *> Ap.takeWhile1 (Ap.inClass "a-zA-Z._0-9|-")
@@ -475,6 +560,14 @@ stripMissionColor loc_title = case RE.matchOnceText strip_color_RE loc_title of
 -- key itself.
 getGameL10n :: (IsGameData (GameData g), Monad m) => Text -> PPT g m Text
 getGameL10n key = getGameL10nDefault key key
+
+-- | Get the localization string for a given key, substituting the given values
+-- for the arguments it names. If it doesn't exist, use the key itself.
+getGameL10nArgs :: (IsGameData (GameData g), Monad m) =>
+    HashMap Text LocArg -> Text -> PPT g m Text
+getGameL10nArgs args key =
+    handleLocFormatArgs args . content . HM.findWithDefault (LocEntry 0 key) key
+        =<< getCurrentLang
 
 -- | Get the localization string for a given key. If it doesn't exist, use the
 -- given default (the first argument) instead.
