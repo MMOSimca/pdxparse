@@ -200,11 +200,12 @@ floatOrTextRhs rhs = maybe (Right <$> textRhs rhs )
 -- Parser --
 ------------
 
--- | Skip whitespace, including comments. A comment is a \"#\" followed by the
--- rest of the line.
+-- | Skip whitespace or excessive commas, including comments.
+-- A comment is a \"#\" followed by the rest of the line.
 skipSpace :: Parser ()
 skipSpace = Ap.skipMany
             (void Ap.space
+            <|> void (Ap.char ',')
             <|> comment)
 
 -- | A comment is a # followed by the rest of the line. This parser also
