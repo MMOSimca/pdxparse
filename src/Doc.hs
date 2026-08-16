@@ -10,6 +10,7 @@ module Doc
     , ppFloat
     , ppFloatT
     , nl2br
+    , oneLine
     , Doc
     , (PP.<++>)
     ) where
@@ -79,3 +80,12 @@ nl2br = mconcat . unfoldr replaceNextBreak . Just where
           in if T.null right -- no newlines found
                 then Just (left, Nothing)
                 else Just (left <> "<br/>", Just right')
+
+-- | Squeeze a run of text onto one line, collapsing every stretch of
+-- whitespace in it to a single space and trimming the ends. Localization is
+-- laid out for the space the game has to write it in, and breaks lines to suit
+-- it; most places the text then goes on the wiki -- a list item, a table cell, a
+-- template argument -- end at the first line break instead of wrapping, so the
+-- layout has to come out before the text goes in.
+oneLine :: Text -> Text
+oneLine = T.unwords . T.words

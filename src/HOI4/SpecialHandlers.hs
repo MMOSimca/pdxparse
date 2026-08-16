@@ -16,8 +16,9 @@ module HOI4.SpecialHandlers (
     ,   removeDynamicModifier
     ,   hasDynamicModifier
     ,   ScriptChunk (..)
-    ,   chunkDynModVars
+    ,   chunkScript
     ,   ppDynModChunk
+    ,   ppIdeaSlotChunk
     ,   addPowerBalanceModifier
     ,   addFieldMarshalRole
     ,   addAdvisorRole
@@ -174,11 +175,7 @@ handleIdea addIdea ide = do
         Just iidea -> do
             let ideaKey = id_id iidea
                 ideaname = id_name iidea
-            ideaIcon <- do
-                micon <- getGameInterfaceIfPresent ("GFX_idea_" <> ideaKey)
-                case micon of
-                    Nothing -> getGameInterface "idea_unknown" (id_picture iidea)
-                    Just idicon -> return idicon
+            ideaIcon <- getIdeaIcon iidea
             idea_loc <- getGameL10n ideaname
             category <- if id_category iidea == "country" then getGameL10n "FE_COUNTRY_SPIRIT" else getGameL10n $ id_category iidea
             effectbox <- modmessage iidea idea_loc ideaKey ideaIcon
@@ -196,37 +193,61 @@ handleIdea addIdea ide = do
                 return $ Just (slot, "", namekey, name_loc, Nothing)
 
 
+-- | The picture the game shows an idea with, falling back on the generic one.
+getIdeaIcon :: (HOI4Info g, Monad m) => HOI4Idea -> PPT g m Text
+getIdeaIcon iidea = do
+    micon <- getGameInterfaceIfPresent ("GFX_idea_" <> id_id iidea)
+    case micon of
+        Nothing -> getGameInterface "idea_unknown" (id_picture iidea)
+        Just idicon -> return idicon
+
+-- | What an idea named by a @show_ideas_tooltip@ grants. An idea in the idea
+-- files gets the same effect box as one that is handed out for good; an advisor
+-- has no such box, since their entry holds little beyond their name and the
+-- trait that comes with the post.
 showIdea :: (HOI4Info g, Monad m) => StatementHandler g m
-showIdea stmt@[pdx| $lhs = $idea |] = do
+showIdea = showIdeaWith id
+
+-- | As 'showIdea', for an idea listed under a heading announcing its slot. An
+-- effect box is a block in its own right, so it stays at the heading's level,
+-- while everything shown as a list item belongs one level under it.
+showIdeaUnderHeading :: (HOI4Info g, Monad m) => StatementHandler g m
+showIdeaUnderHeading = showIdeaWith indentUp
+
+showIdeaWith :: (HOI4Info g, Monad m) =>
+    (PPT g m IndentedMessages -> PPT g m IndentedMessages) -> StatementHandler g m
+showIdeaWith nest stmt@[pdx| %_ = $idea |] = do
     ides <- getIdeas
     charto <- getCharToken
     case HM.lookup idea ides of
         Just iidea -> do
-            modifier <- maybe (return []) (indentUp . ppOne) (id_modifier iidea)
-            targeted_modifier <-
-                maybe (return []) (indentUp . concatMapM handleTargetedModifier) (id_targeted_modifier iidea)
-            research_bonus <- maybe (return []) (indentUp . ppOne) (id_research_bonus iidea)
-            equipment_bonus <- maybe (return []) (indentUp . ppOne) (id_equipment_bonus iidea)
-            let ideamods = modifier ++ targeted_modifier ++ research_bonus ++ equipment_bonus
             idea_loc <- getGameL10n (id_name iidea)
-            basemsg <- msgToPP $ MsgShowIdea idea_loc idea
-            return $ basemsg ++ ideamods
+            ideaIcon <- getIdeaIcon iidea
+            modmessage iidea idea_loc (id_id iidea) ideaIcon
         Nothing -> case HM.lookup idea charto of
-            Nothing -> preStatement stmt
-            Just ccharto -> do
-                let traits = case adv_traits ccharto of
-                        Just trts -> trts
-                        _-> []
-                mloc <- getGameL10nIfPresent $ adv_cha_name ccharto
-                name_loc <- case mloc of
-                    Just nloc -> return nloc
-                    _ -> getGameL10n $ adv_idea_token ccharto
-                modmsg <- maybe (return []) (indentUp .handleModifier) (adv_modifier ccharto)
-                resmsg <- maybe (return []) (indentUp .handleResearchBonus) (adv_research_bonus ccharto)
-                traitmsg <- concatMapM ppHt traits
-                basemsg <- msgToPP $ MsgShowIdea name_loc idea
-                return $ basemsg ++ traitmsg ++ modmsg ++ resmsg
-showIdea stmt = preStatement stmt
+            Nothing -> nest $ preStatement stmt
+            Just ccharto -> nest $ showAdvisor idea ccharto
+showIdeaWith _ stmt = preStatement stmt
+
+-- | Name an advisor, with the trait their post comes with, and list everything
+-- the post grants under them. Which of the modifiers the trait rather than the
+-- advisor's own entry supplies is of no interest on the wiki, so they are shown
+-- as one list.
+showAdvisor :: (HOI4Info g, Monad m) => Text -> HOI4Advisor -> PPT g m IndentedMessages
+showAdvisor token adv = do
+    let traits = fromMaybe [] (adv_traits adv)
+    mloc <- getGameL10nIfPresent (adv_cha_name adv)
+    name_loc <- maybe (getGameL10n (adv_idea_token adv)) return mloc
+    -- Some trait names are laid out over two lines ("Armor\n(Expert)"), which
+    -- would end the list item they are written into.
+    traitlocs <- traverse (fmap Doc.oneLine . getGameL10n) traits
+    basemsg <- msgToPP $ MsgShowAdvisor name_loc token (T.intercalate ", " traitlocs)
+    bonusmsg <- indentUp $ do
+        traitmsg <- concatMapM getLeaderTraits traits
+        modmsg <- maybe (return []) handleModifier (adv_modifier adv)
+        resmsg <- maybe (return []) handleResearchBonus (adv_research_bonus adv)
+        return $ traitmsg ++ modmsg ++ resmsg
+    return $ basemsg ++ bonusmsg
 
 modmessage :: forall g m. (HOI4Info g, Monad m) => HOI4Idea -> Text -> Text -> Text -> PPT g m IndentedMessages
 modmessage iidea idea_loc ideaKey ideaIcon = do
@@ -238,11 +259,15 @@ modmessage iidea idea_loc ideaKey ideaIcon = do
             ideaDesc <- case id_desc_loc iidea of
                 Just desc -> return $ Doc.nl2br desc
                 _ -> return ""
+            -- A company's or an advisor's trait names the kind of thing it is
+            -- ("Railway Company"), which the box's own title already conveys;
+            -- only a national spirit's traits are worth a heading of their own.
+            let namedTraits = id_category iidea == "country"
             traitmsg <- case id_traits iidea of
                 Just arr -> do
                     let traitbare = mapMaybe getbaretraits arr
-                    concatMapM (\t-> do
-                        traitloc <- getGameL10n t
+                    concatMapM (\t-> if not namedTraits then getLeaderTraits t else do
+                        traitloc <- Doc.oneLine <$> getGameL10n t
                         namemsg <- plainMsg' ("'''" <> traitloc <> "'''")
                         traitmsg <- indentUp $ getLeaderTraits t
                         return $ namemsg : traitmsg) traitbare
@@ -523,7 +548,9 @@ handleEquipmentBonus stmt@[pdx| %_ = @scr |] = fold <$> traverse modifierEquipMS
             modifierEquipMSG [pdx| $tech = @scr |] = do
                 let (_, rest) = extractStmt (matchLhsText "instant") scr
                 techloc <- getGameL10n tech
-                techmsg <- plainMsg' ("{{color|yellow|"<> techloc <> "}}:")
+                -- The game picks the equipment out of the tooltip in yellow;
+                -- the wiki writes that emphasis as bold.
+                techmsg <- plainMsg' ("'''" <> techloc <> "'''")
                 modmsg <- do
                     keys <- getModKeys
                     sm <- sortmods rest keys
@@ -1173,21 +1200,65 @@ removeDynamicModifier stmt@[pdx| %_ = @dyn |] = do
         _-> preStatement stmt
 removeDynamicModifier stmt = preStatement stmt
 
------------------------------------------------------------------
--- Dynamic modifiers whose values are held in script variables --
------------------------------------------------------------------
+-------------------------------------------------------
+-- Runs of statements that only make sense together  --
+-------------------------------------------------------
 
 -- | How a run of variable writes changes the dynamic modifier behind them.
 data DynModOp = DynModSet | DynModAdd | DynModSub deriving (Eq)
 
--- | An effect script, with runs of statements that write to the variables
--- behind a dynamic modifier pulled out, so they can be shown as one effect box
--- instead of as a list of raw variable arithmetic.
+-- | An effect script, with the runs of statements that only say something
+-- together pulled out of it.
 data ScriptChunk
     = PlainStmt GenericStatement
     | DynModChunk HOI4DynamicModifier Bool [(Text, Double)]
       -- ^ The modifier, whether its values are set rather than added to, and
       --   the modifier keys affected with their new values.
+    | IdeaSlotChunk GenericStatement [GenericStatement]
+      -- ^ The tooltip announcing that a slot's ideas change, and the
+      --   @show_ideas_tooltip@ statements naming the ideas it announces.
+
+-- | Split a script into the chunks that are shown as a whole.
+chunkScript :: (HOI4Info g, Monad m) => GenericScript -> PPT g m [ScriptChunk]
+chunkScript scr = chunkIdeaSlots <$> chunkDynModVars scr
+
+-- | Group each tooltip saying that ideas become available in (or leave) an
+-- advisor or company slot with the @show_ideas_tooltip@ statements it heads, so
+-- that the ideas can be listed under it. A tooltip that heads nothing is left
+-- where it was, to be shown as the ordinary tooltip it is.
+chunkIdeaSlots :: [ScriptChunk] -> [ScriptChunk]
+chunkIdeaSlots = reverse . foldl' addChunk []
+    where
+        addChunk chunks chunk = case chunk of
+            PlainStmt stmt
+                | isSlotTooltip stmt -> IdeaSlotChunk stmt [] : chunks
+                | isShownIdea stmt
+                , IdeaSlotChunk tt ideas : rest <- chunks ->
+                    IdeaSlotChunk tt (ideas ++ [stmt]) : rest
+            _ -> chunk : chunks
+        -- The slot a run of ideas belongs to is named by the tooltip's key, and
+        -- the game keeps to @available_@ and @remove_@ for those.
+        isSlotTooltip [pdx| custom_effect_tooltip = $key |] =
+            any (`T.isPrefixOf` key) ["available_", "remove_"]
+        isSlotTooltip _ = False
+        isShownIdea [pdx| show_ideas_tooltip = $_ |] = True
+        isShownIdea _ = False
+
+-- | Present the tooltip announcing a change to an advisor or company slot as a
+-- heading for the ideas it names, and those ideas under it. The trailing
+-- newline that spaces the tooltip out in game is noise on the wiki, and so is
+-- the @Custom effect tooltip:@ that an ordinary tooltip is labelled with: what
+-- follows the heading says plainly enough that it is one.
+ppIdeaSlotChunk :: forall g m. (HOI4Info g, Monad m) =>
+    GenericStatement -> [GenericStatement] -> PPT g m IndentedMessages
+ppIdeaSlotChunk [pdx| %_ = $key |] ideas@(_:_) = do
+    loc <- T.strip <$> getGameL10n key
+    -- Without a heading there is nothing for the ideas to be listed under.
+    if T.null loc then concatMapM showIdea ideas else do
+        headmsg <- plainMsg (wikifyLocColours loc)
+        ideamsg <- concatMapM showIdeaUnderHeading ideas
+        return $ headmsg ++ ideamsg
+ppIdeaSlotChunk tt ideas = concatMapM ppOne (tt : ideas)
 
 -- | Split a script into chunks, grouping each run of consecutive statements
 -- that write to the variables of one and the same dynamic modifier.
@@ -1505,7 +1576,7 @@ promomessage what atom stmt = do
 
 ppHt :: (Monad m, HOI4Info g) => Text -> PPT g m IndentedMessages
 ppHt trait = do
-    traitloc <- getGameL10n trait
+    traitloc <- Doc.oneLine <$> getGameL10n trait
     namemsg <- indentUp $ plainMsg' ("'''" <> traitloc <> "'''")
     traitmsg' <- indentUp $ indentUp $ getLeaderTraits trait
     return $ namemsg : traitmsg'

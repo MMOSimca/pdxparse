@@ -29,6 +29,7 @@ module HOI4.Messages (
     ,   StatementHandler
     ,   template, templateDoc
     ,   templateColor, templateColor'
+    ,   wikifyLocColours
     ,   message, messageText
     ,   imsg2doc, imsg2doc_html
     ,   IndentedMessage, IndentedMessages
@@ -480,7 +481,7 @@ data ScriptMessage
     | MsgReplaceIdea {scriptMessageCategory :: Text, scriptMessageIcon :: Text, scriptMessageKey :: Text, scriptMessageLoc :: Text, scriptMessageCategory2 :: Text, scriptMessageIcon2 :: Text, scriptMessageKey2 :: Text, scriptMessageLoc2 :: Text}
     | MsgEffectBox {scriptMessageLoc :: Text, scriptMessageKey :: Text, scriptMessageIcon :: Text, scriptMessageDesc :: Text}
     | MsgEffectBoxEnd  {scriptMessageIndent :: Int}
-    | MsgShowIdea {scriptMessageLoc :: Text, scriptMessageKey :: Text}
+    | MsgShowAdvisor {scriptMessageLoc :: Text, scriptMessageKey :: Text, scriptMessageWhat :: Text}
     | MsgHasOpinion {scriptMessageAmtText :: Text, scriptMessageWhom :: Text, scriptMessageCompare :: Text }
     | MsgSetRule {scriptMessageAmt :: Double}
     | MsgSetRuleYesNo {scriptMessageIcon :: Text, scriptMessageWhat :: Text}
@@ -2748,13 +2749,16 @@ instance RenderMessage Script ScriptMessage where
                 , T.pack $ show _indent
                 , "}}\n"
                 ]
-        MsgShowIdea {scriptMessageLoc = _loc, scriptMessageKey = _key}
+        -- An advisor's own entry holds little more than their name, so the
+        -- trait that comes with the post is named alongside it rather than as a
+        -- heading of its own over what the trait grants.
+        MsgShowAdvisor {scriptMessageLoc = _loc, scriptMessageKey = _key, scriptMessageWhat = _what}
             -> mconcat
-                [ _loc
+                [ boldText _loc
                 , " <!-- "
                 , _key
                 ,  " -->"
-                , ", which grants"
+                , ifThenElseT (T.null _what) "" (" (" <> _what <> ")")
                 ]
         MsgHasOpinion {scriptMessageAmtText = _amtT, scriptMessageWhom = _whom, scriptMessageCompare = _comp}
             -> mconcat
@@ -5067,6 +5071,27 @@ substColoured names = go
         -- Underscores count, so that a script name that happens to contain a
         -- building's, such as "[?built_a_dockyard]", is left alone.
         isWordChar c = isAlphaNum c || c == '_'
+
+-- | Rewrite the colour templates that a localization's @§@ codes turn into the
+-- way the wiki writes the same emphasis. The game's green and red for good and
+-- bad news have templates of their own, and the yellow it picks a term out of a
+-- sentence with is bold on the wiki. Any other colour is left as it was.
+wikifyLocColours :: Text -> Text
+wikifyLocColours = go
+    where
+        go t = case T.breakOn "{{color|" t of
+            (before, rest)
+                | T.null rest -> before
+                | otherwise -> case splitTemplate (T.drop 8 rest) of
+                    -- Unterminated template: nothing sensible to do, leave it.
+                    Nothing -> before <> rest
+                    Just (code, body, after) ->
+                        before <> recoloured code (go body) <> go after
+        recoloured code body = case T.toUpper code of
+            "G" -> "{{green|" <> body <> "}}"
+            "R" -> "{{red|" <> body <> "}}"
+            "Y" -> "'''" <> body <> "'''"
+            _ -> "{{color|" <> code <> "|" <> body <> "}}"
 
 -- | Split the innards of a template, given the text just after its @{{name|@,
 -- into its first argument, the rest of it, and whatever follows the template.
