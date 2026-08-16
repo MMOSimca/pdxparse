@@ -2955,10 +2955,9 @@ foldCompound "setPartyName" "SetPartyName" "spn"
     ]
     [|  do
         let long_name = fromMaybe "" _long_name
-        ideo_loc <- getGameL10n _ideology
         long_loc <- getGameL10n long_name
         short_loc <- getGameL10n _name
-        return $ MsgSetPartyName ideo_loc short_loc long_loc
+        return $ MsgSetPartyName _ideology short_loc long_loc
     |]
 
 ---------------------------------
