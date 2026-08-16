@@ -631,6 +631,7 @@ modifiersTable = HM.fromList
         ,("civil_war_involvement_tension"   , ("MODIFIER_CIVIL_WAR_INVOLVEMENT_TENSION", MsgModifierPcNegReduced)) -- precision 1
         ,("enemy_declare_war_tension"       , ("MODIFIER_ENEMY_DECLARE_WAR_TENSION", MsgModifierPcPosReduced))
         ,("enemy_justify_war_goal_time"     , ("MODIFIER_ENEMY_JUSTIFY_WAR_GOAL_TIME", MsgModifierPcPosReduced))
+        ,("faction_influence_war_score_factor" , ("MODIFIER_FACTION_INFLUENCE_WAR_SCORE", MsgModifierPcReducedSignMin)) -- yellow
         ,("faction_trade_opinion_factor"    , ("MODIFIER_FACTION_TRADE_OPINION_FACTOR", MsgModifierPcReducedSign)) --precision 2 yellow
         ,("generate_wargoal_tension"        , ("MODIFIER_GENERATE_WARGOAL_TENSION_LIMIT", MsgModifierPcReducedSign)) -- yellow
         ,("guarantee_cost"                  , ("MODIFIER_GUARANTEE_COST", MsgModifierPcNegReduced))
@@ -748,6 +749,7 @@ modifiersTable = HM.fromList
         ,("heat_attrition"                  , ("MODIFIER_HEAT_ATTRITION", MsgModifierPcNegReduced))
         ,("heat_attrition_factor"           , ("MODIFIER_HEAT_ATTRITION_FACTOR", MsgModifierPcNegReduced))
         ,("winter_attrition_factor"         , ("MODIFIER_WINTER_ATTRITION_FACTOR", MsgModifierPcNegReduced))
+        ,("truck_attrition_factor"          , ("MODIFIER_TRUCK_ATTRITION_FACTOR", MsgModifierPcNegReduced))
         ,("extra_marine_supply_grace"       , ("MODIFIER_MARINE_EXTRA_SUPPLY_GRACE", MsgModifierColourPos))
         ,("extra_paratrooper_supply_grace"  , ("MODIFIER_PARATROOPER_EXTRA_SUPPLY_GRACE", MsgModifierColourPos))
         ,("special_forces_no_supply_grace"  , ("MODIFIER_SPECIAL_FORCES_NO_SUPPLY_GRACE", MsgModifierColourPos))
@@ -772,6 +774,7 @@ modifiersTable = HM.fromList
         ,("static_anti_air_damage_factor"   , ("MODIFIER_STATIC_ANTI_AIR_DAMAGE_FACTOR", MsgModifierPcPosReduced))
         ,("static_anti_air_hit_chance_factor" , ("MODIFIER_STATIC_ANTI_AIR_HIT_CHANCE_FACTOR", MsgModifierPcPosReduced))
         ,("coastal_bunker_effectiveness_factor" , ("MODIFIER_COASTAL_BUNKER_EFFECTIVENESS_FACTOR", MsgModifierPcPosReduced))
+        ,("land_bunker_effectiveness_factor" , ("MODIFIER_LAND_BUNKER_EFFECTIVENESS_FACTOR", MsgModifierPcPosReduced))
 
             -- resistance and compliance
         ,("compliance_growth_on_our_occupied_states" , ("MODIFIER_COMPLIANCE_GROWTH_ON_OUR_OCCUPIED_STATES", MsgModifierPcNegReduced))
