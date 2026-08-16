@@ -367,7 +367,7 @@ handlersLocRhs = Tr.fromList
         [("create_faction"        , withLocAtom MsgCreateFaction)
         ,("set_state_name"        , withLocAtom MsgSetStateName)
         ,("set_state_category"    , withLocAtom MsgSetStateCategory)
-        ,("custom_effect_tooltip" , withLocAtom MsgCustomEffectTooltip)
+        ,("custom_effect_tooltip" , withLocAtomNonEmpty MsgCustomEffectTooltip)
         ,("has_country_leader_with_trait" , withLocAtom MsgHasCountryLeaderWithTrait)
         ,("has_decision"          , withLocAtomKey MsgHasDecision)
         ,("has_power_balance"     , withLocAtomCompound MsgHasPowerBalance)

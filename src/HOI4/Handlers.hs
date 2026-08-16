@@ -19,6 +19,7 @@ module HOI4.Handlers (
     ,   compoundMessagePronoun
     ,   compoundMessageTagged
     ,   withLocAtom
+    ,   withLocAtomNonEmpty
     ,   withLocAtom'
     ,   withLocAtomCompound
     ,   withLocAtomKey
@@ -748,6 +749,17 @@ withLocAtom :: (HOI4Info g, Monad m) =>
     (Text -> ScriptMessage)
     -> GenericStatement -> PPT g m IndentedMessages
 withLocAtom msg = withLocAtom' msg id
+
+-- | As 'withLocAtom', but say nothing at all if the localization is blank.
+-- Scripts use tooltips whose text is only whitespace (@generic_skip_one_line_tt@
+-- and friends) to space out the in-game tooltip; on the wiki they are noise.
+withLocAtomNonEmpty :: (HOI4Info g, Monad m) =>
+    (Text -> ScriptMessage)
+    -> GenericStatement -> PPT g m IndentedMessages
+withLocAtomNonEmpty msg stmt@[pdx| %_ = ?key |] = do
+    loc <- getGameL10n key
+    if T.null (T.strip loc) then return [] else msgToPP (msg loc)
+withLocAtomNonEmpty _ stmt = preStatement stmt
 
 withLocAtomCompound :: (HOI4Info g, Monad m) =>
     (Text -> ScriptMessage)
