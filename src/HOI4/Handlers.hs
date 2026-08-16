@@ -2312,6 +2312,8 @@ addBuildingConstruction stmt@[pdx| %_ = @scr |] =
         addLine abc [pdx| instant_build = yes |] = abc { addbc_instant_build = True }
         addLine abc [pdx| province = !num |] = abc { addbc_province = Just [num] }
         addLine abc [pdx| province = @scr |] = foldl' addLine' abc scr
+        addLine abc [pdx| level > !num |] = abc { addbc_province_comp = "higher than", addbc_province_level = Just num }
+        addLine abc [pdx| level < !num |] = abc { addbc_province_comp = "lower than", addbc_province_level = Just num }
         addLine abc [pdx| $other = %_ |] = trace ("unknown section in add_building_construction: " ++ show other) abc
         addLine abc stmt = trace ("Unknown in add_building_construction: " ++ show stmt) abc
 
@@ -2416,6 +2418,8 @@ setBuildingLevel stmt@[pdx| %_ = @scr |] =
         addLine sbl [pdx| level = $txt |] = sbl { sbl_levelvar = Just txt }
         addLine sbl [pdx| province = !num |] = sbl { sbl_province = Just [num] }
         addLine sbl [pdx| province = @scr |] = foldl' addLine' sbl scr
+        addLine sbl [pdx| level > !num |] = sbl { sbl_province_comp = "higher than", sbl_province_level = Just num }
+        addLine sbl [pdx| level < !num |] = sbl { sbl_province_comp = "lower than", sbl_province_level = Just num }
         addLine sbl [pdx| instant_build = %_ |] = sbl
         addLine sbl [pdx| $other = %_ |] = trace ("unknown section in set_building_level: " ++ show other) sbl
         addLine sbl stmt = trace ("Unknown form in set_building_level: " ++ show stmt) sbl
