@@ -54,7 +54,7 @@ parseHOI4NationalFocuses scripts = HM.unions . HM.elems <$> do
     tryParse <- hoistExceptions $
         HM.traverseWithKey
             (\sourceFile scr ->
-                setCurrentFile sourceFile $ mapM parseHOI4NationalFocus $ concatMap mapTree scr)
+                setCurrentFile sourceFile $ mapM (parseHOI4NationalFocus (fileVars scr)) $ concatMap mapTree scr)
             scripts
     case tryParse of
         Left err -> do
@@ -78,12 +78,20 @@ parseHOI4NationalFocuses scripts = HM.unions . HM.elems <$> do
             [pdx| joint_focus = @_ |] -> [scr]
             _ -> []
 
+-- | Collect the file-local script constants (@var = 10 at top level of a
+-- file). These are used e.g. for focus costs shared between several focuses.
+fileVars :: GenericScript -> HashMap Text Double
+fileVars = HM.fromList . mapMaybe getvar
+    where
+        getvar (Statement (AtLhs var) OpEq rhs) = (,) var <$> floatRhs rhs
+        getvar _ = Nothing
+
 -- | Parse a statement in an national focus file. Some statements aren't
 -- national focus'; for those, and for any obvious errors, return Right Nothing.
 parseHOI4NationalFocus :: (IsGameState (GameState g), IsGameData (GameData g), MonadError Text m) =>
-    GenericStatement -> PPT g m (Either Text (Maybe HOI4NationalFocus))
-parseHOI4NationalFocus (StatementBare _) = throwError "bare statement at top level"
-parseHOI4NationalFocus [pdx| %left = %right |] = case right of
+    HashMap Text Double -> GenericStatement -> PPT g m (Either Text (Maybe HOI4NationalFocus))
+parseHOI4NationalFocus _ (StatementBare _) = throwError "bare statement at top level"
+parseHOI4NationalFocus vars [pdx| %left = %right |] = case right of
     CompoundRhs parts -> case left of
         CustomLhs _ -> throwError "internal error: custom lhs"
         IntLhs _ -> throwError "int lhs at top level"
@@ -95,7 +103,7 @@ parseHOI4NationalFocus [pdx| %left = %right |] = case right of
                 withCurrentFile $ \file -> do
                     nfNameLoc <- getGameL10n $ fromMaybe (getNFId parts) (getNFTxt parts)
                     nfNameDesc <- getGameL10nIfPresent $ fromMaybe (getNFId parts) (getNFTxt parts) <> "_desc"
-                    nnf <- hoistErrors $ foldM nationalFocusAddSection
+                    nnf <- hoistErrors $ foldM (nationalFocusAddSection vars)
                                                 (Just newHOI4NationalFocus {nf_path = file
                                                                             ,nf_name_loc = nfNameLoc
                                                                             ,nf_name_desc = nfNameDesc})
@@ -114,15 +122,15 @@ parseHOI4NationalFocus [pdx| %left = %right |] = case right of
         getNFTxt ([pdx| text = $nfname|]:_) = Just nfname
         getNFTxt (_:xs) = getNFTxt xs
         getNFTxt [] = Nothing
-parseHOI4NationalFocus _ = withCurrentFile $ \file ->
+parseHOI4NationalFocus _ _ = withCurrentFile $ \file ->
     throwError ("unrecognised form for national focus in " <> T.pack file)
 
 -- | Interpret one section of an national focus. If understood, add it to the
 -- event data. If not understood, throw an exception.
 nationalFocusAddSection :: (IsGameState (GameState g), MonadError Text m) =>
-    Maybe HOI4NationalFocus -> GenericStatement -> PPT g m (Maybe HOI4NationalFocus)
-nationalFocusAddSection Nothing _ = return Nothing
-nationalFocusAddSection nf stmt
+    HashMap Text Double -> Maybe HOI4NationalFocus -> GenericStatement -> PPT g m (Maybe HOI4NationalFocus)
+nationalFocusAddSection _ Nothing _ = return Nothing
+nationalFocusAddSection vars nf stmt
     = return $ (`nationalFocusAddSection'` stmt) <$> nf
     where
         nationalFocusAddSection' nf stmt@[pdx| $lhs = %rhs |] = case T.map toLower lhs of
@@ -159,6 +167,9 @@ nationalFocusAddSection nf stmt
                 _-> trace ("bad nf icon in: " ++ show stmt) nf
             "cost" -> case rhs of
                 (floatRhs -> Just num) -> nf {nf_cost = num}
+                GenericRhs var []
+                    | Just num <- HM.lookup (fromMaybe var (T.stripPrefix "@" var)) vars
+                    -> nf {nf_cost = num}
                 _ -> trace ("bad nf cost in: " ++ show stmt) nf
             "allow_branch" -> case rhs of
                 CompoundRhs [] ->
@@ -259,7 +270,7 @@ parseHOI4NationalFocusesPath scripts = do
     tryParse <- hoistExceptions $
         HM.traverseWithKey
             (\sourceFile scr ->
-                setCurrentFile sourceFile $ mapM parseHOI4NationalFocus $ concatMap mapTree scr)
+                setCurrentFile sourceFile $ mapM (parseHOI4NationalFocus (fileVars scr)) $ concatMap mapTree scr)
             scripts
     case tryParse of
         Left err -> do
