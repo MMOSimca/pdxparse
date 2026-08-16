@@ -480,9 +480,16 @@ getStateLoc :: (IsGameData (GameData g), Monad m) =>
 getStateLoc n = do
     let stateid_t = T.pack (show n)
     mstateloc <- getGameL10nIfPresent ("STATE_" <> stateid_t)
-    return $ case mstateloc of
-        Just loc -> boldText loc <> " (" <> stateid_t <> ")"
-        _ -> "State" <> stateid_t
+    case mstateloc of
+        -- the wiki's state template renders as bold name + id in parentheses
+        Just _ -> return $ Doc.doc2text (template "state" [stateid_t])
+        -- Some scripts (e.g. prioritize lists) mix province ids in with state
+        -- ids; try the victory point name for those
+        _ -> do
+            mvploc <- getGameL10nIfPresent ("VICTORY_POINTS_" <> stateid_t)
+            return $ case mvploc of
+                Just vploc -> boldText vploc <> " (province " <> stateid_t <> ")"
+                _ -> "province (" <> stateid_t <> ")"
 
 eGetState :: (HOI4Info g, Monad m) =>
              Either Text (Text, Text) -> PPT g m (Maybe Text)
