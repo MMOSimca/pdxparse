@@ -4666,9 +4666,7 @@ instance RenderMessage Script ScriptMessage where
             -> mconcat
                 [ "Start a {{icon|"
                 , _what
-                , "}} "
-                , _what
-                , " civil war ("
+                , "|1}} civil war ("
                 , _amtT
                 , " size)"
                 ]
