@@ -424,7 +424,7 @@ ppEvent evt = maybe
             traceM ("warning: is_triggered_only, trigger, and mean_time_to_happen missing for event id " ++ T.unpack eid)
         when (isTriggeredOnly && Doc.doc2text triggered_pp == "(No triggers)" && isNothing mmtth_pp'd && null trigger_pp'd) $
             -- TODO: use logging instead of trace
-            traceM ("warning: Event is is_triggered_only but no triggers or mean_time_to_hapen found for event id " ++ T.unpack eid)
+            traceM ("warning: Event is is_triggered_only but no triggers or mean_time_to_happen found for event id " ++ T.unpack eid)
         when (isFireOnlyOnce && isMajor) $
             -- TODO: use logging instead of trace
             traceM ("warning: Event is fire_only_once and major " ++ T.unpack eid)
