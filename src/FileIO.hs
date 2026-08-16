@@ -22,6 +22,7 @@ import Control.Exception (try)
 
 import qualified Data.ByteString as B
 
+import Data.Char (isSpace)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
@@ -119,6 +120,12 @@ readPathScript filepath = do
         runparserAndAddClosingCurlyBrackets filepath contents = case runparser contents of
             -- no leftovers means that the parsing was successful (result could be empty in case of a file which just has whitespace and comments)
             Ap.Done "" result -> Ap.Done "" result
+            -- if the leftover is nothing but extra closing brackets (and whitespace),
+            -- the file parsed fine apart from surplus } at the end; ignore them
+            Ap.Done originalLeftover originalResult
+                | T.all (\c -> isSpace c || c == '}') originalLeftover ->
+                    trace ( "File " ++ filepath ++ ": Extra closing curly bracket(s) at end, ignored" )
+                        Ap.Done "" originalResult
             -- we have some leftover, so the file was either not parsed at all or just partially parsed
             -- so we try again with an extra closing }
             Ap.Done originalLeftover originalResult -> case runparser (contents<>"}") of
