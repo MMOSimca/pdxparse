@@ -3905,6 +3905,10 @@ startBorderWar stmt@[pdx| %_ = @scr |]
             | otherwise = return sbw
         addLine sbw [pdx| attacker = @scr |] = foldM (addLine' True) sbw scr
         addLine sbw [pdx| defender = @scr |] = foldM (addLine' False) sbw scr
+        addLine sbw [pdx| combat_width = %_ |] = return sbw
+        addLine sbw [pdx| minimum_duration_in_days = %_ |] = return sbw
+        addLine sbw [pdx| dig_in_factor = %_ |] = return sbw
+        addLine sbw [pdx| terrain_factor = %_ |] = return sbw
         addLine sbw [pdx| $other = %_ |] = trace ("unknown section in startBorderWar: " ++ show other) $ return sbw
         addLine sbw stmt = trace ("unknown form in startBorderWar: " ++ show stmt) $ return sbw
 
@@ -3935,6 +3939,10 @@ startBorderWar stmt@[pdx| %_ = @scr |]
             then return  sbw { sbw_on_cancel_attacker = eid }
             else return sbw { sbw_on_cancel_defender = eid }
         addLine' atde sbw [pdx| num_provinces = %_ |] = return sbw
+        addLine' _ sbw [pdx| leader_score = %_ |] = return sbw
+        addLine' _ sbw [pdx| dig_in_factor = %_ |] = return sbw
+        addLine' _ sbw [pdx| terrain_factor = %_ |] = return sbw
+        addLine' _ sbw [pdx| modifier = %_ |] = return sbw
         addLine' _ sbw [pdx| $other = %_ |] = trace ("unknown section in startBorderWar@attdef: " ++ show other) $ return sbw
         addLine' _ sbw stmt = trace ("unknown form in startBorderWar@attdef: " ++ show stmt) $ return sbw
         ppSBW :: StartBorderWar -> PPT g m IndentedMessages
