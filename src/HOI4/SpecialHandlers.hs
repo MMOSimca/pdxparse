@@ -65,7 +65,7 @@ import Abstract -- everything
 import qualified Doc -- everything
 import HOI4.Messages -- everything
 import MessageTools (iquotes
-
+                    , plainNum
                     , formatDays)
 import QQ -- everything
 -- everything
@@ -2210,8 +2210,31 @@ tooltipText msg loc
 locKeyText :: (HOI4Info g, Monad m) => HashMap Text LocArg -> Text -> PPT g m Text
 locKeyText args key = case T.stripPrefix "|" rest of
     Just token -> fromMaybe ("<tt>" <> key <> "</tt>") <$> locFormatter fmt token
-    Nothing -> getGameL10nArgs args key
+    Nothing -> fillConstants =<< getGameL10nArgs args key
     where (fmt, rest) = T.breakOn "|" key
+
+-- | Fill in every script constant a piece of localization refers to in brackets.
+-- The game reads those as it draws the text, and unlike the variables that share
+-- the same bracket syntax, a constant is the same number whenever it is read, so
+-- it can be filled in here as well. A reference to something that is not a
+-- constant holding a number is left as it stands for a human to deal with.
+fillConstants :: (HOI4Info g, Monad m) => Text -> PPT g m Text
+fillConstants text = do
+    constants <- getScriptConstants
+    return (fill constants text)
+    where
+        marker = "[?constant:"
+        fill constants t = case T.breakOn marker t of
+            (_, rest) | T.null rest -> t
+            (before, rest) ->
+                let afterMarker = T.drop (T.length marker) rest
+                    (path, closing) = T.breakOn "]" afterMarker
+                in case (HM.lookup path constants, T.stripPrefix "]" closing) of
+                    (Just val, Just after) ->
+                        before <> Doc.doc2text (plainNum val) <> fill constants after
+                    -- Whatever this refers to, the marker itself is done with, so
+                    -- what follows is searched without it and the recursion ends.
+                    _ -> before <> marker <> fill constants afterMarker
 
 -- | What one of the game's localization formatters comes to when applied to a
 -- token, or 'Nothing' for one we cannot work out, which is left as written for a

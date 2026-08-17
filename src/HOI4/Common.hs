@@ -639,6 +639,8 @@ handlersSpecialComplex = Tr.fromList
         ,("add_named_threat"             , addNamedThreat)
         ,("add_opinion_modifier"         , opinion MsgAddOpinion MsgAddOpinionDur)
         ,("add_tech_bonus"               , addTechBonus)
+        ,("add_breakthrough_progress"    , addBreakthrough MsgAddBreakthroughProgress MsgBreakthroughProgress)
+        ,("add_breakthrough_points"      , addBreakthrough MsgAddBreakthroughPoints MsgBreakthroughPoints)
         ,("add_to_war"                   , addToWar)
         ,("annex_country"                , annexCountry)
         ,("reverse_add_opinion_modifier" , opinion MsgReverseAddOpinion MsgReverseAddOpinionDur)

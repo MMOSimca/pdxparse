@@ -13,6 +13,7 @@ module HOI4.Misc (
         ,parseHOI4ModifierDefinitions
         ,parseHOI4Buildings
         ,parseHOI4MioNames
+        ,parseHOI4ScriptConstants
         ,parseHOI4LocKeys
     ) where
 
@@ -562,3 +563,27 @@ parseHOI4MioNames scripts = return $ HM.unions (map organization (concat (HM.ele
             Just [pdx| %_ = $name |] -> [(token, name)]
             Just [pdx| %_ = ?name |] -> [(token, name)]
             _ -> []
+
+----------------------
+-- script constants --
+----------------------
+
+-- | The numbers script can name instead of writing out, keyed on the dotted path
+-- that names each, e.g. @sp_breakthrough_progress.medium@. A category may hold
+-- its numbers directly or group them into blocks a further level down, and both
+-- are named by the whole path down to the number, so the tree is flattened into
+-- one entry per number. Nothing but numbers is kept: the other categories hold
+-- lists of countries or states, which script uses in ways that have nothing to do
+-- with a value.
+parseHOI4ScriptConstants :: (IsGameState (GameState g), IsGameData (GameData g), Monad m) =>
+    HashMap String GenericScript -> PPT g m (HashMap Text Double)
+parseHOI4ScriptConstants scripts = return $ HM.fromList
+    (concatMap (constant "") (concat (HM.elems scripts)))
+    where
+        -- The schema says what shape a category's entries take rather than being
+        -- one of them, and its own keys would read as constants named "data" and
+        -- "any_key" if it were followed into.
+        constant _ [pdx| schema = %_ |] = []
+        constant prefix [pdx| $key = @scr |] = concatMap (constant (prefix <> key <> ".")) scr
+        constant prefix [pdx| $key = !num |] = [(prefix <> key, num)]
+        constant _ _ = []

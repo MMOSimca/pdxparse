@@ -62,6 +62,7 @@ import HOI4.Misc (parseHOI4CountryHistory
                  , parseHOI4Effects, parseHOI4Triggers
                  , parseHOI4BopRanges, parseHOI4ModifierDefinitions
                  , parseHOI4Buildings, parseHOI4MioNames
+                 , parseHOI4ScriptConstants
                  , parseHOI4LocKeys)
 
 -- | Temporary (?) fix for CHI and PRC both localizing to "China"
@@ -147,6 +148,8 @@ instance IsGame HOI4 where
                 ,   hoi4buildings = HM.empty
                 ,   hoi4mioScripts = HM.empty
                 ,   hoi4mionames = HM.empty
+                ,   hoi4scriptconstantScripts = HM.empty
+                ,   hoi4scriptconstants = HM.empty
                 ,   hoi4lockeys = []
                 ,   hoi4modkeys = []
 
@@ -338,6 +341,12 @@ instance HOI4Info HOI4 where
     getMioNames = do
         HOI4D ed <- get
         return (hoi4mionames ed)
+    getScriptConstantScripts = do
+        HOI4D ed <- get
+        return (hoi4scriptconstantScripts ed)
+    getScriptConstants = do
+        HOI4D ed <- get
+        return (hoi4scriptconstants ed)
     getLocKeys = do
         HOI4D ed <- get
         return (hoi4lockeys ed)
@@ -416,6 +425,7 @@ readHOI4Scripts = do
                     "technologies" -> "common" </> "technologies"
                     "buildings" -> "common" </> "buildings"
                     "mio" -> "common" </> "military_industrial_organization" </> "organizations"
+                    "script_constants" -> "common" </> "script_constants"
                     _          -> category
                 sourceDir = buildPath settings sourceSubdir
             direxist <- liftIO $ doesDirectoryExist sourceDir
@@ -455,6 +465,7 @@ readHOI4Scripts = do
     techscript <- readHOI4Script "technologies"
     buildingscript <- readHOI4Script "buildings"
     mioscript <- readHOI4Script "mio"
+    constantscript <- readHOI4Script "script_constants"
     lockeys <- gets (gameL10nKeys . getSettings)
 
     modify $ \(HOI4D s) -> HOI4D $ s {
@@ -487,6 +498,7 @@ readHOI4Scripts = do
         ,   hoi4techScripts = techscript
         ,   hoi4buildingScripts = buildingscript
         ,   hoi4mioScripts = mioscript
+        ,   hoi4scriptconstantScripts = constantscript
         ,   hoi4lockeys = lockeys
         }
 
@@ -520,6 +532,7 @@ parseHOI4Scripts = do
     techspathed <- parseHOI4TechnologiesPath =<< getTechnologyScripts
     buildings <- parseHOI4Buildings =<< getBuildingScripts
     mionames <- parseHOI4MioNames =<< getMioScripts
+    constants <- parseHOI4ScriptConstants =<< getScriptConstantScripts
     modkeys <- parseHOI4LocKeys =<< getLocKeys
 
     let te1 = findTriggeredEventsInEvents HM.empty (HM.elems events)
@@ -569,6 +582,7 @@ parseHOI4Scripts = do
             ,   hoi4techs = techspathed
             ,   hoi4buildings = buildings
             ,   hoi4mionames = mionames
+            ,   hoi4scriptconstants = constants
             ,   hoi4modkeys = modkeys
             }
 

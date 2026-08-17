@@ -104,6 +104,8 @@ data HOI4Data = HOI4Data {
     ,   hoi4buildings :: HashMap Text HOI4Building
     ,   hoi4mioScripts :: HashMap FilePath GenericScript
     ,   hoi4mionames :: HashMap Text Text -- ^ MIO, trait and policy token -> name key
+    ,   hoi4scriptconstantScripts :: HashMap FilePath GenericScript
+    ,   hoi4scriptconstants :: HashMap Text Double -- ^ dotted path -> value
     ,   hoi4lockeys :: [Text]
     ,   hoi4modkeys :: [Text]
 
@@ -237,6 +239,11 @@ class (IsGame g,
     -- | Get the name every military industrial organization, department trait
     -- and policy is known by, keyed on its token
     getMioNames :: Monad m => PPT g m (HashMap Text Text)
+    -- | Get script constant script
+    getScriptConstantScripts :: Monad m => PPT g m (HashMap FilePath GenericScript)
+    -- | Get the numbers script can name instead of writing out, keyed on the
+    -- dotted path that names each
+    getScriptConstants :: Monad m => PPT g m (HashMap Text Double)
     -- | Get the lockeys
     getLocKeys :: Monad m => PPT g m [Text]
     -- | Get the modkeys parsed

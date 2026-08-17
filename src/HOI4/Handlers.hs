@@ -98,6 +98,7 @@ module HOI4.Handlers (
     ,   declareWarOn
     ,   annexCountry
     ,   addTechBonus
+    ,   addBreakthrough
     ,   setFlag
     ,   hasFlag
     ,   addToWar
@@ -197,6 +198,14 @@ import {-# SOURCE #-} HOI4.Common (ppScript, ppMany, extractStmt, matchLhsText)
 import HOI4.Types -- everything
 
 import Debug.Trace
+
+-- | The number script names by naming a script constant, or 'Nothing' if the name
+-- is not a constant holding one. An effect that documents a constant for one of
+-- its fields takes the name bare; anywhere a variable would go, script writes the
+-- @constant:@ prefix instead, and both name the same thing.
+constantValue :: (HOI4Info g, Monad m) => Text -> PPT g m (Maybe Double)
+constantValue name = HM.lookup path <$> getScriptConstants
+    where path = fromMaybe name (T.stripPrefix "constant:" name)
 
 -- | Pretty-print a script statement, wrap it in a @<pre>@ element, and emit a
 -- generic message for it at the current indentation level. This is the
@@ -2215,7 +2224,7 @@ setVariable :: forall g m. (HOI4Info g, Monad m) =>
     (Text -> Double -> ScriptMessage) ->
     StatementHandler g m
 setVariable msgWW msgWV stmt@[pdx| %_ = @scr |]
-    = pp_sv (foldl' addLine newSV scr)
+    = pp_sv =<< resolveConstant (foldl' addLine newSV scr)
     where
         addLine :: SetVariable -> GenericStatement -> SetVariable
         addLine sv [pdx| var = ?val |]
@@ -2244,6 +2253,17 @@ setVariable msgWW msgWV stmt@[pdx| %_ = @scr |]
         addLine sv _ = trace ("failed to parse var: " ++ show stmt) sv
         toTT :: Text -> Text
         toTT t = "<tt>" <> t <> "</tt>"
+        -- A value script names as a script constant is a number like any other,
+        -- and the same number every time, so it is written as that number rather
+        -- than as a name only the script knows the meaning of.
+        resolveConstant :: SetVariable -> PPT g m SetVariable
+        resolveConstant sv = case T.stripPrefix "constant:" =<< sv_which2 sv of
+            Just path -> do
+                mval <- constantValue path
+                return $ case mval of
+                    Just val -> sv { sv_which2 = Nothing, sv_value = Just val }
+                    Nothing -> sv
+            Nothing -> return sv
         -- The modifier localization a tooltip names has a slot for the value
         -- being written, which the game fills in as it draws the tooltip and the
         -- statement has just told us.
@@ -2853,6 +2873,38 @@ addTechBonus stmt@[pdx| %_ = @scr |]
             tbmsg_pp <- msgToPP tbmsg
             return $ tbmsg_pp ++ concat techcatmsg
 addTechBonus stmt = preStatement stmt
+
+-- | Handler for @add_breakthrough_progress@ and @add_breakthrough_points@, which
+-- advance a country towards its next special project breakthrough in one
+-- specialization, or hand it whole breakthroughs outright.
+--
+-- The amount may be a number or the name of a script constant, and the
+-- specialization may be @all@, in which case there is no one specialization to
+-- name and the message says so instead.
+addBreakthrough :: (HOI4Info g, Monad m) =>
+    ScriptMessage -> (Text -> Double -> ScriptMessage) -> StatementHandler g m
+addBreakthrough headmsg linemsg stmt@[pdx| %_ = @scr |] = do
+    let (mspec, rest) = extractStmt (matchLhsText "specialization") scr
+        (mvalue, _) = extractStmt (matchLhsText "value") rest
+    mamt <- maybe (return Nothing) constantOrNumber mvalue
+    case (mspec, mamt) of
+        (Just [pdx| %_ = $spec |], Just amt) -> do
+            specloc <- if spec == "all"
+                        then return ""
+                        else Doc.oneLine <$> getGameL10n spec
+            headpp <- msgToPP headmsg
+            linepp <- indentUp (msgToPP (linemsg specloc amt))
+            return $ headpp ++ linepp
+        _ -> preStatement stmt
+addBreakthrough _ _ stmt = preStatement stmt
+
+-- | The number a statement gives, whether it writes the number out or names a
+-- script constant holding it. Comes back as 'Nothing' if it does neither, most
+-- likely because it uses a variable instead.
+constantOrNumber :: (HOI4Info g, Monad m) => GenericStatement -> PPT g m (Maybe Double)
+constantOrNumber [pdx| %_ = !num |] = return (Just num)
+constantOrNumber [pdx| %_ = ?name |] = constantValue name
+constantOrNumber _ = return Nothing
 
 ------------------------------------------
 -- handlers for various flag statements --

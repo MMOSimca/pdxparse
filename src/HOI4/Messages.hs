@@ -300,6 +300,10 @@ data ScriptMessage
     | MsgCharacterListTooltip {scriptMessageAmtText :: Text, scriptMessageWhat :: Text}
     | MsgTechEnables {scriptMessageWhat :: Text}
     | MsgTechEnablesBuilding {scriptMessageWhat :: Text, scriptMessageAmt :: Double}
+    | MsgAddBreakthroughProgress
+    | MsgAddBreakthroughPoints
+    | MsgBreakthroughProgress {scriptMessageWhat :: Text, scriptMessageAmt :: Double}
+    | MsgBreakthroughPoints {scriptMessageWhat :: Text, scriptMessageAmt :: Double}
     | MsgRemoveStateClaim {scriptMessageWhat :: Text}
     | MsgRemoveStateCore {scriptMessageWhat :: Text}
     | MsgSetStateController {scriptMessageWhat :: Text}
@@ -1482,6 +1486,26 @@ instance RenderMessage Script ScriptMessage where
                 , boldText _what
                 , " up to level "
                 , toMessage $ plainNum _amt
+                ]
+        -- Breakthrough progress and the points it adds up to are gained in one
+        -- special project specialization at a time, so the specialization heads
+        -- its own line under the sentence naming what is being gained, which is
+        -- how the game writes it too.
+        MsgAddBreakthroughProgress
+            -> "Gain breakthrough progress:"
+        MsgAddBreakthroughPoints
+            -> "Gain breakthrough points:"
+        MsgBreakthroughProgress {scriptMessageWhat = _what, scriptMessageAmt = _amt}
+            -> mconcat
+                [ ifThenElseT (T.null _what) "Every specialization" (boldText _what)
+                , ": "
+                , toMessage $ reducedNum (colourPcMin True) _amt
+                ]
+        MsgBreakthroughPoints {scriptMessageWhat = _what, scriptMessageAmt = _amt}
+            -> mconcat
+                [ ifThenElseT (T.null _what) "Every specialization" (boldText _what)
+                , ": "
+                , toMessage $ colourNumMin True _amt
                 ]
         MsgRemoveStateClaim {scriptMessageWhat = _what}
             -> mconcat

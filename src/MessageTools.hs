@@ -12,7 +12,7 @@ module MessageTools (
     -- formats the number using a @{{red}}@ or @{{green}}@ template
     -- accordingly. Don't use these for numbers that may be either good or bad
     -- depending on context, e.g. karma.
-    ,   colourNum, colourPc
+    ,   colourNum, colourPc, colourNumMin, colourPcMin
     ,   colourNumSign, colourPcSign
     -- ** Fixed decimal places
     -- | Each of these writes the number to a set number of decimal places
@@ -216,6 +216,19 @@ colourNum good = ppNum True False good False False
 -- | Format a number as a percentage, in an appropriate colour, with thousands separators.
 colourPc :: Bool -> Double -> Doc
 colourPc good = ppNum True True good False False
+
+-- | Format a number in an appropriate colour with thousands separators, keeping
+-- the @-@ in front of a negative one. See 'colourPcMin'.
+colourNumMin :: Bool -> Double -> Doc
+colourNumMin good = ppNum True False good False True
+
+-- | Format a number as a percentage, in an appropriate colour, with thousands
+-- separators, keeping the @-@ in front of a negative one. Unlike 'colourPc',
+-- which drops the sign on the assumption that the surrounding sentence says
+-- which way the value goes, this is for a figure that stands on its own and so
+-- has to say so itself.
+colourPcMin :: Bool -> Double -> Doc
+colourPcMin good = ppNum True True good False True
 
 -- | Format a number in an appropriate colour with thousands separators, adding
 -- a @+@ at the start if positive.
