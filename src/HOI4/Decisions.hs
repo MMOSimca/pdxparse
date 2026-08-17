@@ -189,7 +189,7 @@ ppdecisioncat decc = setCurrentFile (decc_path decc) $ do
                 mpic <- getGameInterfaceIfPresent piccat
                 maybe (return mempty) (\p -> return $ mconcat ["<!-- picture: ", Doc.strictText p, " -->", PP.line]) mpic
     return . mconcat $
-        ["== [[File:", Doc.strictText icon_pp, ".png]]" , "<!-- ", nameD, " --> ", Doc.strictText name_loc," ==", PP.line]++
+        ["== [[File:", Doc.strictText icon_pp, ".png|22px]]" , "<!-- ", nameD, " --> ", Doc.strictText name_loc," ==", PP.line]++
 
         [maybe mempty
                (\txt -> mconcat [picture_pp, Doc.strictText $ italicText $ Doc.nl2br txt, PP.line, PP.line])

@@ -346,7 +346,7 @@ writeHOI4DynamicModifiers = do
             req <- imsg2doc =<< ppMany (dmodEnable mod)
             icon <- maybe (return mempty) (\i -> do
                 icond <- getGameInterface "idea_unknown" i
-                return $ "[[File:" <> icond <> ".png]]") (dmodIcon mod)
+                return $ "[[File:" <> icond <> ".png|22px]]") (dmodIcon mod)
             loc <- do
                 mloc <- getGameL10nIfPresent (dmodName mod <> "_desc")
                 case mloc of

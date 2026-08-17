@@ -430,7 +430,7 @@ unpackTextfragment args = \case
         let kpref = if "GFX_" `T.isPrefixOf` k then k else "GFX_" <> k
         gfx <- getGameInterfaceIfPresent kpref
         case gfx of
-            Just f -> return $ "[[File:" <> f <> ".png]]"
+            Just f -> return $ "[[File:" <> f <> ".png|22px]]"
             Nothing -> return $ "£" <> k
     KeyText k mfmt -> case HM.lookup k args of
         Just val -> return $ formatLocValue mfmt val
