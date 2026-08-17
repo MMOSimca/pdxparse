@@ -11,6 +11,8 @@ module HOI4.Misc (
         ,parseHOI4Triggers
         ,parseHOI4BopRanges
         ,parseHOI4ModifierDefinitions
+        ,parseHOI4Buildings
+        ,parseHOI4MioNames
         ,parseHOI4LocKeys
     ) where
 
@@ -505,3 +507,58 @@ parseHOI4ModifierDefinition _ = withCurrentFile $ \file ->
 
 parseHOI4LocKeys order = return $ map fst (sortOn (\x -> elemIndex (snd x) order) . filter (modchk . snd) . HM.toList . HM.map (\(loc,_,_) -> loc) $ modifiersTable)
     where modchk = T.all (\xs -> isUpper xs || not (isAlphaNum xs))
+
+---------------
+-- buildings --
+---------------
+
+-- | The buildings, keyed on the token script names them by. Only the modifiers a
+-- building gives the state it stands in are kept: those are what the game shows
+-- when script points at a building by name, and the rest of a building's entry
+-- says how to build it rather than what it does.
+parseHOI4Buildings :: (IsGameState (GameState g), IsGameData (GameData g), Monad m) =>
+    HashMap String GenericScript -> PPT g m (HashMap Text HOI4Building)
+parseHOI4Buildings scripts = return $ HM.unions
+    [ HM.fromList [(bld_id bld, bld) | bld <- mapMaybe (building sourceFile) (concatMap named scr)]
+    | (sourceFile, scr) <- HM.toList scripts ]
+    where
+        named = \case
+            [pdx| buildings = @blds |] -> blds
+            _ -> []
+        building file [pdx| $bid = @scr |] = Just HOI4Building
+            {   bld_id = bid
+            ,   bld_state_modifiers = fst (extractStmt (matchLhsText "state_modifiers") scr)
+            ,   bld_filepath = file
+            }
+        building _ _ = Nothing
+
+---------------------------------------
+-- military industrial organizations --
+---------------------------------------
+
+-- | The localization key that names each military industrial organization and
+-- each of the department traits it can take on, keyed on the token script refers
+-- to it by. Most are localized under their own token, but a fair number are not
+-- and only their entry says which key to use.
+parseHOI4MioNames :: (IsGameState (GameState g), IsGameData (GameData g), Monad m) =>
+    HashMap String GenericScript -> PPT g m (HashMap Text Text)
+parseHOI4MioNames scripts = return $ HM.unions (map organization (concat (HM.elems scripts)))
+    where
+        organization [pdx| $token = @scr |] =
+            HM.fromList (nameOf token scr ++ concatMap trait scr)
+        organization _ = HM.empty
+        -- A trait carries its own token, so the block it is written in says both
+        -- halves; a trait added by one organization and altered by another is
+        -- named the same either way, so the later entry may simply win.
+        trait stmt = case stmt of
+            [pdx| add_trait = @scr |] -> tokenNameOf scr
+            [pdx| trait = @scr |] -> tokenNameOf scr
+            [pdx| override_trait = @scr |] -> tokenNameOf scr
+            _ -> []
+        tokenNameOf scr = case fst (extractStmt (matchLhsText "token") scr) of
+            Just [pdx| %_ = $token |] -> nameOf token scr
+            _ -> []
+        nameOf token scr = case fst (extractStmt (matchLhsText "name") scr) of
+            Just [pdx| %_ = $name |] -> [(token, name)]
+            Just [pdx| %_ = ?name |] -> [(token, name)]
+            _ -> []

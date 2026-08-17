@@ -61,6 +61,7 @@ import HOI4.Misc (parseHOI4CountryHistory
                  , parseHOI4Terrain, parseHOI4Ideology
                  , parseHOI4Effects, parseHOI4Triggers
                  , parseHOI4BopRanges, parseHOI4ModifierDefinitions
+                 , parseHOI4Buildings, parseHOI4MioNames
                  , parseHOI4LocKeys)
 
 -- | Temporary (?) fix for CHI and PRC both localizing to "China"
@@ -142,6 +143,10 @@ instance IsGame HOI4 where
                 ,   hoi4bops = HM.empty
                 ,   hoi4techScripts = HM.empty
                 ,   hoi4techs = HM.empty
+                ,   hoi4buildingScripts = HM.empty
+                ,   hoi4buildings = HM.empty
+                ,   hoi4mioScripts = HM.empty
+                ,   hoi4mionames = HM.empty
                 ,   hoi4lockeys = []
                 ,   hoi4modkeys = []
 
@@ -321,6 +326,18 @@ instance HOI4Info HOI4 where
     getTechnologies = do
         HOI4D ed <- get
         return (hoi4techs ed)
+    getBuildingScripts = do
+        HOI4D ed <- get
+        return (hoi4buildingScripts ed)
+    getBuildings = do
+        HOI4D ed <- get
+        return (hoi4buildings ed)
+    getMioScripts = do
+        HOI4D ed <- get
+        return (hoi4mioScripts ed)
+    getMioNames = do
+        HOI4D ed <- get
+        return (hoi4mionames ed)
     getLocKeys = do
         HOI4D ed <- get
         return (hoi4lockeys ed)
@@ -397,6 +414,8 @@ readHOI4Scripts = do
                     "modifier_definitions" -> "common" </> "modifier_definitions"
                     "bop" -> "common" </> "bop"
                     "technologies" -> "common" </> "technologies"
+                    "buildings" -> "common" </> "buildings"
+                    "mio" -> "common" </> "military_industrial_organization" </> "organizations"
                     _          -> category
                 sourceDir = buildPath settings sourceSubdir
             direxist <- liftIO $ doesDirectoryExist sourceDir
@@ -434,6 +453,8 @@ readHOI4Scripts = do
     moddefs <- readHOI4Script "modifier_definitions"
     bopscript <- readHOI4Script "bop"
     techscript <- readHOI4Script "technologies"
+    buildingscript <- readHOI4Script "buildings"
+    mioscript <- readHOI4Script "mio"
     lockeys <- gets (gameL10nKeys . getSettings)
 
     modify $ \(HOI4D s) -> HOI4D $ s {
@@ -464,6 +485,8 @@ readHOI4Scripts = do
 
         ,   hoi4bopScripts = bopscript
         ,   hoi4techScripts = techscript
+        ,   hoi4buildingScripts = buildingscript
+        ,   hoi4mioScripts = mioscript
         ,   hoi4lockeys = lockeys
         }
 
@@ -495,6 +518,8 @@ parseHOI4Scripts = do
     moddef <- parseHOI4ModifierDefinitions =<< getModifierDefintionScripts
     bops <- parseHOI4BopRanges =<< getBopScripts
     techspathed <- parseHOI4TechnologiesPath =<< getTechnologyScripts
+    buildings <- parseHOI4Buildings =<< getBuildingScripts
+    mionames <- parseHOI4MioNames =<< getMioScripts
     modkeys <- parseHOI4LocKeys =<< getLocKeys
 
     let te1 = findTriggeredEventsInEvents HM.empty (HM.elems events)
@@ -542,6 +567,8 @@ parseHOI4Scripts = do
             ,   hoi4modifierdefinitions = moddef
             ,   hoi4bops = bops
             ,   hoi4techs = techspathed
+            ,   hoi4buildings = buildings
+            ,   hoi4mionames = mionames
             ,   hoi4modkeys = modkeys
             }
 

@@ -292,6 +292,14 @@ data ScriptMessage
     | MsgAddSkill {scriptMessageWhat :: Text, scriptMessageAmt :: Double}
     | MsgTooltip {scriptMessageWhat :: Text}
     | MsgCustomEffectTooltip {scriptMessageWhat :: Text}
+    | MsgShowUnitLeader {scriptMessageLoc :: Text, scriptMessageKey :: Text}
+    | MsgShowMio {scriptMessageLoc :: Text, scriptMessageKey :: Text}
+    | MsgUnlockMio {scriptMessageLoc :: Text, scriptMessageKey :: Text}
+    | MsgUnlockMioTrait {scriptMessageLoc :: Text, scriptMessageKey :: Text}
+    | MsgUnlockMioPolicy {scriptMessageLoc :: Text, scriptMessageKey :: Text}
+    | MsgCharacterListTooltip {scriptMessageAmtText :: Text, scriptMessageWhat :: Text}
+    | MsgTechEnables {scriptMessageWhat :: Text}
+    | MsgTechEnablesBuilding {scriptMessageWhat :: Text, scriptMessageAmt :: Double}
     | MsgRemoveStateClaim {scriptMessageWhat :: Text}
     | MsgRemoveStateCore {scriptMessageWhat :: Text}
     | MsgSetStateController {scriptMessageWhat :: Text}
@@ -1422,6 +1430,59 @@ instance RenderMessage Script ScriptMessage where
         -- game's text nor anything the script could have said instead.
         MsgCustomEffectTooltip {scriptMessageWhat = _what}
             -> _what
+        -- The game's own tooltip for a commander is their name and nothing else:
+        -- script writes it next to a hidden effect that has just given the
+        -- country that commander.
+        MsgShowUnitLeader {scriptMessageLoc = _loc, scriptMessageKey = _key}
+            -> mconcat
+                [ boldText _loc
+                , "<!-- ", _key, " -->"
+                ]
+        MsgShowMio {scriptMessageLoc = _loc, scriptMessageKey = _key}
+            -> mconcat
+                [ boldText _loc
+                , "<!-- ", _key, " -->"
+                ]
+        MsgUnlockMio {scriptMessageLoc = _loc, scriptMessageKey = _key}
+            -> mconcat
+                [ "Unlock the "
+                , boldText _loc
+                , "<!-- ", _key, " -->"
+                , " military industrial organization"
+                ]
+        MsgUnlockMioTrait {scriptMessageLoc = _loc, scriptMessageKey = _key}
+            -> mconcat
+                [ "Unlock the "
+                , boldText _loc
+                , "<!-- ", _key, " -->"
+                , " industrial organization trait"
+                ]
+        MsgUnlockMioPolicy {scriptMessageLoc = _loc, scriptMessageKey = _key}
+            -> mconcat
+                [ "Unlock the "
+                , boldText _loc
+                , "<!-- ", _key, " -->"
+                , " industrial organization policy"
+                ]
+        MsgCharacterListTooltip {scriptMessageAmtText = _amt, scriptMessageWhat = _what}
+            -> mconcat
+                [ "Names "
+                , ifThenElseT (T.null _amt) "every character"
+                    (boldText _amt <> " random characters")
+                , ifThenElseT (T.null _what) ":" (" that " <> _what)
+                ]
+        MsgTechEnables {scriptMessageWhat = _what}
+            -> mconcat
+                [ "Enables "
+                , boldText _what
+                ]
+        MsgTechEnablesBuilding {scriptMessageWhat = _what, scriptMessageAmt = _amt}
+            -> mconcat
+                [ "Enables "
+                , boldText _what
+                , " up to level "
+                , toMessage $ plainNum _amt
+                ]
         MsgRemoveStateClaim {scriptMessageWhat = _what}
             -> mconcat
                 [ "Loses a claim on "

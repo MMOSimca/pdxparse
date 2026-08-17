@@ -23,6 +23,7 @@ module HOI4.Types (
     ,   HOI4UnitLeaderTrait (..)
     ,   HOI4BopRange (..)
     ,   HOI4Technology (..)
+    ,   HOI4Building (..)
         -- * Low level types
     ,   HOI4Scope (..)
     ,   AIWillDo (..)
@@ -99,6 +100,10 @@ data HOI4Data = HOI4Data {
     ,   hoi4bops :: HashMap Text HOI4BopRange
     ,   hoi4techScripts :: HashMap FilePath GenericScript
     ,   hoi4techs :: HashMap FilePath [HOI4Technology]
+    ,   hoi4buildingScripts :: HashMap FilePath GenericScript
+    ,   hoi4buildings :: HashMap Text HOI4Building
+    ,   hoi4mioScripts :: HashMap FilePath GenericScript
+    ,   hoi4mionames :: HashMap Text Text -- ^ MIO, trait and policy token -> name key
     ,   hoi4lockeys :: [Text]
     ,   hoi4modkeys :: [Text]
 
@@ -223,6 +228,15 @@ class (IsGame g,
     getTechnologyScripts  :: Monad m => PPT g m (HashMap FilePath GenericScript)
     -- | Get the technologies parsed
     getTechnologies  :: Monad m => PPT g m (HashMap FilePath [HOI4Technology])
+    -- | Get buildings script
+    getBuildingScripts :: Monad m => PPT g m (HashMap FilePath GenericScript)
+    -- | Get the buildings parsed
+    getBuildings :: Monad m => PPT g m (HashMap Text HOI4Building)
+    -- | Get military industrial organization script
+    getMioScripts :: Monad m => PPT g m (HashMap FilePath GenericScript)
+    -- | Get the name every military industrial organization, department trait
+    -- and policy is known by, keyed on its token
+    getMioNames :: Monad m => PPT g m (HashMap Text Text)
     -- | Get the lockeys
     getLocKeys :: Monad m => PPT g m [Text]
     -- | Get the modkeys parsed
@@ -611,6 +625,15 @@ data HOI4Technology = HOI4Technology
     ,   tech_on_complete :: Maybe GenericScript
     ,   tech_sortrest :: Maybe [GenericStatement]
     ,   tech_filepath :: FilePath
+    } deriving (Show)
+
+-- | A building, as far as anything outside the construction interface needs it:
+-- the modifiers it gives the state it stands in, which the game will show for a
+-- building the script has just granted.
+data HOI4Building = HOI4Building
+    {   bld_id :: Text
+    ,   bld_state_modifiers :: Maybe GenericStatement
+    ,   bld_filepath :: FilePath
     } deriving (Show)
 
 ------------------------------

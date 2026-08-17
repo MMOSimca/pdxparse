@@ -136,14 +136,35 @@ characterAddSection hChar stmt
             return hChar
         characterAddSection' hChar [pdx| gender = %_ |] =
             return hChar
-        characterAddSection' hChar [pdx| instance = %_ |] =
-            return hChar
+        -- A character whose entry differs between DLCs is written as several
+        -- instances, each holding the sections the character would otherwise
+        -- hold directly. Which instance is in play depends on what the game is
+        -- running with, so all of them are read: an advisor post that only one
+        -- of them offers is still a post the character can hold, and script that
+        -- points at its idea token has to find it.
+        characterAddSection' hChar [pdx| instance = @scr |] =
+            foldM instanceSection hChar scr
         characterAddSection' hChar [pdx| allowed_civil_war = %_ |] =
+            return hChar
+        -- What decides which of a character's instances is the one in play. All
+        -- of them are read, so there is nothing to decide.
+        characterAddSection' hChar [pdx| allowed = %_ |] =
+            return hChar
+        characterAddSection' hChar [pdx| can_be_captured = %_ |] =
             return hChar
         characterAddSection' hChar [pdx| $other = %_ |]
             = trace ("unknown section in character: " ++ T.unpack other) $ return hChar
         characterAddSection' hChar _
             = trace "unrecognised form for in character" $ return hChar
+
+        -- Instances disagree about the character's name, since that is often the
+        -- whole reason for having more than one of them, so the name the
+        -- character is localized under outside them wins. Only where there is no
+        -- such name does an instance get to supply one.
+        instanceSection hChar stmt@[pdx| name = %_ |]
+            | cha_loc_name hChar /= cha_id hChar = return hChar
+            | otherwise = characterAddSection' hChar stmt
+        instanceSection hChar stmt = characterAddSection' hChar stmt
 
         getTraits stmt@[pdx| traits = @traits |] = map
             (\case

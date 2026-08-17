@@ -22,7 +22,6 @@ module HOI4.Handlers (
     ,   compoundMessageTagged
     ,   withLocAtom
     ,   withLocAtomNonEmpty
-    ,   customEffectTooltip
     ,   withLocAtom'
     ,   withLocAtomCompound
     ,   withLocAtomKey
@@ -77,6 +76,7 @@ module HOI4.Handlers (
     ,   hasDlc
     ,   withFlagOrState
     ,   customTriggerTooltip
+    ,   limitClause
     ,   handleFocus
     ,   focusUncomplete
     ,   focusProgress
@@ -863,67 +863,6 @@ withLocAtomNonEmpty msg stmt@[pdx| %_ = ?key |] = do
     loc <- getGameL10n key
     if T.null (T.strip loc) then return [] else msgToPP (msg loc)
 withLocAtomNonEmpty _ stmt = preStatement stmt
-
--- | Handler for @custom_effect_tooltip@. A tooltip is usually a localization key
--- on its own, but it can also be a block naming the key together with values for
--- the arguments its text is written with.
---
--- Tooltips are worth the trouble of reading: script hides the machinery of an
--- effect in a @hidden_effect@ and puts a tooltip next to it saying in one
--- sentence what the machinery comes to, so the text a tooltip names is the
--- game's own summary of an effect we would otherwise have to spell out.
-customEffectTooltip :: (HOI4Info g, Monad m) => StatementHandler g m
-customEffectTooltip stmt@[pdx| %_ = @scr |] =
-    case extractStmt (matchLhsText "localization_key") scr of
-        (Just [pdx| %_ = ?key |], rest) -> do
-            args <- HM.fromList . catMaybes <$> traverse locArg rest
-            customTooltipText =<< getGameL10nArgs args key
-        _ -> preStatement stmt
-customEffectTooltip [pdx| %_ = ?key |] = customTooltipText =<< getGameL10n key
-customEffectTooltip stmt = preStatement stmt
-
--- | Emit a tooltip's text, or nothing at all if it has none: scripts use
--- tooltips whose text is only whitespace (@generic_skip_one_line_tt@ and
--- friends) to space the tooltip out in game, and on the wiki they are noise. A
--- tooltip written over several lines keeps its breaks, written the way the wiki
--- writes a break inside a list item.
-customTooltipText :: (HOI4Info g, Monad m) => Text -> PPT g m IndentedMessages
-customTooltipText loc
-    | T.null stripped = return []
-    | otherwise = msgToPP (MsgCustomEffectTooltip (Doc.nl2br stripped))
-    where stripped = T.strip loc
-
--- | The value a tooltip gives for one of the arguments its text is written with,
--- ready to be written into that text.
-locArg :: (HOI4Info g, Monad m) => GenericStatement -> PPT g m (Maybe (Text, LocArg))
--- An argument can be a tooltip in its own right, written the same way.
-locArg [pdx| $name = @scr |] = case extractStmt (matchLhsText "localization_key") scr of
-    (Just [pdx| %_ = ?key |], rest) -> do
-        inner <- HM.fromList . catMaybes <$> traverse locArg rest
-        Just . (,) name . LocText <$> getGameL10nArgs inner key
-    _ -> return Nothing
-locArg [pdx| $name = !num |] = return (Just (name, LocNum num))
-locArg [pdx| $name = ?val |] = Just . (,) name . LocText <$> locArgValue val
-locArg _ = return Nothing
-
--- | Read one tooltip argument's value. Most of them name localization of their
--- own. The rest are the game reading something out of its own state, where the
--- script says how to find it but not what it will say; those are left as written
--- for a human to fill in, except for a state's name, which we can look up.
-locArgValue :: (HOI4Info g, Monad m) => Text -> PPT g m Text
-locArgValue val
-    -- A promoted scope, e.g. "[70.GetName]".
-    | Just inner <- T.stripPrefix "[" =<< T.stripSuffix "]" unquoted
-        = case T.breakOn "." inner of
-            (sid, _) | not (T.null sid), T.all isDigit sid
-                -> getStateLoc (read (T.unpack sid))
-            _ -> return script
-    -- A sub-tooltip the game writes itself, e.g. "tech_effect|jungle_training_tech".
-    | "|" `T.isInfixOf` unquoted = return script
-    | otherwise = getGameL10n unquoted
-    where
-        unquoted = T.dropAround (== '"') val
-        script = "<tt>" <> unquoted <> "</tt>"
 
 withLocAtomCompound :: (HOI4Info g, Monad m) =>
     (Text -> ScriptMessage)

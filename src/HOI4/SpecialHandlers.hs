@@ -34,6 +34,16 @@ module HOI4.SpecialHandlers (
     ,   addRemoveUnitTrait
     ,   addTimedTrait
     ,   swapLeaderTrait
+    ,   customEffectTooltip
+    ,   customOverrideTooltip
+    ,   tooltip
+    ,   tooltipWith
+    ,   showUnitLeader
+    ,   showMio
+    ,   unlockMio
+    ,   unlockMioTrait
+    ,   unlockMioPolicy
+    ,   characterListTooltip
     ) where
 
 import Data.Text (Text)
@@ -44,7 +54,8 @@ import qualified Data.HashMap.Strict as HM
 --import Data.Set (Set)
 
 
-import Data.List (foldl', sortOn, elemIndex)
+import Data.Char (isDigit)
+import Data.List (foldl', sortOn, elemIndex, find)
 import Data.Maybe
 
 import Control.Monad.State (gets)
@@ -60,7 +71,8 @@ import QQ -- everything
 -- everything
 import SettingsTypes ( PPT, IsGameData (..), GameData (..), IsGameState (..), GameState (..)
                      , indentUp, getCurrentIndent, withCurrentIndent, withCurrentIndentCustom
-                     , getGameL10n, getGameL10nIfPresent
+                     , getGameL10n, getGameL10nIfPresent, getGameL10nArgs
+                     , LocArg (..)
                      , concatMapM
                      , getGameInterface, getGameInterfaceIfPresent)
 import {-# SOURCE #-} HOI4.Common (ppMany, ppOne, extractStmt, matchLhsText)
@@ -225,8 +237,12 @@ showIdeaWith nest stmt@[pdx| %_ = $idea |] = do
             ideaIcon <- getIdeaIcon iidea
             modmessage iidea idea_loc (id_id iidea) ideaIcon
         Nothing -> case HM.lookup idea charto of
-            Nothing -> nest $ preStatement stmt
             Just ccharto -> nest $ showAdvisor idea ccharto
+            -- Script also points this at things that are not ideas at all, a
+            -- military industrial organization most often. There is nothing to
+            -- list for those, but they are localized, so they can at least be
+            -- named rather than left as script.
+            Nothing -> nest $ mioTooltip MsgShowMio stmt
 showIdeaWith _ stmt = preStatement stmt
 
 -- | Name an advisor, with the trait their post comes with, and list everything
@@ -438,11 +454,12 @@ modifierMSG hidden targ stmt@[pdx| $mod = !num |] = let lmod = T.toLower mod in 
                             numericLocPrec loc' dec scrmsg stmt
                         Nothing -> preStatement stmt
                 Nothing -> preStatement stmt
-modifierMSG _ _ stmt@[pdx| custom_modifier_tooltip = $key|] = do
-    loc <- getGameL10nIfPresent key
-    maybe (preStatement stmt)
-        (msgToPP . MsgCustomModifierTooltip)
-        loc
+-- A modifier block can carry a sentence of its own saying what the modifiers in
+-- it come to; 'sortmods' has already moved it to the end of the block. The key
+-- may be quoted, and the sentence may run over several lines.
+modifierMSG _ _ stmt@[pdx| custom_modifier_tooltip = ?key |] = do
+    mloc <- getGameL10nIfPresent key
+    maybe (preStatement stmt) (tooltipText MsgCustomModifierTooltip) mloc
 modifierMSG hidden targ stmt@[pdx| $mod = $var|] =  let lmod = T.toLower mod in case HM.lookup lmod modifiersTable of
     Just (key, _, _) -> do
         loc <- getGameL10n key
@@ -1168,6 +1185,9 @@ modifiersTable = HM.fromList
         ,("supply_consumption"      , ("STAT_ARMY_SUPPLY_CONSUMPTION", MsgModifierPcPosReduced, Nothing)) --precision 0
         ,("soft_attack"             , ("STAT_ARMY_SOFT_ATTACK", MsgModifierPcPosReduced, Nothing))
         ,("hard_attack"             , ("STAT_ARMY_HARD_ATTACK", MsgModifierPcPosReduced, Nothing))
+        -- The narrower a division, the more of them fit into a battle, so this
+        -- one is good news when it goes down.
+        ,("combat_width"            , ("STAT_ARMY_COMBAT_WIDTH", MsgModifierPcNegReduced, Nothing))
 
         ,("air_agility"             , ("STAT_AIR_AGILITY", MsgModifierPcPosReduced, Nothing))
         ,("air_attack"              , ("STAT_AIR_ATTACK", MsgModifierPcPosReduced, Nothing))
@@ -2126,3 +2146,267 @@ getUnitTraits trait = do
         getscript stmt = case stmt of
             Just [pdx| %_ = @scr|] -> scr
             _ -> []
+
+--------------
+-- tooltips --
+--------------
+
+-- | Handler for @custom_effect_tooltip@. A tooltip is usually a localization key
+-- on its own, but it can also be a block naming the key together with values for
+-- the arguments its text is written with.
+--
+-- Tooltips are worth the trouble of reading: script hides the machinery of an
+-- effect in a @hidden_effect@ and puts a tooltip next to it saying in one
+-- sentence what the machinery comes to, so the text a tooltip names is the
+-- game's own summary of an effect we would otherwise have to spell out.
+customEffectTooltip :: (HOI4Info g, Monad m) => StatementHandler g m
+customEffectTooltip = tooltipWith MsgCustomEffectTooltip
+
+-- | Handler for a @tooltip@, the sentence written in place of whatever conditions
+-- or effects it stands next to. Written the same two ways as a custom effect
+-- tooltip.
+tooltip :: (HOI4Info g, Monad m) => StatementHandler g m
+tooltip = tooltipWith MsgTooltip
+
+tooltipWith :: (HOI4Info g, Monad m) =>
+    (Text -> ScriptMessage) -> StatementHandler g m
+tooltipWith msg stmt@[pdx| %_ = @scr |] =
+    case extractStmt (matchLhsText "localization_key") scr of
+        (Just [pdx| %_ = ?key |], rest) -> do
+            args <- HM.fromList . catMaybes <$> traverse locArg rest
+            tooltipText msg =<< locKeyText args key
+        _ -> preStatement stmt
+tooltipWith msg [pdx| %_ = ?key |] = tooltipText msg =<< locKeyText HM.empty key
+tooltipWith _ stmt = preStatement stmt
+
+-- | Handler for @custom_override_tooltip@, which runs the effects inside it but
+-- shows only its own sentence in place of theirs. What the game hides here is
+-- exactly what the wiki is for, so the sentence heads the block and the effects
+-- are written out under it.
+customOverrideTooltip :: (HOI4Info g, Monad m) => StatementHandler g m
+customOverrideTooltip stmt@[pdx| %_ = @scr |] = do
+    let (mtooltip, rest) = extractStmt (matchLhsText "tooltip") scr
+    ttmsg <- maybe (return []) tooltip mtooltip
+    script_pp'd <- ppMany rest
+    return $ ttmsg ++ script_pp'd
+customOverrideTooltip stmt = preStatement stmt
+
+-- | Emit a tooltip's text, or nothing at all if it has none: scripts use
+-- tooltips whose text is only whitespace (@generic_skip_one_line_tt@ and
+-- friends) to space the tooltip out in game, and on the wiki they are noise. A
+-- tooltip written over several lines keeps its breaks, written the way the wiki
+-- writes a break inside a list item.
+tooltipText :: (HOI4Info g, Monad m) =>
+    (Text -> ScriptMessage) -> Text -> PPT g m IndentedMessages
+tooltipText msg loc
+    | T.null stripped = return []
+    | otherwise = msgToPP (msg (Doc.nl2br stripped))
+    where stripped = T.strip loc
+
+-- | The text a tooltip's localization key comes to. A key is usually just a key,
+-- but it can instead ask one of the game's formatters for something the game
+-- works out as it draws the tooltip, written as the formatter's name, a @|@, and
+-- the token to apply it to.
+locKeyText :: (HOI4Info g, Monad m) => HashMap Text LocArg -> Text -> PPT g m Text
+locKeyText args key = case T.stripPrefix "|" rest of
+    Just token -> fromMaybe ("<tt>" <> key <> "</tt>") <$> locFormatter fmt token
+    Nothing -> getGameL10nArgs args key
+    where (fmt, rest) = T.breakOn "|" key
+
+-- | What one of the game's localization formatters comes to when applied to a
+-- token, or 'Nothing' for one we cannot work out, which is left as written for a
+-- human to fill in. The eight the game documents are of two kinds: those that
+-- name or describe one thing, which come to a phrase, and those that say what
+-- something grants, which come to a line apiece.
+--
+-- Several are documented as needing the country the tooltip is drawn for, but
+-- only @country_culture@ reads it for anything: to prefer a country's own wording
+-- over the generic one. A wiki page has no country, so the generic wording is
+-- what we use, which is the wording the game itself uses for every country that
+-- has nothing of its own to say.
+locFormatter :: (HOI4Info g, Monad m) => Text -> Text -> PPT g m (Maybe Text)
+locFormatter fmt token = case fmt of
+    "character_name" -> Just <$> getCharacterName token
+    "idea_name" -> do
+        ides <- getIdeas
+        traverse (getGameL10n . id_name) (HM.lookup token ides)
+    "idea_desc" -> do
+        ides <- getIdeas
+        return (id_desc_loc =<< HM.lookup token ides)
+    -- An advisor is an idea, and the post's own entry names the character rather
+    -- than describing them, so the description wanted is the idea's.
+    "advisor_desc" -> do
+        charto <- getCharToken
+        descOf $ case HM.lookup token charto of
+            Just adv -> adv_idea_token adv
+            Nothing -> token
+    "country_leader_desc" -> descOf token
+    "country_culture" -> getGameL10nIfPresent token
+    "building_state_modifier" -> do
+        blds <- getBuildings
+        case bld_state_modifiers =<< HM.lookup token blds of
+            Just mods -> Just <$> (messageLines =<< handleModifier mods)
+            Nothing -> return Nothing
+    "tech_effect" -> do
+        techs <- concat . HM.elems <$> getTechnologies
+        case find ((token ==) . tech_id) techs of
+            Just tech -> Just <$> (messageLines =<< techEffect tech)
+            Nothing -> return Nothing
+    _ -> return Nothing
+    where descOf key = getGameL10nIfPresent (key <> "_desc")
+
+-- | Write out messages as the lines of a tooltip's text. A tooltip goes into a
+-- single list item, so what would otherwise have been the list's own nesting has
+-- to be spelled out. The game asks for a particular indent with an @INDENT@
+-- argument, which wiki markup has no use for.
+messageLines :: (HOI4Info g, Monad m) => IndentedMessages -> PPT g m Text
+messageLines msgs = T.intercalate "\n" <$> traverse line msgs
+    where
+        base = if null msgs then 0 else minimum (map fst msgs)
+        line (i, msg) = (T.replicate (2 * max 0 (i - base)) "&nbsp;" <>) . T.strip
+                            <$> messageText msg
+
+-- | What finishing a technology comes to: whatever it makes available, the
+-- modifiers it gives the country, and the stats it improves for the units it
+-- applies to.
+techEffect :: (HOI4Info g, Monad m) => HOI4Technology -> PPT g m IndentedMessages
+techEffect tech = do
+    units <- getUnit
+    unittags <- getUnitTag
+    let isStatBlock stmt = case stmt of
+            [pdx| $what = @_ |] -> what `elem` units || what `elem` unittags
+            _ -> False
+        available = concatMap (fromMaybe [])
+            [tech_equipment tech, tech_modules tech, tech_units tech]
+    availmsg <- concatMapM (\what -> msgToPP . MsgTechEnables =<< getGameL10n what) available
+    buildmsg <- concatMapM building (fromMaybe [] (tech_buildings tech))
+    globalmsg <- fold <$> traverse (modifierMSG False "") (fromMaybe [] (tech_globalmod tech))
+    statmsg <- concatMapM statBlock (filter isStatBlock (fromMaybe [] (tech_sortrest tech)))
+    return $ availmsg ++ buildmsg ++ globalmsg ++ statmsg
+    where
+        -- A technology raises the level a building may be built to rather than
+        -- simply making it available, so the level is worth saying.
+        building scr = do
+            let (mbuilding, rest) = extractStmt (matchLhsText "building") scr
+                (mlevel, _) = extractStmt (matchLhsText "level") rest
+            case mbuilding of
+                Just [pdx| %_ = $what |] -> do
+                    whatloc <- getGameL10n what
+                    case mlevel of
+                        Just [pdx| %_ = !level |] -> msgToPP (MsgTechEnablesBuilding whatloc level)
+                        _ -> msgToPP (MsgTechEnables whatloc)
+                _ -> return []
+        -- The stats a technology improves are written under the unit or the class
+        -- of units they apply to, which the game picks out in yellow.
+        statBlock [pdx| $what = @scr |] = do
+            whatloc <- Doc.oneLine <$> getGameL10n what
+            headmsg <- plainMsg' ("'''" <> whatloc <> "'''")
+            modmsg <- fold <$> indentUp (traverse (modifierMSG False "") scr)
+            return (headmsg : modmsg)
+        statBlock stmt = preStatement stmt
+
+-- | The value a tooltip gives for one of the arguments its text is written with,
+-- ready to be written into that text.
+locArg :: (HOI4Info g, Monad m) => GenericStatement -> PPT g m (Maybe (Text, LocArg))
+-- An argument can be a tooltip in its own right, written the same way.
+locArg [pdx| $name = @scr |] = case extractStmt (matchLhsText "localization_key") scr of
+    (Just [pdx| %_ = ?key |], rest) -> do
+        inner <- HM.fromList . catMaybes <$> traverse locArg rest
+        Just . (,) name . LocText <$> locKeyText inner key
+    _ -> return Nothing
+locArg [pdx| $name = !num |] = return (Just (name, LocNum num))
+locArg [pdx| $name = ?val |] = Just . (,) name . LocText <$> locArgValue val
+locArg _ = return Nothing
+
+-- | Read one tooltip argument's value. Most of them name localization of their
+-- own, some ask a formatter for text the game works out for itself, and the rest
+-- are the game reading something out of its own state, where the script says how
+-- to find it but not what it will say. Those last are left as written for a human
+-- to fill in, except for a state's name, which we can look up.
+locArgValue :: (HOI4Info g, Monad m) => Text -> PPT g m Text
+locArgValue val
+    -- A promoted scope, e.g. "[70.GetName]".
+    | Just inner <- T.stripPrefix "[" =<< T.stripSuffix "]" unquoted
+        = case T.breakOn "." inner of
+            (sid, _) | not (T.null sid), T.all isDigit sid
+                -> getStateLoc (read (T.unpack sid))
+            _ -> return ("<tt>" <> unquoted <> "</tt>")
+    | otherwise = locKeyText HM.empty unquoted
+    where unquoted = T.dropAround (== '"') val
+
+-- | Handler for @show_unit_leaders_tooltip@, which names a commander in a
+-- tooltip. Script uses it to show what a @hidden_effect@ next to it just did, so
+-- the commander's name is all there is to say.
+showUnitLeader :: (HOI4Info g, Monad m) => StatementHandler g m
+showUnitLeader [pdx| %_ = ?token |] = do
+    nameloc <- getCharacterName token
+    msgToPP (MsgShowUnitLeader (Doc.oneLine nameloc) token)
+showUnitLeader stmt = preStatement stmt
+
+-- | Handlers for the tooltips that name a military industrial organization, one
+-- of the department traits it can take on, or one of the policies it can follow.
+showMio :: (HOI4Info g, Monad m) => StatementHandler g m
+showMio = mioTooltip MsgShowMio
+
+unlockMio :: (HOI4Info g, Monad m) => StatementHandler g m
+unlockMio = mioTooltip MsgUnlockMio
+
+unlockMioTrait :: (HOI4Info g, Monad m) => StatementHandler g m
+unlockMioTrait = mioTooltip MsgUnlockMioTrait
+
+unlockMioPolicy :: (HOI4Info g, Monad m) => StatementHandler g m
+unlockMioPolicy = mioTooltip MsgUnlockMioPolicy
+
+-- | Name whatever a military industrial organization tooltip points at. The token
+-- may be reached through @mio:@; one read out of a variable names nothing we can
+-- look up.
+mioTooltip :: (HOI4Info g, Monad m) =>
+    (Text -> Text -> ScriptMessage) -> StatementHandler g m
+mioTooltip msg stmt@[pdx| %_ = @scr |] =
+    case mapMaybe named scr of
+        (token : _) -> mioNamed msg stmt token
+        [] -> preStatement stmt
+    where
+        named = \case
+            [pdx| trait = ?token |] -> Just token
+            [pdx| policy = ?token |] -> Just token
+            [pdx| mio = ?token |] -> Just token
+            _ -> Nothing
+mioTooltip msg stmt@[pdx| %_ = ?token |] = mioNamed msg stmt token
+mioTooltip _ stmt = preStatement stmt
+
+mioNamed :: (HOI4Info g, Monad m) =>
+    (Text -> Text -> ScriptMessage) -> GenericStatement -> Text -> PPT g m IndentedMessages
+mioNamed msg stmt token
+    | "var:" `T.isPrefixOf` token = preStatement stmt
+    | otherwise = do
+        names <- getMioNames
+        -- Most tokens are localized under their own name; the rest are named by
+        -- the key their entry in the organization files gives.
+        mloc <- getGameL10nIfPresent bare
+        nameloc <- case mloc of
+            Just loc -> return (Just loc)
+            Nothing -> traverse getGameL10n (HM.lookup bare names)
+        case nameloc of
+            Just loc -> msgToPP (msg (Doc.oneLine loc) bare)
+            Nothing -> preStatement stmt
+    where bare = fromMaybe token (T.stripPrefix "mio:" token)
+
+-- | Handler for @character_list_tooltip@, which names in a tooltip every
+-- character the conditions inside it pick out. Nothing but those conditions is
+-- ever written in the block, so they go on the line rather than under it.
+characterListTooltip :: (HOI4Info g, Monad m) => StatementHandler g m
+characterListTooltip stmt@[pdx| %_ = @scr |] = do
+    let (mlimit, rest) = extractStmt (matchLhsText "limit") scr
+        (mamount, _) = extractStmt (matchLhsText "random_select_amount") rest
+        amount = case mamount of
+            Just [pdx| %_ = !num |] -> T.pack (show (round (num :: Double) :: Int))
+            _ -> ""
+    mclause <- maybe (return Nothing) limitClause mlimit
+    case mclause of
+        Just clause -> msgToPP (MsgCharacterListTooltip amount clause)
+        Nothing -> do
+            basemsg <- msgToPP (MsgCharacterListTooltip amount "")
+            script_pp'd <- indentUp (ppMany scr)
+            return $ basemsg ++ script_pp'd
+characterListTooltip stmt = preStatement stmt

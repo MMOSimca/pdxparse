@@ -409,7 +409,7 @@ handlersLocRhs = Tr.fromList
         ,("is_in_tech_sharing_group" , withLocAtomName MsgIsInTechSharingGroup)
         ,("add_to_tech_sharing_group" , withLocAtomName MsgAddToTechSharingGroup)
         ,("remove_power_balance"  , withLocAtomCompound MsgRemovePowerBalance)
-        ,("tooltip"               , withLocAtom MsgTooltip)
+        ,("tooltip"               , tooltip)
         ]
 
 -- | Handlers for statements whose RHS is a state ID
@@ -648,6 +648,7 @@ handlersSpecialComplex = Tr.fromList
         ,("create_wargoal"               , createWargoal)
         ,("create_unit"                  , createUnit)
         ,("custom_trigger_tooltip"       , customTriggerTooltip)
+        ,("custom_override_tooltip"      , customOverrideTooltip)
         ,("country_event"                , triggerEvent MsgCountryEvent)
         ,("declare_war_on"               , declareWarOn)
         ,("free_building_slots"          , freeBuildingSlots)
@@ -727,6 +728,18 @@ handlersSpecialComplex = Tr.fromList
         ,("unlock_decision_category_tooltip" , withLocAtom MsgUnlockDecisionCategoryTooltip)
         ,("unlock_decision_tooltip"       , unlockDecisionTooltip)
         ,("activate_mission_tooltip"      , withLocAtom MsgActivateMissionTooltip)
+        ,("show_unit_leaders_tooltip"     , showUnitLeader)
+        ,("character_list_tooltip"        , characterListTooltip)
+        ,("show_mio_tooltip"              , showMio)
+        ,("unlock_military_industrial_organization_tooltip" , unlockMio)
+        ,("unlock_mio_trait_tooltip"      , unlockMioTrait)
+        ,("unlock_mio_policy_tooltip"     , unlockMioPolicy)
+        -- Written inside a modifier block, where 'modifierMSG' handles it; this
+        -- is for anywhere else it may turn up.
+        ,("custom_modifier_tooltip"       , tooltipWith MsgCustomModifierTooltip)
+        -- The text of an event option, for an effect that will offer the player
+        -- that event.
+        ,("event_option_tooltip"          , customEffectTooltip)
         ,("add_days_remove"              , textValueKey "decision" "days" MsgAddDaysRemove MsgAddDaysRemoveVar)
         ,("add_days_mission_timeout"     , textValueKey "mission" "days" MsgAddDaysMissionTimeout MsgAddDaysMissionTimeoutVar)
         ]
