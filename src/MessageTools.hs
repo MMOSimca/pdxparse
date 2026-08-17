@@ -14,6 +14,13 @@ module MessageTools (
     -- depending on context, e.g. karma.
     ,   colourNum, colourPc
     ,   colourNumSign, colourPcSign
+    -- ** Fixed decimal places
+    -- | Each of these writes the number to a set number of decimal places
+    -- instead of to as many as it happens to have. See 'fixedNum'.
+    ,   fixedNum
+    ,   colourNumSignPrec, colourPcSignPrec
+    ,   plainNumSignPrec, plainNumMinPrec
+    ,   plainPcPrec, plainPcMinPrec, plainPcSignPrec
     -- ** Reduced numbers
     -- | Several quantities range from 0 to 100 in game, but are expressed in
     -- script as a number between 0 and 1. This includes religous quantities
@@ -49,7 +56,8 @@ module MessageTools (
     ,   module Text.PrettyPrint.Leijen.Text
     ) where
 
-import Data.List (unfoldr, intersperse)
+import Data.List (unfoldr, intersperse, find)
+import Data.Maybe (fromMaybe)
 
 import Numeric (floatToDigits)
 
@@ -115,21 +123,38 @@ instance PPSep Double where
                              replicate (negate expn) '0' -- zeroes after decimal
                              ++ concatMap show fracDigits))
 
--- | Format a number to a fixed number of decimal places, with thousands
+-- | Format a number to a given number of decimal places, with thousands
 -- separators, keeping any trailing zeroes. Unlike 'ppNumSep', which writes out
--- the places a number happens to have, this writes the places it is asked for:
--- the localization says how precisely a value is meant to be read, which is not
--- always how precisely it was written in script.
+-- only the places a number happens to have, this writes the places it is asked
+-- for: the localization says how precisely a value is meant to be read, which is
+-- not always how precisely it was written in script.
+--
+-- The count is a floor rather than an exact width. A value written to fewer
+-- places than it needs would read as a rounder number than it is, and one
+-- written to none at all would read as no change whatsoever.
 fixedNumText :: Int -> Double -> Text
 fixedNumText places n = T.pack $
     (if rounded < 0 then "−" else "")
         <> ppNumSep' True (show whole)
-        <> (if places > 0 then "." <> ppNumSep' False (pad (show frac)) else "")
+        <> (if places' > 0 then "." <> ppNumSep' False (pad (show frac)) else "")
     where
-        scale = 10 ^ max 0 places :: Integer
+        places' = max (max 0 places) (neededPlaces n)
+        scale = 10 ^ places' :: Integer
         rounded = round (n * fromIntegral scale) :: Integer
         (whole, frac) = abs rounded `divMod` scale
-        pad s = replicate (places - length s) '0' <> s
+        pad s = replicate (places' - length s) '0' <> s
+
+-- | How many decimal places it takes to write a number without rounding it. The
+-- game itself keeps at most three, so a value needing more than that is floating
+-- point noise and is left to be rounded off.
+neededPlaces :: Double -> Int
+neededPlaces n = fromMaybe maxPlaces (find isExact [0 .. maxPlaces])
+    where
+        maxPlaces = 3
+        isExact places = abs (n - rounded places) < 1e-9
+        rounded places = let scale = 10 ^ places :: Integer
+                         in fromIntegral (round (n * fromIntegral scale) :: Integer)
+                                / fromIntegral scale
 
 -- | Format a number as is, except add thousands separators.
 plainNum :: Double -> Doc
@@ -206,6 +231,29 @@ colourPcSign good = ppNum True True good True False
 reducedNum :: PPSep n => (n -> Doc) -> n -> Doc
 reducedNum p n = p (n * 100)
 
+-- | Write a number to a set number of decimal places, or, given 'Nothing', to as
+-- many as it happens to have.
+fixedNum :: Maybe Int -> Double -> Doc
+fixedNum Nothing = ppNumSep
+fixedNum (Just places) = Doc.strictText . fixedNumText places
+
+-- | The formatting functions above, each writing the number to a set number of
+-- decimal places. The game's localization says how precisely each of its
+-- modifiers is meant to be read, and a value written to fewer places than that
+-- reads as rounder than it is. 'Nothing' keeps as many places as the number has,
+-- which is what the function each is named after does.
+colourNumSignPrec, colourPcSignPrec :: Maybe Int -> Bool -> Double -> Doc
+colourNumSignPrec places good = ppNumWith (fixedNum places) True False good True False
+colourPcSignPrec places good = ppNumWith (fixedNum places) True True good True False
+
+plainNumSignPrec, plainNumMinPrec, plainPcPrec, plainPcMinPrec, plainPcSignPrec
+    :: Maybe Int -> Double -> Doc
+plainNumSignPrec places = ppNumWith (fixedNum places) False False False True False
+plainNumMinPrec places = ppNumWith (fixedNum places) False False False False True
+plainPcPrec places = ppNumWith (fixedNum places) False True False False False
+plainPcMinPrec places = ppNumWith (fixedNum places) False True False False True
+plainPcSignPrec places = ppNumWith (fixedNum places) False True False True False
+
 -- | Round number to eight decimal places to avoid floating point inaccuracies
 -- e.g. 0.55 would be rendered as 0.5500000000000001
 roundEightDecimals :: Double -> Double
@@ -223,11 +271,19 @@ ppNum :: (Ord n, PPSep n) => Bool -- ^ Whether to apply a colour template (red
                                   --   or strip the - from negative ones.
                           -> Bool -- ^ Whether to keep the - from negative numbers.
                           -> n -> Doc
-ppNum colour is_pc pos pos_plus kp_min n =
+ppNum = ppNumWith ppNumSep
+
+-- | As 'ppNum', but with the writing of the digits themselves left open, so that
+-- a number can be written to a set number of decimal places rather than to as
+-- many as it happens to have.
+ppNumWith :: (Ord n, Num n) => (n -> Doc) -- ^ How to write the number itself.
+                          -> Bool -> Bool -> Bool -> Bool -> Bool
+                          -> n -> Doc
+ppNumWith write colour is_pc pos pos_plus kp_min n =
     let n_pp'd = (if kp_min
                 then id
                 else (if pos_plus then Doc.ppSigned else Doc.ppNosigned))
-                 ppNumSep n <> if is_pc then "%" else ""
+                 write n <> if is_pc then "%" else ""
     in (if not colour then id else
         case (if pos then n else negate n) `compare` 0 of
             LT -> template "red" . (:[]) . Doc.doc2text

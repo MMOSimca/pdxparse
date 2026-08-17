@@ -27,6 +27,8 @@ module due to TH stage restrictions.
 module HOI4.Messages (
         ScriptMessage (..)
     ,   StatementHandler
+    ,   ModifierDisplay
+    ,   modYesNo, modNoYes
     ,   template, templateDoc
     ,   templateColor, templateColor'
     ,   wikifyLocColours
@@ -526,20 +528,20 @@ data ScriptMessage
     | MsgRemovePowerBalanceModifier { scriptMessageWho :: Text, scriptMessageWhat :: Text, scriptMessageWhoKey :: Text , scriptMessageWhatKey :: Text }
     | MsgHasPowerBalanceModifier { scriptMessageWho :: Text, scriptMessageWhat :: Text, scriptMessageWhoKey :: Text , scriptMessageWhatKey :: Text }
     | MsgModifier {scriptMessageWhat :: Text, scriptMessageAmt :: Double}
-    | MsgModifierYellow {scriptMessageWhat :: Text, scriptMessageAmt :: Double}
-    | MsgModifierSign {scriptMessageWhat :: Text, scriptMessageAmt :: Double}
-    | MsgModifierColourPos {scriptMessageWhat :: Text, scriptMessageAmt :: Double}
-    | MsgModifierColourNeg {scriptMessageWhat :: Text, scriptMessageAmt :: Double}
+    | MsgModifierYellow {scriptMessageWhat :: Text, scriptMessageDec :: Maybe Int, scriptMessageAmt :: Double}
+    | MsgModifierSign {scriptMessageWhat :: Text, scriptMessageDec :: Maybe Int, scriptMessageAmt :: Double}
+    | MsgModifierColourPos {scriptMessageWhat :: Text, scriptMessageDec :: Maybe Int, scriptMessageAmt :: Double}
+    | MsgModifierColourNeg {scriptMessageWhat :: Text, scriptMessageDec :: Maybe Int, scriptMessageAmt :: Double}
     | MsgModifierPc {scriptMessageWhat :: Text, scriptMessageAmt :: Double}
-    | MsgModifierPcSign {scriptMessageWhat :: Text, scriptMessageAmt :: Double}
+    | MsgModifierPcSign {scriptMessageWhat :: Text, scriptMessageDec :: Maybe Int, scriptMessageAmt :: Double}
     | MsgModifierPcReduced {scriptMessageWhat :: Text, scriptMessageAmt :: Double}
-    | MsgModifierPcReducedSign {scriptMessageWhat :: Text, scriptMessageAmt :: Double}
-    | MsgModifierPcReducedSignMin {scriptMessageWhat :: Text, scriptMessageAmt :: Double}
-    | MsgModifierPcPos {scriptMessageWhat :: Text, scriptMessageAmt :: Double}
-    | MsgModifierPcNeg {scriptMessageWhat :: Text, scriptMessageAmt :: Double}
-    | MsgModifierPcPosReduced {scriptMessageWhat :: Text, scriptMessageAmt :: Double}
-    | MsgModifierPcNegReduced {scriptMessageWhat :: Text, scriptMessageAmt :: Double}
-    | MsgModifierBop {scriptMessageWhat :: Text, scriptMessageAmt :: Double}
+    | MsgModifierPcReducedSign {scriptMessageWhat :: Text, scriptMessageDec :: Maybe Int, scriptMessageAmt :: Double}
+    | MsgModifierPcReducedSignMin {scriptMessageWhat :: Text, scriptMessageDec :: Maybe Int, scriptMessageAmt :: Double}
+    | MsgModifierPcPos {scriptMessageWhat :: Text, scriptMessageDec :: Maybe Int, scriptMessageAmt :: Double}
+    | MsgModifierPcNeg {scriptMessageWhat :: Text, scriptMessageDec :: Maybe Int, scriptMessageAmt :: Double}
+    | MsgModifierPcPosReduced {scriptMessageWhat :: Text, scriptMessageDec :: Maybe Int, scriptMessageAmt :: Double}
+    | MsgModifierPcNegReduced {scriptMessageWhat :: Text, scriptMessageDec :: Maybe Int, scriptMessageAmt :: Double}
+    | MsgModifierBop {scriptMessageWhat :: Text, scriptMessageDec :: Maybe Int, scriptMessageAmt :: Double}
     | MsgModifierNoYes {scriptMessageWhat :: Text, scriptMessageAmt :: Double}
     | MsgModifierYesNo {scriptMessageWhat :: Text, scriptMessageAmt :: Double}
     | MsgModifierVar {scriptMessageWhat :: Text, scriptMessageAmtText :: Text}
@@ -3089,31 +3091,31 @@ instance RenderMessage Script ScriptMessage where
                 , ":  "
                 , toMessage (bold (plainNumMin _amt))
                 ]
-        MsgModifierYellow {scriptMessageWhat = _what, scriptMessageAmt = _amt}
+        MsgModifierYellow {scriptMessageWhat = _what, scriptMessageDec = _dec, scriptMessageAmt = _amt}
             -> mconcat
                 [ _what
                 , ": {{color|yellow|"
-                , toMessage (bold (plainNumMin _amt))
+                , toMessage (bold (plainNumMinPrec _dec _amt))
                 , "}}"
                 ]
-        MsgModifierSign {scriptMessageWhat = _what, scriptMessageAmt = _amt}
+        MsgModifierSign {scriptMessageWhat = _what, scriptMessageDec = _dec, scriptMessageAmt = _amt}
             -> mconcat
                 [ _what
                 , ": {{color|yellow|"
-                , toMessage (plainNumSign _amt)
+                , toMessage (plainNumSignPrec _dec _amt)
                 , "}}"
                 ]
-        MsgModifierColourPos {scriptMessageWhat = _what, scriptMessageAmt = _amt}
+        MsgModifierColourPos {scriptMessageWhat = _what, scriptMessageDec = _dec, scriptMessageAmt = _amt}
             -> mconcat
                 [ _what
                 , ": "
-                , toMessage $ templateColor (colourNumSign True _amt)
+                , toMessage $ templateColor (colourNumSignPrec _dec True _amt)
                 ]
-        MsgModifierColourNeg {scriptMessageWhat = _what, scriptMessageAmt = _amt}
+        MsgModifierColourNeg {scriptMessageWhat = _what, scriptMessageDec = _dec, scriptMessageAmt = _amt}
             -> mconcat
                 [ _what
                 , ": "
-                , toMessage $ templateColor (colourNumSign False _amt)
+                , toMessage $ templateColor (colourNumSignPrec _dec False _amt)
                 ]
         MsgModifierPc {scriptMessageWhat = _what, scriptMessageAmt = _amt}
             -> mconcat
@@ -3121,11 +3123,11 @@ instance RenderMessage Script ScriptMessage where
                 , ": "
                 , toMessage (bold (plainPcMin _amt))
                 ]
-        MsgModifierPcSign {scriptMessageWhat = _what, scriptMessageAmt = _amt}
+        MsgModifierPcSign {scriptMessageWhat = _what, scriptMessageDec = _dec, scriptMessageAmt = _amt}
             -> mconcat
                 [ _what
                 , ": {{color|yellow|"
-                , toMessage (bold (plainPcSign _amt))
+                , toMessage (bold (plainPcSignPrec _dec _amt))
                 , "}}"
                 ]
         MsgModifierPcReduced {scriptMessageWhat = _what, scriptMessageAmt = _amt}
@@ -3134,50 +3136,50 @@ instance RenderMessage Script ScriptMessage where
                 , ": "
                 , toMessage (bold (reducedNum plainPcMin _amt))
                 ]
-        MsgModifierPcReducedSign {scriptMessageWhat = _what, scriptMessageAmt = _amt}
+        MsgModifierPcReducedSign {scriptMessageWhat = _what, scriptMessageDec = _dec, scriptMessageAmt = _amt}
             -> mconcat
                 [ _what
                 , ": {{color|yellow|"
-                , toMessage (reducedNum plainPcSign _amt)
+                , toMessage (reducedNum (plainPcSignPrec _dec) _amt)
                 , "}}"
                 ]
-        MsgModifierPcReducedSignMin {scriptMessageWhat = _what, scriptMessageAmt = _amt}
+        MsgModifierPcReducedSignMin {scriptMessageWhat = _what, scriptMessageDec = _dec, scriptMessageAmt = _amt}
             -> mconcat
                 [ _what
                 , ": {{color|yellow|"
-                , toMessage (reducedNum plainPcMin _amt)
+                , toMessage (reducedNum (plainPcMinPrec _dec) _amt)
                 , "}}"
                 ]
-        MsgModifierPcPos {scriptMessageWhat = _what, scriptMessageAmt = _amt}
+        MsgModifierPcPos {scriptMessageWhat = _what, scriptMessageDec = _dec, scriptMessageAmt = _amt}
             -> mconcat
                 [ _what
                 , ": "
-                , toMessage $ templateColor (colourPcSign True _amt)
+                , toMessage $ templateColor (colourPcSignPrec _dec True _amt)
                 ]
-        MsgModifierPcNeg {scriptMessageWhat = _what, scriptMessageAmt = _amt}
+        MsgModifierPcNeg {scriptMessageWhat = _what, scriptMessageDec = _dec, scriptMessageAmt = _amt}
             -> mconcat
                 [ _what
                 , ": "
-                , toMessage $ templateColor (colourPcSign False _amt)
+                , toMessage $ templateColor (colourPcSignPrec _dec False _amt)
                 ]
-        MsgModifierPcPosReduced {scriptMessageWhat = _what, scriptMessageAmt = _amt}
+        MsgModifierPcPosReduced {scriptMessageWhat = _what, scriptMessageDec = _dec, scriptMessageAmt = _amt}
             -> mconcat
                 [ _what
                 , ": "
-                , toMessage $ templateColor (reducedNum (colourPcSign True) _amt)
+                , toMessage $ templateColor (reducedNum (colourPcSignPrec _dec True) _amt)
                 ]
-        MsgModifierPcNegReduced {scriptMessageWhat = _what, scriptMessageAmt = _amt}
+        MsgModifierPcNegReduced {scriptMessageWhat = _what, scriptMessageDec = _dec, scriptMessageAmt = _amt}
             -> mconcat
                 [ _what
                 , ": "
-                , toMessage $ templateColor (reducedNum (colourPcSign False) _amt)
+                , toMessage $ templateColor (reducedNum (colourPcSignPrec _dec False) _amt)
                 ]
-        MsgModifierBop {scriptMessageWhat = _what, scriptMessageAmt = _amt}
+        MsgModifierBop {scriptMessageWhat = _what, scriptMessageDec = _dec, scriptMessageAmt = _amt}
             -> mconcat
                 [ _what
                 , ": "
                 , bopicon _amt
-                , toMessage (bold (reducedNum plainPc _amt))
+                , toMessage (bold (reducedNum (plainPcPrec _dec) _amt))
                 ]
         MsgModifierNoYes {scriptMessageWhat = _what, scriptMessageAmt = _amt}
             -> mconcat
@@ -4988,6 +4990,20 @@ type IndentedMessages = [IndentedMessage]
 
 -- | Convenience synonym.
 type StatementHandler g m = GenericStatement -> PPT g m IndentedMessages
+
+-- | How to write out one modifier: the localization that names it, the message
+-- that says what kind of value it carries and whether more of it is good news,
+-- and how many decimal places the game writes it to -- 'Nothing' for as many as
+-- the value happens to have. The three are the same three things the game's own
+-- @common\/modifier_definitions@ gives for a modifier a mod adds.
+-- See "HOI4.SpecialHandlers".modifiersTable.
+type ModifierDisplay = (Text, Text -> Maybe Int -> Double -> ScriptMessage, Maybe Int)
+
+-- | A modifier that is only ever on or off writes no number, so it has no
+-- decimal places to write it to.
+modYesNo, modNoYes :: Text -> Maybe Int -> Double -> ScriptMessage
+modYesNo what _ = MsgModifierYesNo what
+modNoYes what _ = MsgModifierNoYes what
 
 -- | Convert a single message to Text.
 --

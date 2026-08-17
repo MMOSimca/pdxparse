@@ -41,7 +41,7 @@ import SettingsTypes ( PPT
                      , hoistErrors, hoistExceptions)
 import HOI4.Common -- everything
 import HOI4.SpecialHandlers ( modifiersTable)
-import HOI4.Messages (ScriptMessage (..))
+import HOI4.Messages (ScriptMessage (..), ModifierDisplay, modYesNo, modNoYes)
 
 newHOI4CountryHistory :: Text -> HOI4CountryHistory
 newHOI4CountryHistory chtag = HOI4CountryHistory chtag undefined
@@ -436,8 +436,8 @@ parseHOI4ModifierDefinitions scripts = HM.unions . HM.elems <$> do
                         return Nothing
                     Right mmoddef -> return mmoddef
     where
-        mkTriggerMap :: [(Text,Text-> Double -> ScriptMessage)] -> HashMap Text (Text-> Double -> ScriptMessage)
-        mkTriggerMap = HM.fromList
+        mkTriggerMap :: [ModifierDisplay] -> HashMap Text ModifierDisplay
+        mkTriggerMap ds = HM.fromList [(key, d) | d@(key,_,_) <- ds]
         onlyscripts = \case
             stmt@[pdx| %_ = @_|] -> [stmt]
             _ -> []
@@ -453,7 +453,7 @@ newMDF :: ModDef
 newMDF = ModDef "<!--Check Script-->" "<!--Check Script-->" 0 Nothing
 
 parseHOI4ModifierDefinition :: (IsGameState (GameState g), IsGameData (GameData g), MonadError Text m) =>
-    GenericStatement -> PPT g m (Either Text (Maybe (Text, Text-> Double -> ScriptMessage)))
+    GenericStatement -> PPT g m (Either Text (Maybe ModifierDisplay))
 parseHOI4ModifierDefinition (StatementBare _) = throwError "bare statement at top level"
 parseHOI4ModifierDefinition stmt@[pdx| %left = %right |] = case right of
     CompoundRhs parts -> case left of
@@ -473,31 +473,35 @@ parseHOI4ModifierDefinition stmt@[pdx| %left = %right |] = case right of
         addSection mdf [pdx| postfix = $psfix |] = return mdf { mdef_postfix = Just psfix }
         addSection mdf stmt = return $ trace ("Urecognized statement in modifier definition: " ++ show stmt) mdf
 
-        getscrmess :: Text -> ModDef -> Maybe (Text, Text -> Double -> ScriptMessage)
-        getscrmess mdid mdf = case T.toLower $ mdef_color_type mdf of
+        getscrmess :: Text -> ModDef -> Maybe ModifierDisplay
+        getscrmess mdid mdf = withPrecision <$> case T.toLower $ mdef_color_type mdf of
             "good" -> case T.toLower $ mdef_value_type mdf of
-                "number" -> Just (mdid, MsgModifierColourPos)
-                "percentage" -> Just (mdid, MsgModifierPcPosReduced)
-                "percentage_in_hundred" -> Just (mdid, MsgModifierPcPos)
-                "yes_no" -> Just (mdid, MsgModifierYesNo)
+                "number" -> Just MsgModifierColourPos
+                "percentage" -> Just MsgModifierPcPosReduced
+                "percentage_in_hundred" -> Just MsgModifierPcPos
+                "yes_no" -> Just modYesNo
                 _ -> Nothing
             "neutral" -> case T.toLower $ mdef_value_type mdf of
-                "number" -> Just (mdid, MsgModifierSign)
-                "percentage" -> Just (mdid, MsgModifierPcReducedSign)
-                "percentage_in_hundred" -> Just (mdid, MsgModifierPcSign)
-                "yes_no" -> Just (mdid, MsgModifierYesNo)
+                "number" -> Just MsgModifierSign
+                "percentage" -> Just MsgModifierPcReducedSign
+                "percentage_in_hundred" -> Just MsgModifierPcSign
+                "yes_no" -> Just modYesNo
                 _ -> Nothing
             "bad" -> case T.toLower $ mdef_value_type mdf of
-                "number" -> Just (mdid, MsgModifierColourNeg)
-                "percentage" -> Just (mdid, MsgModifierPcNegReduced)
-                "percentage_in_hundred" -> Just (mdid, MsgModifierPcNeg)
-                "yes_no" -> Just (mdid, MsgModifierNoYes)
+                "number" -> Just MsgModifierColourNeg
+                "percentage" -> Just MsgModifierPcNegReduced
+                "percentage_in_hundred" -> Just MsgModifierPcNeg
+                "yes_no" -> Just modNoYes
                 _ -> Nothing
             _ -> Nothing
+            where
+                -- The definition says how many decimal places to write the value
+                -- to, the same as the documentation does for a built-in modifier.
+                withPrecision msg = (mdid, msg, Just (round (mdef_precision mdf)))
 
 parseHOI4ModifierDefinition _ = withCurrentFile $ \file ->
     throwError ("unrecognised form for scripted trigger in " <> T.pack file)
 
 
-parseHOI4LocKeys order = return $ map fst (sortOn (\x -> elemIndex (snd x) order) . filter (modchk . snd) . HM.toList . HM.map fst $ modifiersTable)
+parseHOI4LocKeys order = return $ map fst (sortOn (\x -> elemIndex (snd x) order) . filter (modchk . snd) . HM.toList . HM.map (\(loc,_,_) -> loc) $ modifiersTable)
     where modchk = T.all (\xs -> isUpper xs || not (isAlphaNum xs))

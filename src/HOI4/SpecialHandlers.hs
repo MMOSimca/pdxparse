@@ -345,18 +345,18 @@ modifierMSG _ targ stmt@[pdx| $specmod = @scr|]
             return $ termsg : modmsg
         else trace ("unknown modifier type: " ++ show specmod ++ " IN: " ++ show stmt) $ preStatement stmt
 modifierMSG hidden targ stmt@[pdx| $mod = !num |] = let lmod = T.toLower mod in case HM.lookup lmod modifiersTable of
-    Just (key, msg) -> do
+    Just (key, msg, dec) -> do
         loc <- getGameL10n key
         let bonus = num :: Double
             loc' = locprep hidden targ loc
-        numericLoc loc' msg stmt
+        numericLocPrec loc' dec msg stmt
     Nothing
         | "cat_" `T.isPrefixOf` lmod -> do
             mloc <- getGameL10nIfPresent lmod
             case mloc of
                 Just loc ->
                     let loc' = locprep hidden targ loc in
-                    numericLoc loc' MsgModifierPcNegReduced stmt
+                    numericLocPrec loc' (familyPrecision lmod) MsgModifierPcNegReduced stmt
                 Nothing -> preStatement stmt
         | ("production_speed_" `T.isPrefixOf` lmod && "_factor" `T.isSuffixOf` lmod) ||
             ("state_production_speed_" `T.isPrefixOf` lmod && "_factor" `T.isSuffixOf` lmod) ||
@@ -369,14 +369,14 @@ modifierMSG hidden targ stmt@[pdx| $mod = !num |] = let lmod = T.toLower mod in 
             case mloc of
                 Just loc ->
                     let loc' = locprep hidden targ loc in
-                    numericLoc loc' MsgModifierPcPosReduced stmt
+                    numericLocPrec loc' (familyPrecision lmod) MsgModifierPcPosReduced stmt
                 Nothing -> preStatement stmt
         | "unit_" `T.isPrefixOf` lmod && "_design_cost_factor" `T.isSuffixOf` lmod -> do
             mloc <- getGameL10nIfPresent ("modifier_" <> lmod)
             case mloc of
                 Just loc ->
                     let loc' = locprep hidden targ loc in
-                    numericLoc loc' MsgModifierPcNegReduced stmt
+                    numericLocPrec loc' (familyPrecision lmod) MsgModifierPcNegReduced stmt
                 Nothing -> preStatement stmt
         | "modifier_army_sub_" `T.isPrefixOf` lmod ||
             (("operation_" `T.isPrefixOf` lmod && "_outcome" `T.isSuffixOf` lmod ) ||
@@ -387,7 +387,7 @@ modifierMSG hidden targ stmt@[pdx| $mod = !num |] = let lmod = T.toLower mod in 
             case mloc of
                 Just loc ->
                     let loc' = locprep hidden targ loc in
-                    numericLoc loc' MsgModifierPcPosReduced stmt
+                    numericLocPrec loc' (familyPrecision lmod) MsgModifierPcPosReduced stmt
                 Nothing -> preStatement stmt
         | "operation_" `T.isPrefixOf` lmod && ("_risk" `T.isSuffixOf` lmod || "_cost" `T.isSuffixOf` lmod ) ||
             "_design_cost_factor" `T.isSuffixOf` lmod -> do
@@ -395,7 +395,7 @@ modifierMSG hidden targ stmt@[pdx| $mod = !num |] = let lmod = T.toLower mod in 
             case mloc of
                 Just loc ->
                     let loc' = locprep hidden targ loc in
-                    numericLoc loc' MsgModifierPcNegReduced stmt
+                    numericLocPrec loc' (familyPrecision lmod) MsgModifierPcNegReduced stmt
                 Nothing -> preStatement stmt
         | ("state_resource_" `T.isPrefixOf` lmod && not ("state_resource_cost_" `T.isPrefixOf` lmod)) || --precision 0
             ("country_resource_" `T.isPrefixOf` lmod && not ("country_resource_cost_" `T.isPrefixOf` lmod)) || --precision 0
@@ -404,38 +404,38 @@ modifierMSG hidden targ stmt@[pdx| $mod = !num |] = let lmod = T.toLower mod in 
             case mloc of
                 Just loc ->
                     let loc' = locprep hidden targ loc in
-                    numericLoc loc' MsgModifierColourPos stmt
+                    numericLocPrec loc' (familyPrecision lmod) MsgModifierColourPos stmt
                 Nothing -> preStatement stmt
         |  "_intel_decryption_bonus" `T.isSuffixOf` lmod -> do --precision 0
             mloc <- getGameL10nIfPresent ("modifier_" <> lmod)
             case mloc of
                 Just loc ->
                     let loc' = locprep hidden targ loc in
-                    numericLoc loc' MsgModifierColourPos stmt
+                    numericLocPrec loc' (familyPrecision lmod) MsgModifierColourPos stmt
                 Nothing -> preStatement stmt
         | "country_resource_cost_" `T.isPrefixOf` lmod -> do --precision 0
             mloc <- getGameL10nIfPresent lmod
             case mloc of
                 Just loc ->
                     let loc' = locprep hidden targ loc in
-                    numericLoc loc' MsgModifierColourNeg stmt
+                    numericLocPrec loc' (familyPrecision lmod) MsgModifierColourNeg stmt
                 Nothing -> preStatement stmt
         | "production_cost_max_" `T.isPrefixOf` lmod -> do --precision 0
             mloc <- getGameL10nIfPresent ("modifier_" <> lmod)
             case mloc of
                 Just loc ->
                     let loc' = locprep hidden targ loc in
-                    numericLoc loc' MsgModifierYellow stmt
+                    numericLocPrec loc' (familyPrecision lmod) MsgModifierYellow stmt
                 Nothing -> preStatement stmt
         | otherwise -> do
             moddef <- getModifierDefinitions
             case HM.lookup mod moddef of
-                Just scrmsg -> do
+                Just (_, scrmsg, dec) -> do
                     mloc <- getGameL10nIfPresent mod
                     case mloc of
                         Just loc ->
                             let loc' = locprep hidden targ loc in
-                            numericLoc loc' scrmsg stmt
+                            numericLocPrec loc' dec scrmsg stmt
                         Nothing -> preStatement stmt
                 Nothing -> preStatement stmt
 modifierMSG _ _ stmt@[pdx| custom_modifier_tooltip = $key|] = do
@@ -444,7 +444,7 @@ modifierMSG _ _ stmt@[pdx| custom_modifier_tooltip = $key|] = do
         (msgToPP . MsgCustomModifierTooltip)
         loc
 modifierMSG hidden targ stmt@[pdx| $mod = $var|] =  let lmod = T.toLower mod in case HM.lookup lmod modifiersTable of
-    Just (key, msg) -> do
+    Just (key, _, _) -> do
         loc <- getGameL10n key
         let loc' = locprep hidden targ loc
         msgToPP $ MsgModifierVar loc' var
@@ -485,7 +485,7 @@ modifierMSG hidden targ stmt@[pdx| $mod = $var|] =  let lmod = T.toLower mod in 
         | otherwise -> do
             moddef <- getModifierDefinitions
             case HM.lookup mod moddef of
-                Just scrmsg -> do
+                Just _ -> do
                     mloc <- getGameL10nIfPresent mod
                     case mloc of
                         Just loc ->
@@ -504,17 +504,51 @@ numericLocPost what msg [pdx| %_ = !amt |]
          msgToPP $ msg whatloc amt Nothing
 numericLocPost _ _  stmt = plainMsg $ preStatementText' stmt
 
+-- | The decimal places the documentation gives for a modifier family: the
+-- modifiers named after a building, a unit, a resource or the like, which are
+-- documented by their shape rather than one at a time, and which 'modifierMSG'
+-- likewise recognises by their shape rather than from 'modifiersTable'.
+familyPrecision :: Text -> Maybe Int
+familyPrecision lmod = Just $
+    if any (`T.isPrefixOf` lmod)
+            [ "experience_gain_"          -- experience_gain_<Unit>_combat_factor
+            , "sp_tag_", "specialization_" -- <SpecialProject>_speed_factor
+            , "operation_"               -- <Operation>_cost, _outcome and _risk
+            , "state_resource_", "country_resource_", "temporary_state_resource_"
+            , "production_cost_max_"     -- production_cost_max_<NavalEquipment>
+            , "cat_"                     -- <IdeaCategory>_category_type_cost_factor
+            , "modifier_army_sub_" ]
+        || "_intel_decryption_bonus" `T.isSuffixOf` lmod
+        then 0
+        -- The speed, repair, design cost, trait experience and preferred weight
+        -- families are all written to two places.
+        else 2
+
+-- | Write out a modifier's value to the number of decimal places the game
+-- writes it to. 'Nothing' leaves it with as many places as it was written with.
+numericLocPrec :: (HOI4Info g, Monad m) =>
+    Text
+        -> Maybe Int
+        -> (Text -> Maybe Int -> Double -> ScriptMessage)
+        -> StatementHandler g m
+numericLocPrec what dec msg = numericLoc what (\loc -> msg loc dec)
+
 locprep :: Bool -> Text -> Text -> Text
-locprep hidden targ loc = do
-    let loc' = if ": " `T.isSuffixOf` loc then T.dropEnd 2 loc else loc
-        loctag = if T.null targ then loc' else "(" <> targ <> ")" <> loc'
-    if hidden then "(Hidden)" <> loctag else loctag
+locprep hidden targ loc = (if hidden then "(Hidden)" else "") <> named
+    where
+        loc' = if ": " `T.isSuffixOf` loc then T.dropEnd 2 loc else loc
+        -- The country a targeted modifier applies to reads better after what the
+        -- modifier does than in front of it: a colon is written straight after
+        -- this, and a flag at the front puts the whole width of a name between
+        -- the reader and it.
+        named | T.null targ = loc'
+              | otherwise = T.strip loc' <> " (" <> targ <> ")"
 
 handleResearchBonus :: forall g m. (HOI4Info g, Monad m) =>
         StatementHandler g m
 handleResearchBonus [pdx| %_ = @scr |] = fold <$> traverse handleResearchBonus' scr
     where
-        handleResearchBonus' stmt@[pdx| $tech = !num |] = let bonus = num :: Double in numericLoc (T.toLower tech <> "_research") MsgModifierPcPosReduced stmt
+        handleResearchBonus' stmt@[pdx| $tech = !num |] = let bonus = num :: Double in numericLocPrec (T.toLower tech <> "_research") Nothing MsgModifierPcPosReduced stmt
         handleResearchBonus' scr = preStatement scr
 handleResearchBonus stmt = preStatement stmt
 
@@ -563,597 +597,877 @@ handleEquipmentBonus stmt = preStatement stmt
 
 
 -- | Handlers for numeric statements with icons
-modifiersTable :: HashMap Text (Text, Text -> Double -> ScriptMessage)
+modifiersTable :: HashMap Text ModifierDisplay
 modifiersTable = HM.fromList
         [
         --general modifiers
-         ("monthly_population"              , ("MODIFIER_GLOBAL_MONTHLY_POPULATION", MsgModifierPcPosReduced))
-        ,("nuclear_production_factor"       , ("MODIFIER_NUCLEAR_PRODUCTION_FACTOR", MsgModifierPcPosReduced))
-        ,("research_sharing_per_country_bonus" , ("MODIFIER_RESEARCH_SHARING_PER_COUNTRY_BONUS", MsgModifierPcPosReduced))
-        ,("research_sharing_per_country_bonus_factor" , ("MODIFIER_RESEARCH_SHARING_PER_COUNTRY_BONUS_FACTOR", MsgModifierPcPosReduced))
-        ,("research_speed_factor"           , ("MODIFIER_RESEARCH_SPEED_FACTOR", MsgModifierPcPosReduced))
-        ,("local_resources_factor"          , ("MODIFIER_LOCAL_RESOURCES_FACTOR", MsgModifierPcPosReduced))
-        ,("surrender_limit"                 , ("MODIFIER_SURRENDER_LIMIT", MsgModifierPcPosReduced))
-        ,("max_surrender_limit_offset"      , ("MODIFIER_MAX_SURRENDER_LIMIT_OFFSET", MsgModifierPcPosReduced)) --precision 2
+         ("monthly_population"              , ("MODIFIER_GLOBAL_MONTHLY_POPULATION", MsgModifierPcPosReduced, Just 1))
+        ,("nuclear_production_factor"       , ("MODIFIER_NUCLEAR_PRODUCTION_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("research_sharing_per_country_bonus" , ("MODIFIER_RESEARCH_SHARING_PER_COUNTRY_BONUS", MsgModifierPcPosReduced, Just 2))
+        ,("research_sharing_per_country_bonus_factor" , ("MODIFIER_RESEARCH_SHARING_PER_COUNTRY_BONUS_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("research_speed_factor"           , ("MODIFIER_RESEARCH_SPEED_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("local_resources_factor"          , ("MODIFIER_LOCAL_RESOURCES_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("surrender_limit"                 , ("MODIFIER_SURRENDER_LIMIT", MsgModifierPcPosReduced, Just 2))
+        ,("max_surrender_limit_offset"      , ("MODIFIER_MAX_SURRENDER_LIMIT_OFFSET", MsgModifierPcPosReduced, Just 2)) --precision 2
 
             -- Politics modifiers
-        ,("min_export"                      , ("MODIFIER_MIN_EXPORT_FACTOR", MsgModifierPcReducedSign)) -- yellow
-        ,("trade_opinion_factor"            , ("MODIFIER_TRADE_OPINION_FACTOR", MsgModifierPcReducedSign))
-        ,("economy_cost_factor"             , ("economy_cost_factor", MsgModifierPcNegReduced))
-        ,("disabled_ideas"                  , ("MODIFIER_DISABLE_IDEA_TAKING", MsgModifierNoYes))
-        ,("mobilization_laws_cost_factor"   , ("mobilization_laws_cost_factor", MsgModifierPcNegReduced))
-        ,("political_advisor_cost_factor"   , ("political_advisor_cost_factor", MsgModifierPcNegReduced))
-        ,("trade_laws_cost_factor"          , ("trade_laws_cost_factor", MsgModifierPcNegReduced))
-        ,("tank_manufacturer_cost_factor"   , ("tank_manufacturer_cost_factor", MsgModifierPcNegReduced))
-        ,("naval_manufacturer_cost_factor"  , ("naval_manufacturer_cost_factor", MsgModifierPcNegReduced))
-        ,("aircraft_manufacturer_cost_factor" , ("aircraft_manufacturer_cost_factor", MsgModifierPcNegReduced))
-        ,("materiel_manufacturer_cost_factor" , ("materiel_manufacturer_cost_factor", MsgModifierPcNegReduced))
-        ,("industrial_concern_cost_factor"  , ("industrial_concern_cost_factor", MsgModifierPcNegReduced))
-        ,("theorist_cost_factor"            , ("theorist_cost_factor", MsgModifierPcNegReduced))
-        ,("army_chief_cost_factor"          , ("army_chief_cost_factor", MsgModifierPcNegReduced))
-        ,("navy_chief_cost_factor"          , ("navy_chief_cost_factor", MsgModifierPcNegReduced))
-        ,("air_chief_cost_factor"           , ("air_chief_cost_factor", MsgModifierPcNegReduced))
-        ,("high_command_cost_factor"        , ("high_command_cost_factor", MsgModifierPcNegReduced))
-        ,("air_advisor_cost_factor"         , ("MODIFIER_AIR_ADVISOR_COST_FACTOR", MsgModifierPcNegReduced))
-        ,("army_advisor_cost_factor"        , ("MODIFIER_ARMY_ADVISOR_COST_FACTOR", MsgModifierPcNegReduced))
-        ,("navy_advisor_cost_factor"        , ("MODIFIER_NAVY_ADVISOR_COST_FACTOR", MsgModifierPcNegReduced))
-        ,("offensive_war_stability_factor"  , ("MODIFIER_STABILITY_OFFENSIVE_WAR_FACTOR", MsgModifierPcPosReduced))
-        ,("defensive_war_stability_factor"  , ("MODIFIER_STABILITY_DEFENSIVE_WAR_FACTOR", MsgModifierPcPosReduced))
-        ,("unit_leader_as_advisor_cp_cost_factor" , ("MODIFIER_UNIT_LEADER_AS_ADVISOR_CP_COST_FACTOR", MsgModifierPcNegReduced)) --precision 1
-        ,("improve_relations_maintain_cost_factor" , ("MODIFIER_IMPROVE_RELATIONS_MAINTAIN_COST_FACTOR", MsgModifierPcNegReduced))
-        ,("party_popularity_stability_factor" , ("MODIFIER_STABILITY_POPULARITY_FACTOR", MsgModifierPcPosReduced))
-        ,("political_power_cost"            , ("MODIFIER_POLITICAL_POWER_COST", MsgModifierColourNeg))
-        ,("political_power_gain"            , ("MODIFIER_POLITICAL_POWER_GAIN", MsgModifierColourPos)) --precision 2
-        ,("political_power_factor"          , ("MODIFIER_POLITICAL_POWER_FACTOR", MsgModifierPcPosReduced))
-        ,("stability_factor"                , ("MODIFIER_STABILITY_FACTOR", MsgModifierPcPosReduced)) --precision 2
-        ,("stability_weekly"                , ("MODIFIER_STABILITY_WEEKLY", MsgModifierPcPosReduced))
-        ,("stability_weekly_factor"         , ("MODIFIER_STABILITY_WEEKLY_FACTOR", MsgModifierPcPosReduced))
-        ,("war_stability_factor"            , ("MODIFIER_STABILITY_WAR_FACTOR", MsgModifierPcPosReduced))
-        ,("war_support_factor"              , ("MODIFIER_WAR_SUPPORT_FACTOR", MsgModifierPcPosReduced))
-        ,("war_support_weekly"              , ("MODIFIER_WAR_SUPPORT_WEEKLY", MsgModifierPcPosReduced))
-        ,("war_support_weekly_factor"       , ("MODIFIER_WAR_SUPPORT_WEEKLY_FACTOR", MsgModifierPcPosReduced))
-        ,("weekly_casualties_war_support"   , ("MODIFIER_WEEKLY_CASUALTIES_WAR_SUPPORT", MsgModifierPcPosReduced))
-        ,("weekly_convoys_war_support"      , ("MODIFIER_WEEKLY_CONVOYS_WAR_SUPPORT", MsgModifierPcPosReduced))
-        ,("weekly_bombing_war_support"      , ("MODIFIER_WEEKLY_BOMBING_WAR_SUPPORT", MsgModifierPcPosReduced))
-        ,("drift_defence_factor"            , ("MODIFIER_DRIFT_DEFENCE_FACTOR", MsgModifierPcPosReduced))
-        ,("power_balance_daily"             , ("MODIFIER_POWER_BALANCE_DAILY", MsgModifierBop))
-        ,("power_balance_weekly"            , ("MODIFIER_POWER_BALANCE_WEEKLY", MsgModifierBop))
-        ,("communism_drift"                 , ("communism_drift", MsgModifierColourPos)) --precision 2
-        ,("democratic_drift"                , ("democratic_drift", MsgModifierColourPos)) --precision 2
-        ,("fascism_drift"                   , ("fascism_drift", MsgModifierColourPos)) --precision 2
-        ,("neutrality_drift"                , ("neutrality_drift", MsgModifierColourPos)) --precision 2
-        ,("communism_acceptance"            , ("communism_acceptance", MsgModifierColourPos))
-        ,("democratic_acceptance"           , ("democratic_acceptance", MsgModifierColourPos))
-        ,("fascism_acceptance"              , ("fascism_acceptance", MsgModifierColourPos))
-        ,("neutrality_acceptance"           , ("neutrality_acceptance", MsgModifierColourPos))
+        ,("min_export"                      , ("MODIFIER_MIN_EXPORT_FACTOR", MsgModifierPcReducedSign, Just 0)) -- yellow
+        ,("trade_opinion_factor"            , ("MODIFIER_TRADE_OPINION_FACTOR", MsgModifierPcReducedSign, Just 2))
+        ,("economy_cost_factor"             , ("economy_cost_factor", MsgModifierPcNegReduced, Nothing))
+        ,("disabled_ideas"                  , ("MODIFIER_DISABLE_IDEA_TAKING", modNoYes, Just 0))
+        ,("mobilization_laws_cost_factor"   , ("mobilization_laws_cost_factor", MsgModifierPcNegReduced, Nothing))
+        ,("political_advisor_cost_factor"   , ("political_advisor_cost_factor", MsgModifierPcNegReduced, Nothing))
+        ,("trade_laws_cost_factor"          , ("trade_laws_cost_factor", MsgModifierPcNegReduced, Nothing))
+        ,("tank_manufacturer_cost_factor"   , ("tank_manufacturer_cost_factor", MsgModifierPcNegReduced, Nothing))
+        ,("naval_manufacturer_cost_factor"  , ("naval_manufacturer_cost_factor", MsgModifierPcNegReduced, Nothing))
+        ,("aircraft_manufacturer_cost_factor" , ("aircraft_manufacturer_cost_factor", MsgModifierPcNegReduced, Nothing))
+        ,("materiel_manufacturer_cost_factor" , ("materiel_manufacturer_cost_factor", MsgModifierPcNegReduced, Nothing))
+        ,("industrial_concern_cost_factor"  , ("industrial_concern_cost_factor", MsgModifierPcNegReduced, Nothing))
+        ,("theorist_cost_factor"            , ("theorist_cost_factor", MsgModifierPcNegReduced, Nothing))
+        ,("army_chief_cost_factor"          , ("army_chief_cost_factor", MsgModifierPcNegReduced, Nothing))
+        ,("navy_chief_cost_factor"          , ("navy_chief_cost_factor", MsgModifierPcNegReduced, Nothing))
+        ,("air_chief_cost_factor"           , ("air_chief_cost_factor", MsgModifierPcNegReduced, Nothing))
+        ,("high_command_cost_factor"        , ("high_command_cost_factor", MsgModifierPcNegReduced, Nothing))
+        ,("air_advisor_cost_factor"         , ("MODIFIER_AIR_ADVISOR_COST_FACTOR", MsgModifierPcNegReduced, Just 0))
+        ,("army_advisor_cost_factor"        , ("MODIFIER_ARMY_ADVISOR_COST_FACTOR", MsgModifierPcNegReduced, Just 0))
+        ,("navy_advisor_cost_factor"        , ("MODIFIER_NAVY_ADVISOR_COST_FACTOR", MsgModifierPcNegReduced, Just 0))
+        ,("offensive_war_stability_factor"  , ("MODIFIER_STABILITY_OFFENSIVE_WAR_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("defensive_war_stability_factor"  , ("MODIFIER_STABILITY_DEFENSIVE_WAR_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("unit_leader_as_advisor_cp_cost_factor" , ("MODIFIER_UNIT_LEADER_AS_ADVISOR_CP_COST_FACTOR", MsgModifierPcNegReduced, Just 1)) --precision 1
+        ,("improve_relations_maintain_cost_factor" , ("MODIFIER_IMPROVE_RELATIONS_MAINTAIN_COST_FACTOR", MsgModifierPcNegReduced, Just 0))
+        ,("party_popularity_stability_factor" , ("MODIFIER_STABILITY_POPULARITY_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("political_power_cost"            , ("MODIFIER_POLITICAL_POWER_COST", MsgModifierColourNeg, Just 2))
+        ,("political_power_gain"            , ("MODIFIER_POLITICAL_POWER_GAIN", MsgModifierColourPos, Just 2)) --precision 2
+        ,("political_power_factor"          , ("MODIFIER_POLITICAL_POWER_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("stability_factor"                , ("MODIFIER_STABILITY_FACTOR", MsgModifierPcPosReduced, Just 2)) --precision 2
+        ,("stability_weekly"                , ("MODIFIER_STABILITY_WEEKLY", MsgModifierPcPosReduced, Just 2))
+        ,("stability_weekly_factor"         , ("MODIFIER_STABILITY_WEEKLY_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("war_stability_factor"            , ("MODIFIER_STABILITY_WAR_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("war_support_factor"              , ("MODIFIER_WAR_SUPPORT_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("war_support_weekly"              , ("MODIFIER_WAR_SUPPORT_WEEKLY", MsgModifierPcPosReduced, Just 2))
+        ,("war_support_weekly_factor"       , ("MODIFIER_WAR_SUPPORT_WEEKLY_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("weekly_casualties_war_support"   , ("MODIFIER_WEEKLY_CASUALTIES_WAR_SUPPORT", MsgModifierPcPosReduced, Just 2))
+        ,("weekly_convoys_war_support"      , ("MODIFIER_WEEKLY_CONVOYS_WAR_SUPPORT", MsgModifierPcPosReduced, Just 2))
+        ,("weekly_bombing_war_support"      , ("MODIFIER_WEEKLY_BOMBING_WAR_SUPPORT", MsgModifierPcPosReduced, Just 2))
+        ,("drift_defence_factor"            , ("MODIFIER_DRIFT_DEFENCE_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("power_balance_daily"             , ("MODIFIER_POWER_BALANCE_DAILY", MsgModifierBop, Just 2))
+        ,("power_balance_weekly"            , ("MODIFIER_POWER_BALANCE_WEEKLY", MsgModifierBop, Just 2))
+        ,("communism_drift"                 , ("communism_drift", MsgModifierColourPos, Nothing)) --precision 2
+        ,("democratic_drift"                , ("democratic_drift", MsgModifierColourPos, Nothing)) --precision 2
+        ,("fascism_drift"                   , ("fascism_drift", MsgModifierColourPos, Nothing)) --precision 2
+        ,("neutrality_drift"                , ("neutrality_drift", MsgModifierColourPos, Nothing)) --precision 2
+        ,("communism_acceptance"            , ("communism_acceptance", MsgModifierColourPos, Nothing))
+        ,("democratic_acceptance"           , ("democratic_acceptance", MsgModifierColourPos, Nothing))
+        ,("fascism_acceptance"              , ("fascism_acceptance", MsgModifierColourPos, Nothing))
+        ,("neutrality_acceptance"           , ("neutrality_acceptance", MsgModifierColourPos, Nothing))
 
             -- Diplomacy
-        ,("civil_war_involvement_tension"   , ("MODIFIER_CIVIL_WAR_INVOLVEMENT_TENSION", MsgModifierPcNegReduced)) -- precision 1
-        ,("enemy_declare_war_tension"       , ("MODIFIER_ENEMY_DECLARE_WAR_TENSION", MsgModifierPcPosReduced))
-        ,("enemy_justify_war_goal_time"     , ("MODIFIER_ENEMY_JUSTIFY_WAR_GOAL_TIME", MsgModifierPcPosReduced))
-        ,("faction_influence_war_score_factor" , ("MODIFIER_FACTION_INFLUENCE_WAR_SCORE", MsgModifierPcReducedSignMin)) -- yellow
-        ,("faction_trade_opinion_factor"    , ("MODIFIER_FACTION_TRADE_OPINION_FACTOR", MsgModifierPcReducedSign)) --precision 2 yellow
-        ,("generate_wargoal_tension"        , ("MODIFIER_GENERATE_WARGOAL_TENSION_LIMIT", MsgModifierPcReducedSign)) -- yellow
-        ,("guarantee_cost"                  , ("MODIFIER_GUARANTEE_COST", MsgModifierPcNegReduced))
-        ,("guarantee_tension"               , ("MODIFIER_GUARANTEE_TENSION_LIMIT", MsgModifierPcNegReduced))
-        ,("join_faction_tension"            , ("MODIFIER_JOIN_FACTION_TENSION_LIMIT", MsgModifierPcNegReduced))
-        ,("justify_war_goal_time"           , ("MODIFIER_JUSTIFY_WAR_GOAL_TIME", MsgModifierPcNegReduced))
-        ,("justify_war_goal_when_in_major_war_time" , ("MODIFIER_JUSTIFY_WAR_GOAL_WHEN_IN_MAJOR_WAR_TIME", MsgModifierPcNegReduced))
-        ,("lend_lease_tension"              , ("MODIFIER_LEND_LEASE_TENSION_LIMIT", MsgModifierPcNegReduced))
-        ,("opinion_gain_monthly"            , ("MODIFIER_OPINION_GAIN_MONTHLY", MsgModifierColourPos))
-        ,("opinion_gain_monthly_factor"     , ("MODIFIER_OPINION_GAIN_MONTHLY_FACTOR", MsgModifierPcPosReduced))
-        ,("opinion_gain_monthly_same_ideology" , ("MODIFIER_OPINION_GAIN_MONTHLY_SAME_IDEOLOGY", MsgModifierColourPos))
-        ,("opinion_gain_monthly_same_ideology_factor" , ("MODIFIER_OPINION_GAIN_MONTHLY_SAME_IDEOLOGY_FACTOR", MsgModifierPcPosReduced))
-        ,("request_lease_tension"           , ("MODIFIER_REQUEST_LEASE_TENSION_LIMIT", MsgModifierPcNegReduced))
-        ,("annex_cost_factor"               , ("MODIFIER_ANNEX_COST_FACTOR", MsgModifierPcNegReduced))
-        ,("puppet_cost_factor"              , ("MODIFIER_PUPPET_COST_FACTOR", MsgModifierPcNegReduced))
-        ,("send_volunteer_divisions_required" , ("MODIFIER_SEND_VOLUNTEER_DIVISIONS_REQUIRED", MsgModifierPcNegReduced))
-        ,("send_volunteer_factor"           , ("MODIFIER_SEND_VOLUNTEER_FACTOR", MsgModifierPcPosReduced))
-        ,("send_volunteer_size"             , ("MODIFIER_SEND_VOLUNTEER_SIZE", MsgModifierColourPos))
-        ,("send_volunteers_tension"         , ("MODIFIER_SEND_VOLUNTEERS_TENSION_LIMIT", MsgModifierPcNegReduced))
-        ,("air_volunteer_cap"               , ("MODIFIER_AIR_VOLUNTEER_CAP", MsgModifierColourPos))
-        ,("embargo_threshold_factor"        , ("MODIFIER_EMBARGO_THRESHOLD_FACTOR", MsgModifierPcNegReduced))
-        ,("embargo_cost_factor"             , ("MODIFIER_EMBARGO_COST_FACTOR", MsgModifierPcNegReduced))
+        ,("civil_war_involvement_tension"   , ("MODIFIER_CIVIL_WAR_INVOLVEMENT_TENSION", MsgModifierPcNegReduced, Just 1)) -- precision 1
+        ,("enemy_declare_war_tension"       , ("MODIFIER_ENEMY_DECLARE_WAR_TENSION", MsgModifierPcPosReduced, Just 1))
+        ,("enemy_justify_war_goal_time"     , ("MODIFIER_ENEMY_JUSTIFY_WAR_GOAL_TIME", MsgModifierPcPosReduced, Just 1))
+        ,("faction_influence_war_score_factor" , ("MODIFIER_FACTION_INFLUENCE_WAR_SCORE", MsgModifierPcReducedSignMin, Just 2)) -- yellow
+        ,("faction_trade_opinion_factor"    , ("MODIFIER_FACTION_TRADE_OPINION_FACTOR", MsgModifierPcReducedSign, Just 2)) --precision 2 yellow
+        ,("generate_wargoal_tension"        , ("MODIFIER_GENERATE_WARGOAL_TENSION_LIMIT", MsgModifierPcReducedSign, Just 1)) -- yellow
+        ,("guarantee_cost"                  , ("MODIFIER_GUARANTEE_COST", MsgModifierPcNegReduced, Just 0))
+        ,("guarantee_tension"               , ("MODIFIER_GUARANTEE_TENSION_LIMIT", MsgModifierPcNegReduced, Just 1))
+        ,("join_faction_tension"            , ("MODIFIER_JOIN_FACTION_TENSION_LIMIT", MsgModifierPcNegReduced, Just 1))
+        ,("justify_war_goal_time"           , ("MODIFIER_JUSTIFY_WAR_GOAL_TIME", MsgModifierPcNegReduced, Just 1))
+        ,("justify_war_goal_when_in_major_war_time" , ("MODIFIER_JUSTIFY_WAR_GOAL_WHEN_IN_MAJOR_WAR_TIME", MsgModifierPcNegReduced, Just 1))
+        ,("lend_lease_tension"              , ("MODIFIER_LEND_LEASE_TENSION_LIMIT", MsgModifierPcNegReduced, Just 1))
+        ,("opinion_gain_monthly"            , ("MODIFIER_OPINION_GAIN_MONTHLY", MsgModifierColourPos, Just 1))
+        ,("opinion_gain_monthly_factor"     , ("MODIFIER_OPINION_GAIN_MONTHLY_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("opinion_gain_monthly_same_ideology" , ("MODIFIER_OPINION_GAIN_MONTHLY_SAME_IDEOLOGY", MsgModifierColourPos, Just 1))
+        ,("opinion_gain_monthly_same_ideology_factor" , ("MODIFIER_OPINION_GAIN_MONTHLY_SAME_IDEOLOGY_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("request_lease_tension"           , ("MODIFIER_REQUEST_LEASE_TENSION_LIMIT", MsgModifierPcNegReduced, Just 1))
+        ,("annex_cost_factor"               , ("MODIFIER_ANNEX_COST_FACTOR", MsgModifierPcNegReduced, Just 1))
+        ,("puppet_cost_factor"              , ("MODIFIER_PUPPET_COST_FACTOR", MsgModifierPcNegReduced, Just 1))
+        ,("send_volunteer_divisions_required" , ("MODIFIER_SEND_VOLUNTEER_DIVISIONS_REQUIRED", MsgModifierPcNegReduced, Just 1))
+        ,("send_volunteer_factor"           , ("MODIFIER_SEND_VOLUNTEER_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("send_volunteer_size"             , ("MODIFIER_SEND_VOLUNTEER_SIZE", MsgModifierColourPos, Just 0))
+        ,("send_volunteers_tension"         , ("MODIFIER_SEND_VOLUNTEERS_TENSION_LIMIT", MsgModifierPcNegReduced, Just 1))
+        ,("air_volunteer_cap"               , ("MODIFIER_AIR_VOLUNTEER_CAP", MsgModifierColourPos, Just 0))
+        ,("embargo_threshold_factor"        , ("MODIFIER_EMBARGO_THRESHOLD_FACTOR", MsgModifierPcNegReduced, Just 1))
+        ,("embargo_cost_factor"             , ("MODIFIER_EMBARGO_COST_FACTOR", MsgModifierPcNegReduced, Just 1))
 
-        ,("resource_trade_cost_bonus_per_factory", ("MODIFIER_RESOURCE_TRADE_COST_BONUS_PER_FACTORY", MsgModifierColourPos))
+        ,("resource_trade_cost_bonus_per_factory", ("MODIFIER_RESOURCE_TRADE_COST_BONUS_PER_FACTORY", MsgModifierColourPos, Just 0))
 
             -- autonomy
-        ,("autonomy_gain"                   , ("MODIFIER_AUTONOMY_GAIN", MsgModifierColourPos))
-        ,("autonomy_gain_global_factor"     , ("MODIFIER_AUTONOMY_GAIN_GLOBAL_FACTOR", MsgModifierPcPosReduced))
-        ,("subjects_autonomy_gain"          , ("MODIFIER_AUTONOMY_SUBJECT_GAIN", MsgModifierColourPos))
-        ,("autonomy_gain_ll_to_overlord"    , ("MODIFIER_AUTONOMY_GAIN_LL_TO_OVERLORD", MsgModifierColourPos))
-        ,("autonomy_gain_trade_factor"      , ("MODIFIER_AUTONOMY_GAIN_TRADE_FACTOR", MsgModifierPcPosReduced))
-        ,("autonomy_manpower_share"         , ("MODIFIER_AUTONOMY_MANPOWER_SHARE", MsgModifierPcReducedSign))
-        ,("can_master_build_for_us"         , ("MODIFIER_CAN_MASTER_BUILD_FOR_US", MsgModifierNoYes))
-        ,("cic_to_overlord_factor"          , ("MODIFIER_CIC_TO_OVERLORD_FACTOR", MsgModifierPcPosReduced))
-        ,("mic_to_overlord_factor"          , ("MODIFIER_MIC_TO_OVERLORD_FACTOR", MsgModifierPcPosReduced))
-        ,("extra_trade_to_overlord_factor"  , ("MODIFIER_TRADE_TO_OVERLORD_FACTOR", MsgModifierPcPosReduced))
-        ,("master_ideology_drift"           , ("MODIFIER_MASTER_IDEOLOGY_DRIFT", MsgModifierColourPos))
-        ,("overlord_trade_cost_factor"      , ("MODIFIER_TRADE_COST_FACTOR", MsgModifierPcNegReduced))
+        ,("autonomy_gain"                   , ("MODIFIER_AUTONOMY_GAIN", MsgModifierColourPos, Just 1))
+        ,("autonomy_gain_global_factor"     , ("MODIFIER_AUTONOMY_GAIN_GLOBAL_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("subjects_autonomy_gain"          , ("MODIFIER_AUTONOMY_SUBJECT_GAIN", MsgModifierColourPos, Just 2))
+        ,("autonomy_gain_ll_to_overlord"    , ("MODIFIER_AUTONOMY_GAIN_LL_TO_OVERLORD", MsgModifierColourPos, Just 2))
+        ,("autonomy_gain_trade_factor"      , ("MODIFIER_AUTONOMY_GAIN_TRADE_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("autonomy_manpower_share"         , ("MODIFIER_AUTONOMY_MANPOWER_SHARE", MsgModifierPcReducedSign, Just 2))
+        ,("can_master_build_for_us"         , ("MODIFIER_CAN_MASTER_BUILD_FOR_US", modNoYes, Just 0))
+        ,("cic_to_overlord_factor"          , ("MODIFIER_CIC_TO_OVERLORD_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("mic_to_overlord_factor"          , ("MODIFIER_MIC_TO_OVERLORD_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("extra_trade_to_overlord_factor"  , ("MODIFIER_TRADE_TO_OVERLORD_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("master_ideology_drift"           , ("MODIFIER_MASTER_IDEOLOGY_DRIFT", MsgModifierColourPos, Just 2))
+        ,("overlord_trade_cost_factor"      , ("MODIFIER_TRADE_COST_FACTOR", MsgModifierPcNegReduced, Just 2))
 
             -- Governments in exile
-        ,("dockyard_donations"              , ("MODIFIER_DOCKYARD_DONATIONS", MsgModifierColourPos))
-        ,("industrial_factory_donations"    , ("MODIFIER_INDUSTRIAL_FACTORY_DONATIONS", MsgModifierColourPos))
-        ,("military_factory_donations"      , ("MODIFIER_MILITARY_FACTORY_DONATIONS", MsgModifierColourPos))
-        ,("exile_manpower_factor"           , ("MODIFIER_EXILED_MAPOWER_GAIN_FACTOR", MsgModifierPcPosReduced))
-        ,("exiled_government_weekly_manpower" , ("MODIFIER_EXILED_GOVERNMENT_WEEKLY_MANPOWER", MsgModifierColourPos))
-        ,("legitimacy_daily"                , ("MODIFIER_LEGITIMACY_DAILY", MsgModifierColourPos))
-        ,("legitimacy_gain_factor"          , ("MODIFIER_LEGITIMACY_FACTOR", MsgModifierPcPosReduced))
+        ,("dockyard_donations"              , ("MODIFIER_DOCKYARD_DONATIONS", MsgModifierColourPos, Just 0))
+        ,("industrial_factory_donations"    , ("MODIFIER_INDUSTRIAL_FACTORY_DONATIONS", MsgModifierColourPos, Just 0))
+        ,("military_factory_donations"      , ("MODIFIER_MILITARY_FACTORY_DONATIONS", MsgModifierColourPos, Just 0))
+        ,("exile_manpower_factor"           , ("MODIFIER_EXILED_MAPOWER_GAIN_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("exiled_government_weekly_manpower" , ("MODIFIER_EXILED_GOVERNMENT_WEEKLY_MANPOWER", MsgModifierColourPos, Just 0))
+        ,("legitimacy_daily"                , ("MODIFIER_LEGITIMACY_DAILY", MsgModifierColourPos, Just 2))
+        ,("legitimacy_gain_factor"          , ("MODIFIER_LEGITIMACY_FACTOR", MsgModifierPcPosReduced, Just 0))
 
             -- Equipment
-        ,("equipment_capture"               , ("MODIFIER_EQUIPMENT_CAPTURE", MsgModifierPcPosReduced))
-        ,("equipment_capture_factor"        , ("MODIFIER_EQUIPMENT_CAPTURE_FACTOR", MsgModifierPcPosReduced))
-        ,("equipment_conversion_speed"      , ("EQUIPMENT_CONVERSION_SPEED_MODIFIERS", MsgModifierPcPosReduced))
-        ,("equipment_upgrade_xp_cost"       , ("MODIFIER_EQUIPMENT_UPGRADE_XP_COST", MsgModifierPcNegReduced))
-        ,("license_purchase_cost"           , ("MODIFIER_LICENSE_PURCHASE_COST", MsgModifierPcNegReduced))
-        ,("license_tech_difference_speed"   , ("MODIFIER_LICENSE_TECH_DIFFERENCE_SPEED", MsgModifierPcPosReduced))
-        ,("license_production_speed"        , ("MODIFIER_LICENSE_PRODUCTION_SPEED", MsgModifierPcPosReduced))
-        ,("license_armor_purchase_cost"     , ("MODIFIER_LICENSE_ARMOR_PURCHASE_COST", MsgModifierPcNegReduced))
-        ,("license_air_purchase_cost"       , ("MODIFIER_LICENSE_AIR_PURCHASE_COST", MsgModifierPcNegReduced))
-        ,("license_naval_purchase_cost"     , ("MODIFIER_LICENSE_NAVAL_PURCHASE_COST", MsgModifierPcNegReduced))
-        ,("production_factory_efficiency_gain_factor" , ("MODIFIER_PRODUCTION_FACTORY_EFFICIENCY_GAIN_FACTOR", MsgModifierPcPosReduced))
-        ,("production_factory_max_efficiency_factor" , ("MODIFIER_PRODUCTION_FACTORY_MAX_EFFICIENCY_FACTOR", MsgModifierPcPosReduced))
-        ,("production_factory_start_efficiency_factor" , ("MODIFIER_PRODUCTION_FACTORY_START_EFFICIENCY_FACTOR", MsgModifierPcPosReduced))
-        ,("production_lack_of_resource_penalty_factor" , ("MODIFIER_PRODUCTION_LACK_OF_RESOURCE_PENALTY_FACTOR", MsgModifierPcNegReduced))
-        ,("refit_speed"                     , ("MODIFIER_INDUSTRIAL_REFIT_SPEED_FACTOR", MsgModifierPcPosReduced))
+        ,("equipment_capture"               , ("MODIFIER_EQUIPMENT_CAPTURE", MsgModifierPcPosReduced, Just 1))
+        ,("equipment_capture_factor"        , ("MODIFIER_EQUIPMENT_CAPTURE_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("equipment_conversion_speed"      , ("EQUIPMENT_CONVERSION_SPEED_MODIFIERS", MsgModifierPcPosReduced, Just 0))
+        ,("equipment_upgrade_xp_cost"       , ("MODIFIER_EQUIPMENT_UPGRADE_XP_COST", MsgModifierPcNegReduced, Just 0))
+        ,("license_purchase_cost"           , ("MODIFIER_LICENSE_PURCHASE_COST", MsgModifierPcNegReduced, Just 0))
+        ,("license_tech_difference_speed"   , ("MODIFIER_LICENSE_TECH_DIFFERENCE_SPEED", MsgModifierPcPosReduced, Just 0))
+        ,("license_production_speed"        , ("MODIFIER_LICENSE_PRODUCTION_SPEED", MsgModifierPcPosReduced, Just 0))
+        ,("license_armor_purchase_cost"     , ("MODIFIER_LICENSE_ARMOR_PURCHASE_COST", MsgModifierPcNegReduced, Just 0))
+        ,("license_air_purchase_cost"       , ("MODIFIER_LICENSE_AIR_PURCHASE_COST", MsgModifierPcNegReduced, Just 0))
+        ,("license_naval_purchase_cost"     , ("MODIFIER_LICENSE_NAVAL_PURCHASE_COST", MsgModifierPcNegReduced, Just 0))
+        ,("production_factory_efficiency_gain_factor" , ("MODIFIER_PRODUCTION_FACTORY_EFFICIENCY_GAIN_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("production_factory_max_efficiency_factor" , ("MODIFIER_PRODUCTION_FACTORY_MAX_EFFICIENCY_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("production_factory_start_efficiency_factor" , ("MODIFIER_PRODUCTION_FACTORY_START_EFFICIENCY_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("production_lack_of_resource_penalty_factor" , ("MODIFIER_PRODUCTION_LACK_OF_RESOURCE_PENALTY_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("refit_speed"                     , ("MODIFIER_INDUSTRIAL_REFIT_SPEED_FACTOR", MsgModifierPcPosReduced, Just 0))
 
             -- Military outside of combat
-        ,("command_power_gain"              , ("MODIFIER_COMMAND_POWER_GAIN", MsgModifierColourPos))
-        ,("command_power_gain_mult"         , ("MODIFIER_COMMAND_POWER_GAIN_MULT", MsgModifierPcPosReduced))
-        ,("conscription"                    , ("MODIFIER_CONSCRIPTION_FACTOR", MsgModifierPcReducedSignMin)) --yellow
-        ,("conscription_factor"             , ("MODIFIER_CONSCRIPTION_TOTAL_FACTOR", MsgModifierPcPosReduced))
-        ,("dig_in_speed_factor"             , ("MODIFIER_DIG_IN_SPEED_FACTOR", MsgModifierPcPosReduced))
-        ,("experience_gain_air"             , ("MODIFIER_XP_GAIN_AIR", MsgModifierColourPos))
-        ,("experience_gain_air_factor"      , ("MODIFIER_XP_GAIN_AIR_FACTOR", MsgModifierPcPosReduced))
-        ,("experience_gain_army"            , ("MODIFIER_XP_GAIN_ARMY", MsgModifierColourPos))
-        ,("experience_gain_army_factor"     , ("MODIFIER_XP_GAIN_ARMY_FACTOR", MsgModifierPcPosReduced))
-        ,("experience_gain_navy"            , ("MODIFIER_XP_GAIN_NAVY", MsgModifierColourPos))
-        ,("experience_gain_navy_factor"     , ("MODIFIER_XP_GAIN_NAVY_FACTOR", MsgModifierPcPosReduced))
-        ,("land_equipment_upgrade_xp_cost"  , ("MODIFIER_LAND_EQUIPMENT_UPGRADE_XP_COST", MsgModifierPcNegReduced)) --precision 0
-        ,("land_reinforce_rate"             , ("MODIFIER_LAND_REINFORCE_RATE", MsgModifierPcPosReduced))
-        ,("training_time_factor"            , ("MODIFIER_TRAINING_TIME_FACTOR", MsgModifierPcNegReduced))
-        ,("minimum_training_level"          , ("MODIFIER_MINIMUM_TRAINING_LEVEL", MsgModifierPcNegReduced))
-        ,("max_training"                    , ("MODIFIER_MAX_TRAINING_XP_FACTOR", MsgModifierPcNegReduced))
-        ,("air_doctrine_cost_factor"        , ("MODIFIER_AIR_DOCTRINE_COST_FACTOR", MsgModifierPcNegReduced))
-        ,("land_doctrine_cost_factor"       , ("MODIFIER_LAND_DOCTRINE_COST_FACTOR", MsgModifierPcNegReduced))
-        ,("naval_doctrine_cost_factor"      , ("MODIFIER_NAVAL_DOCTRINE_COST_FACTOR", MsgModifierPcNegReduced))
-        ,("max_command_power"               , ("MODIFIER_MAX_COMMAND_POWER", MsgModifierColourPos))
-        ,("max_command_power_mult"          , ("MODIFIER_MAX_COMMAND_POWER_MULT", MsgModifierPcPosReduced))
-        ,("training_time_army_factor"       , ("MODIFIER_TRAINING_TIME_ARMY_FACTOR", MsgModifierPcReducedSign)) --yellow
-        ,("weekly_manpower"                 , ("MODIFIER_WEEKLY_MANPOWER", MsgModifierColourPos))
-        ,("refit_ic_cost"                   , ("MODIFIER_INDUSTRIAL_REFIT_IC_COST_FACTOR", MsgModifierPcNegReduced)) --precision 0
-        ,("air_equipment_upgrade_xp_cost"   , ("MODIFIER_AIR_EQUIPMENT_UPGRADE_XP_COST", MsgModifierPcNegReduced)) --precision 0
-        ,("special_forces_training_time_factor", ("MODIFIER_SPECIAL_FORCES_TRAINING_TIME_FACTOR", MsgModifierPcNegReduced))
-        ,("command_abilities_cost_factor"   , ("MODIFIER_COMMAND_ABILITIES_COST_FACTOR", MsgModifierPcNegReduced))
-        ,("special_forces_cap_flat"         ,("MODIFIER_SPECIAL_FORCES_CAP_FLAT", MsgModifierColourPos))
+        ,("command_power_gain"              , ("MODIFIER_COMMAND_POWER_GAIN", MsgModifierColourPos, Just 2))
+        ,("command_power_gain_mult"         , ("MODIFIER_COMMAND_POWER_GAIN_MULT", MsgModifierPcPosReduced, Just 0))
+        ,("conscription"                    , ("MODIFIER_CONSCRIPTION_FACTOR", MsgModifierPcReducedSignMin, Just 2)) --yellow
+        ,("conscription_factor"             , ("MODIFIER_CONSCRIPTION_TOTAL_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("dig_in_speed_factor"             , ("MODIFIER_DIG_IN_SPEED_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("experience_gain_air"             , ("MODIFIER_XP_GAIN_AIR", MsgModifierColourPos, Just 2))
+        ,("experience_gain_air_factor"      , ("MODIFIER_XP_GAIN_AIR_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("experience_gain_army"            , ("MODIFIER_XP_GAIN_ARMY", MsgModifierColourPos, Just 2))
+        ,("experience_gain_army_factor"     , ("MODIFIER_XP_GAIN_ARMY_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("experience_gain_navy"            , ("MODIFIER_XP_GAIN_NAVY", MsgModifierColourPos, Just 2))
+        ,("experience_gain_navy_factor"     , ("MODIFIER_XP_GAIN_NAVY_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("land_equipment_upgrade_xp_cost"  , ("MODIFIER_LAND_EQUIPMENT_UPGRADE_XP_COST", MsgModifierPcNegReduced, Just 0)) --precision 0
+        ,("land_reinforce_rate"             , ("MODIFIER_LAND_REINFORCE_RATE", MsgModifierPcPosReduced, Just 1))
+        ,("training_time_factor"            , ("MODIFIER_TRAINING_TIME_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("minimum_training_level"          , ("MODIFIER_MINIMUM_TRAINING_LEVEL", MsgModifierPcNegReduced, Just 0))
+        ,("max_training"                    , ("MODIFIER_MAX_TRAINING_XP_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("air_doctrine_cost_factor"        , ("MODIFIER_AIR_DOCTRINE_COST_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("land_doctrine_cost_factor"       , ("MODIFIER_LAND_DOCTRINE_COST_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("naval_doctrine_cost_factor"      , ("MODIFIER_NAVAL_DOCTRINE_COST_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("max_command_power"               , ("MODIFIER_MAX_COMMAND_POWER", MsgModifierColourPos, Just 0))
+        ,("max_command_power_mult"          , ("MODIFIER_MAX_COMMAND_POWER_MULT", MsgModifierPcPosReduced, Just 0))
+        ,("training_time_army_factor"       , ("MODIFIER_TRAINING_TIME_ARMY_FACTOR", MsgModifierPcReducedSign, Just 1)) --yellow
+        ,("weekly_manpower"                 , ("MODIFIER_WEEKLY_MANPOWER", MsgModifierColourPos, Just 0))
+        ,("refit_ic_cost"                   , ("MODIFIER_INDUSTRIAL_REFIT_IC_COST_FACTOR", MsgModifierPcNegReduced, Just 0)) --precision 0
+        ,("air_equipment_upgrade_xp_cost"   , ("MODIFIER_AIR_EQUIPMENT_UPGRADE_XP_COST", MsgModifierPcNegReduced, Just 0)) --precision 0
+        ,("special_forces_training_time_factor", ("MODIFIER_SPECIAL_FORCES_TRAINING_TIME_FACTOR", MsgModifierPcNegReduced, Just 1))
+        ,("command_abilities_cost_factor"   , ("MODIFIER_COMMAND_ABILITIES_COST_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("special_forces_cap_flat"         ,("MODIFIER_SPECIAL_FORCES_CAP_FLAT", MsgModifierColourPos, Just 0))
 
             -- Fuel and supplies
-        ,("base_fuel_gain"                  , ("MODIFIER_BASE_FUEL_GAIN_ADD", MsgModifierColourPos))
-        ,("base_fuel_gain_factor"           , ("MODIFIER_BASE_FUEL_GAIN_FACTOR", MsgModifierPcPosReduced))
-        ,("fuel_cost"                       , ("MODIFIER_FUEL_COST", MsgModifierColourNeg))
-        ,("fuel_gain"                       , ("MODIFIER_FUEL_GAIN_ADD", MsgModifierColourPos))
-        ,("fuel_gain_factor"                , ("MODIFIER_MAX_FUEL_FACTOR", MsgModifierPcPosReduced))
-        ,("fuel_gain_factor_from_states"    , ("MODIFIER_FUEL_GAIN_FACTOR_FROM_STATES", MsgModifierPcPosReduced))
-        ,("max_fuel"                        , ("MODIFIER_MAX_FUEL_ADD", MsgModifierColourPos))
-        ,("max_fuel_factor"                 , ("MODIFIER_MAX_FUEL_FACTOR", MsgModifierPcPosReduced))
-        ,("army_fuel_consumption_factor"    , ("MODIFIER_ARMY_FUEL_CONSUMPTION_FACTOR", MsgModifierPcNegReduced))
-        ,("air_fuel_consumption_factor"     , ("MODIFIER_AIR_FUEL_CONSUMPTION_FACTOR", MsgModifierPcNegReduced))
-        ,("navy_fuel_consumption_factor"    , ("MODIFIER_NAVY_FUEL_CONSUMPTION_FACTOR", MsgModifierPcNegReduced))
-        ,("supply_factor"                   , ("MODIFIER_SUPPLY_FACTOR", MsgModifierPcPosReduced)) --precision 0
-        ,("supply_combat_penalties_on_core_factor" , ("supply_combat_penalties_on_core_factor", MsgModifierPcNegReduced))
-        ,("supply_consumption_factor"       , ("MODIFIER_SUPPLY_CONSUMPTION_FACTOR", MsgModifierPcNegReduced))
-        ,("no_supply_grace"                 , ("MODIFIER_NO_SUPPLY_GRACE", MsgModifierColourPos))
-        ,("out_of_supply_factor"            , ("MODIFIER_OUT_OF_SUPPLY_FACTOR", MsgModifierPcNegReduced))
-        ,("attrition"                       , ("MODIFIER_ATTRITION", MsgModifierPcNegReduced))
-        ,("naval_attrition"                 , ("MODIFIER_NAVAL_ATTRITION_FACTOR", MsgModifierPcNegReduced))
-        ,("heat_attrition"                  , ("MODIFIER_HEAT_ATTRITION", MsgModifierPcNegReduced))
-        ,("heat_attrition_factor"           , ("MODIFIER_HEAT_ATTRITION_FACTOR", MsgModifierPcNegReduced))
-        ,("winter_attrition_factor"         , ("MODIFIER_WINTER_ATTRITION_FACTOR", MsgModifierPcNegReduced))
-        ,("truck_attrition_factor"          , ("MODIFIER_TRUCK_ATTRITION_FACTOR", MsgModifierPcNegReduced))
-        ,("extra_marine_supply_grace"       , ("MODIFIER_MARINE_EXTRA_SUPPLY_GRACE", MsgModifierColourPos))
-        ,("extra_paratrooper_supply_grace"  , ("MODIFIER_PARATROOPER_EXTRA_SUPPLY_GRACE", MsgModifierColourPos))
-        ,("special_forces_no_supply_grace"  , ("MODIFIER_SPECIAL_FORCES_NO_SUPPLY_GRACE", MsgModifierColourPos))
-        ,("special_forces_out_of_supply_factor" , ("MODIFIER_SPECIAL_FORCES_OUT_OF_SUPPLY_FACTOR", MsgModifierPcNegReduced))
+        ,("base_fuel_gain"                  , ("MODIFIER_BASE_FUEL_GAIN_ADD", MsgModifierColourPos, Just 0))
+        ,("base_fuel_gain_factor"           , ("MODIFIER_BASE_FUEL_GAIN_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("fuel_cost"                       , ("MODIFIER_FUEL_COST", MsgModifierColourNeg, Just 0))
+        ,("fuel_gain"                       , ("MODIFIER_FUEL_GAIN_ADD", MsgModifierColourPos, Just 2))
+        ,("fuel_gain_factor"                , ("MODIFIER_MAX_FUEL_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("fuel_gain_factor_from_states"    , ("MODIFIER_FUEL_GAIN_FACTOR_FROM_STATES", MsgModifierPcPosReduced, Just 2))
+        ,("max_fuel"                        , ("MODIFIER_MAX_FUEL_ADD", MsgModifierColourPos, Just 2))
+        ,("max_fuel_factor"                 , ("MODIFIER_MAX_FUEL_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("army_fuel_consumption_factor"    , ("MODIFIER_ARMY_FUEL_CONSUMPTION_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("air_fuel_consumption_factor"     , ("MODIFIER_AIR_FUEL_CONSUMPTION_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("navy_fuel_consumption_factor"    , ("MODIFIER_NAVY_FUEL_CONSUMPTION_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("supply_factor"                   , ("MODIFIER_SUPPLY_FACTOR", MsgModifierPcPosReduced, Just 0)) --precision 0
+        ,("supply_combat_penalties_on_core_factor" , ("supply_combat_penalties_on_core_factor", MsgModifierPcNegReduced, Just 1))
+        ,("supply_consumption_factor"       , ("MODIFIER_SUPPLY_CONSUMPTION_FACTOR", MsgModifierPcNegReduced, Just 1))
+        ,("no_supply_grace"                 , ("MODIFIER_NO_SUPPLY_GRACE", MsgModifierColourPos, Just 1))
+        ,("out_of_supply_factor"            , ("MODIFIER_OUT_OF_SUPPLY_FACTOR", MsgModifierPcNegReduced, Just 1))
+        ,("attrition"                       , ("MODIFIER_ATTRITION", MsgModifierPcNegReduced, Just 1))
+        ,("naval_attrition"                 , ("MODIFIER_NAVAL_ATTRITION_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("heat_attrition"                  , ("MODIFIER_HEAT_ATTRITION", MsgModifierPcNegReduced, Just 1))
+        ,("heat_attrition_factor"           , ("MODIFIER_HEAT_ATTRITION_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("winter_attrition_factor"         , ("MODIFIER_WINTER_ATTRITION_FACTOR", MsgModifierPcNegReduced, Just 1))
+        ,("truck_attrition_factor"          , ("MODIFIER_TRUCK_ATTRITION_FACTOR", MsgModifierPcNegReduced, Just 0))
+        ,("extra_marine_supply_grace"       , ("MODIFIER_MARINE_EXTRA_SUPPLY_GRACE", MsgModifierColourPos, Just 1))
+        ,("extra_paratrooper_supply_grace"  , ("MODIFIER_PARATROOPER_EXTRA_SUPPLY_GRACE", MsgModifierColourPos, Just 1))
+        ,("special_forces_no_supply_grace"  , ("MODIFIER_SPECIAL_FORCES_NO_SUPPLY_GRACE", MsgModifierColourPos, Just 1))
+        ,("special_forces_out_of_supply_factor" , ("MODIFIER_SPECIAL_FORCES_OUT_OF_SUPPLY_FACTOR", MsgModifierPcNegReduced, Just 2))
 
             -- buildings
-        ,("civilian_factory_use"            , ("MODIFIER_CIVILIAN_FACTORY_USE", MsgModifierColourNeg))
-        ,("industry_free_repair_factor"     , ("MODIFIER_INDUSTRY_FREE_REPAIR_FACTOR", MsgModifierPcPosReduced))
-        ,("consumer_goods_factor"           , ("MODIFIER_CONSUMER_GOODS_FACTOR", MsgModifierPcReducedSignMin))
-        ,("conversion_cost_civ_to_mil_factor" , ("MODIFIER_CONVERSION_COST_CIV_TO_MIL_FACTOR", MsgModifierPcNegReduced))
-        ,("conversion_cost_mil_to_civ_factor" , ("MODIFIER_CONVERSION_COST_MIL_TO_CIV_FACTOR", MsgModifierPcNegReduced))
-        ,("global_building_slots"           , ("MODIFIER_GLOBAL_BUILDING_SLOTS", MsgModifierPcPosReduced))
-        ,("global_building_slots_factor"    , ("MODIFIER_GLOBAL_BUILDING_SLOTS_FACTOR", MsgModifierPcPosReduced))
-        ,("industrial_capacity_dockyard"    , ("MODIFIER_INDUSTRIAL_CAPACITY_DOCKYARD_FACTOR", MsgModifierPcPosReduced))
-        ,("industrial_capacity_factory"     , ("MODIFIER_INDUSTRIAL_CAPACITY_FACTOR", MsgModifierPcPosReduced))
-        ,("industry_air_damage_factor"      , ("MODIFIER_INDUSTRY_AIR_DAMAGE_FACTOR", MsgModifierPcNegReduced)) --precision 2
-        ,("industry_repair_factor"          , ("MODIFIER_INDUSTRY_REPAIR_FACTOR", MsgModifierPcPosReduced))
-        ,("line_change_production_efficiency_factor" , ("MODIFIER_LINE_CHANGE_PRODUCTION_EFFICIENCY_FACTOR", MsgModifierPcPosReduced))
-        ,("production_oil_factor"           , ("MODIFIER_PRODUCTION_OIL_FACTOR", MsgModifierPcPosReduced))
-        ,("production_speed_buildings_factor" , ("MODIFIER_PRODUCTION_SPEED_BUILDINGS_FACTOR", MsgModifierPcPosReduced))
-        ,("supply_node_range"               , ("MODIFIER_SUPPLY_NODE_RANGE", MsgModifierPcPosReduced))
-        ,("static_anti_air_damage_factor"   , ("MODIFIER_STATIC_ANTI_AIR_DAMAGE_FACTOR", MsgModifierPcPosReduced))
-        ,("static_anti_air_hit_chance_factor" , ("MODIFIER_STATIC_ANTI_AIR_HIT_CHANCE_FACTOR", MsgModifierPcPosReduced))
-        ,("coastal_bunker_effectiveness_factor" , ("MODIFIER_COASTAL_BUNKER_EFFECTIVENESS_FACTOR", MsgModifierPcPosReduced))
-        ,("land_bunker_effectiveness_factor" , ("MODIFIER_LAND_BUNKER_EFFECTIVENESS_FACTOR", MsgModifierPcPosReduced))
+        ,("civilian_factory_use"            , ("MODIFIER_CIVILIAN_FACTORY_USE", MsgModifierColourNeg, Just 0))
+        ,("industry_free_repair_factor"     , ("MODIFIER_INDUSTRY_FREE_REPAIR_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("consumer_goods_factor"           , ("MODIFIER_CONSUMER_GOODS_FACTOR", MsgModifierPcReducedSignMin, Just 1))
+        ,("conversion_cost_civ_to_mil_factor" , ("MODIFIER_CONVERSION_COST_CIV_TO_MIL_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("conversion_cost_mil_to_civ_factor" , ("MODIFIER_CONVERSION_COST_MIL_TO_CIV_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("global_building_slots"           , ("MODIFIER_GLOBAL_BUILDING_SLOTS", MsgModifierPcPosReduced, Just 0))
+        ,("global_building_slots_factor"    , ("MODIFIER_GLOBAL_BUILDING_SLOTS_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("industrial_capacity_dockyard"    , ("MODIFIER_INDUSTRIAL_CAPACITY_DOCKYARD_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("industrial_capacity_factory"     , ("MODIFIER_INDUSTRIAL_CAPACITY_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("industry_air_damage_factor"      , ("MODIFIER_INDUSTRY_AIR_DAMAGE_FACTOR", MsgModifierPcNegReduced, Just 2)) --precision 2
+        ,("industry_repair_factor"          , ("MODIFIER_INDUSTRY_REPAIR_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("line_change_production_efficiency_factor" , ("MODIFIER_LINE_CHANGE_PRODUCTION_EFFICIENCY_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("production_oil_factor"           , ("MODIFIER_PRODUCTION_OIL_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("production_speed_buildings_factor" , ("MODIFIER_PRODUCTION_SPEED_BUILDINGS_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("supply_node_range"               , ("MODIFIER_SUPPLY_NODE_RANGE", MsgModifierPcPosReduced, Just 0))
+        ,("static_anti_air_damage_factor"   , ("MODIFIER_STATIC_ANTI_AIR_DAMAGE_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("static_anti_air_hit_chance_factor" , ("MODIFIER_STATIC_ANTI_AIR_HIT_CHANCE_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("coastal_bunker_effectiveness_factor" , ("MODIFIER_COASTAL_BUNKER_EFFECTIVENESS_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("land_bunker_effectiveness_factor" , ("MODIFIER_LAND_BUNKER_EFFECTIVENESS_FACTOR", MsgModifierPcPosReduced, Just 0))
 
             -- resistance and compliance
-        ,("compliance_growth_on_our_occupied_states" , ("MODIFIER_COMPLIANCE_GROWTH_ON_OUR_OCCUPIED_STATES", MsgModifierPcNegReduced))
-        ,("no_compliance_gain"              , ("MODIFIER_NO_COMPLIANCE_GAIN", MsgModifierNoYes))
-        ,("occupation_cost"                 , ("MODIFIER_OCCUPATION_COST", MsgModifierColourNeg))
-        ,("required_garrison_factor"        , ("MODIFIER_REQUIRED_GARRISON_FACTOR", MsgModifierPcNegReduced))
-        ,("resistance_activity"             , ("MODIFIER_RESISTANCE_ACTIVITY_FACTOR", MsgModifierPcNegReduced))
-        ,("resistance_damage_to_garrison_on_our_occupied_states" , ("MODIFIER_RESISTANCE_DAMAGE_TO_GARRISONS_ON_OUR_OCCUPIED_STATES", MsgModifierPcPosReduced))
-        ,("resistance_decay_on_our_occupied_states" , ("MODIFIER_RESISTANCE_DECAY_ON_OUR_OCCUPIED_STATES", MsgModifierPcNegReduced))
-        ,("resistance_growth_on_our_occupied_states" , ("MODIFIER_RESISTANCE_GROWTH_ON_OUR_OCCUPIED_STATES", MsgModifierPcPosReduced))
-        ,("resistance_target_on_our_occupied_states" , ("MODIFIER_RESISTANCE_TARGET_ON_OUR_OCCUPIED_STATES", MsgModifierPcPosReduced))
+        ,("compliance_growth_on_our_occupied_states" , ("MODIFIER_COMPLIANCE_GROWTH_ON_OUR_OCCUPIED_STATES", MsgModifierPcNegReduced, Just 0))
+        ,("no_compliance_gain"              , ("MODIFIER_NO_COMPLIANCE_GAIN", modNoYes, Just 0))
+        ,("occupation_cost"                 , ("MODIFIER_OCCUPATION_COST", MsgModifierColourNeg, Nothing))
+        ,("required_garrison_factor"        , ("MODIFIER_REQUIRED_GARRISON_FACTOR", MsgModifierPcNegReduced, Just 0))
+        ,("resistance_activity"             , ("MODIFIER_RESISTANCE_ACTIVITY_FACTOR", MsgModifierPcNegReduced, Just 1))
+        ,("resistance_damage_to_garrison_on_our_occupied_states" , ("MODIFIER_RESISTANCE_DAMAGE_TO_GARRISONS_ON_OUR_OCCUPIED_STATES", MsgModifierPcPosReduced, Just 2))
+        ,("resistance_decay_on_our_occupied_states" , ("MODIFIER_RESISTANCE_DECAY_ON_OUR_OCCUPIED_STATES", MsgModifierPcNegReduced, Just 0))
+        ,("resistance_growth_on_our_occupied_states" , ("MODIFIER_RESISTANCE_GROWTH_ON_OUR_OCCUPIED_STATES", MsgModifierPcPosReduced, Just 0))
+        ,("resistance_target_on_our_occupied_states" , ("MODIFIER_RESISTANCE_TARGET_ON_OUR_OCCUPIED_STATES", MsgModifierPcPosReduced, Just 0))
 
             -- Intelligence
-        ,("agency_upgrade_time"             , ("MODIFIER_AGENCY_UPGRADE_TIME", MsgModifierPcNegReduced))
-        ,("decryption"                      , ("MODIFIER_DECRYPTION", MsgModifierColourPos))
-        ,("decryption_factor"               , ("MODIFIER_DECRYPTION_FACTOR", MsgModifierPcPosReduced))
-        ,("encryption"                      , ("MODIFIER_ENCRYPTION", MsgModifierColourPos))
-        ,("encryption_factor"               , ("MODIFIER_ENCRYPTION_FACTOR", MsgModifierPcPosReduced))
-        ,("civilian_intel_factor"           , ("MODIFIER_CIVILIAN_INTEL_FACTOR", MsgModifierPcPosReduced))
-        ,("army_intel_factor"               , ("MODIFIER_ARMY_INTEL_FACTOR", MsgModifierPcPosReduced))
-        ,("navy_intel_factor"               , ("MODIFIER_NAVY_INTEL_FACTOR", MsgModifierPcPosReduced))
-        ,("airforce_intel_factor"           , ("MODIFIER_AIRFORCE_INTEL_FACTOR", MsgModifierPcPosReduced))
-        ,("civilian_intel_to_others"        , ("MODIFIER_CIVILIAN_INTEL_TO_OTHERS", MsgModifierPcNeg))
-        ,("army_intel_to_others"            , ("MODIFIER_ARMY_INTEL_TO_OTHERS", MsgModifierPcNeg))
-        ,("navy_intel_to_others"            , ("MODIFIER_NAVY_INTEL_TO_OTHERS", MsgModifierPcNeg))
-        ,("airforce_intel_to_others"        , ("MODIFIER_AIRFORCE_INTEL_TO_OTHERS", MsgModifierPcNeg))
-        ,("intel_network_gain"              , ("MODIFIER_INTEL_NETWORK_GAIN", MsgModifierColourPos))
-        ,("intel_network_gain_factor"       , ("MODIFIER_INTEL_NETWORK_GAIN_FACTOR", MsgModifierPcPosReduced))
-        ,("subversive_activites_upkeep"     , ("MODIFIER_SUBVERSIVE_ACTIVITES_UPKEEP", MsgModifierPcNegReduced))
-        ,("target_sabotage_risk"            , ("target_sabotage_risk", MsgModifierPcNegReduced))
-        ,("target_sabotage_cost"            , ("target_sabotage_cost", MsgModifierPcNegReduced))
-        ,("diplomatic_pressure_mission_factor" , ("MODIFIER_DIPLOMATIC_PRESSURE_MISSION_FACTOR", MsgModifierPcPosReduced))
-        ,("control_trade_mission_factor"    , ("MODIFIER_CONTROL_TRADE_MISSION_FACTOR", MsgModifierPcPosReduced))
-        ,("boost_ideology_mission_factor"   , ("MODIFIER_BOOST_IDEOLOGY_MISSION_FACTOR", MsgModifierPcPosReduced))
-        ,("boost_resistance_factor"         , ("MODIFIER_BOOST_RESISTANCE_FACTOR", MsgModifierPcPosReduced))
-        ,("propaganda_mission_factor"       , ("MODIFIER_PROPAGANDA_MISSION_FACTOR", MsgModifierPcPosReduced))
-        ,("target_sabotage_factor"          , ("MODIFIER_TARGET_SABOTAGE_FACTOR", MsgModifierPcPosReduced))
-        ,("crypto_strength"                 , ("MODIFIER_CRYPTO_STRENGTH", MsgModifierColourPos))
-        ,("decryption_power"                , ("MODIFIER_DECRYPTION_POWER", MsgModifierColourPos))
-        ,("decryption_power_factor"         , ("MODIFIER_DECRYPTION_POWER_FACTOR", MsgModifierPcPosReduced))
-        ,("intel_from_combat_factor"        , ("MODIFIER_INTEL_FROM_COMBAT_FACTOR", MsgModifierPcPosReduced))
-        ,("intel_from_operatives_factor"    , ("MODIFIER_INTEL_FROM_OPERATIVES_FACTOR", MsgModifierPcPosReduced))
-        ,("civilian_intel_to_others"        , ("MODIFIER_CIVILIAN_INTEL_TO_OTHERS", MsgModifierPcNeg))
-        ,("foreign_subversive_activites"    , ("MODIFIER_FOREIGN_SUBVERSIVE_ACTIVITIES", MsgModifierPcNegReduced))
-        ,("intelligence_agency_defense"     , ("MODIFIER_INTELLIGENCE_AGENCY_DEFENSE", MsgModifierColourPos))
-        ,("root_out_resistance_effectiveness_factor", ("MODIFIER_ROOT_OUT_RESISTANCE_EFFECTIVENESS_FACTOR", MsgModifierPcPosReduced))
+        ,("agency_upgrade_time"             , ("MODIFIER_AGENCY_UPGRADE_TIME", MsgModifierPcNegReduced, Just 1))
+        ,("decryption"                      , ("MODIFIER_DECRYPTION", MsgModifierColourPos, Just 2))
+        ,("decryption_factor"               , ("MODIFIER_DECRYPTION_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("encryption"                      , ("MODIFIER_ENCRYPTION", MsgModifierColourPos, Just 2))
+        ,("encryption_factor"               , ("MODIFIER_ENCRYPTION_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("civilian_intel_factor"           , ("MODIFIER_CIVILIAN_INTEL_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("army_intel_factor"               , ("MODIFIER_ARMY_INTEL_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("navy_intel_factor"               , ("MODIFIER_NAVY_INTEL_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("airforce_intel_factor"           , ("MODIFIER_AIRFORCE_INTEL_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("civilian_intel_to_others"        , ("MODIFIER_CIVILIAN_INTEL_TO_OTHERS", MsgModifierPcNeg, Just 1))
+        ,("army_intel_to_others"            , ("MODIFIER_ARMY_INTEL_TO_OTHERS", MsgModifierPcNeg, Just 1))
+        ,("navy_intel_to_others"            , ("MODIFIER_NAVY_INTEL_TO_OTHERS", MsgModifierPcNeg, Just 1))
+        ,("airforce_intel_to_others"        , ("MODIFIER_AIRFORCE_INTEL_TO_OTHERS", MsgModifierPcNeg, Just 1))
+        ,("intel_network_gain"              , ("MODIFIER_INTEL_NETWORK_GAIN", MsgModifierColourPos, Just 1))
+        ,("intel_network_gain_factor"       , ("MODIFIER_INTEL_NETWORK_GAIN_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("subversive_activites_upkeep"     , ("MODIFIER_SUBVERSIVE_ACTIVITES_UPKEEP", MsgModifierPcNegReduced, Just 0))
+        ,("target_sabotage_risk"            , ("target_sabotage_risk", MsgModifierPcNegReduced, Nothing))
+        ,("target_sabotage_cost"            , ("target_sabotage_cost", MsgModifierPcNegReduced, Nothing))
+        ,("diplomatic_pressure_mission_factor" , ("MODIFIER_DIPLOMATIC_PRESSURE_MISSION_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("control_trade_mission_factor"    , ("MODIFIER_CONTROL_TRADE_MISSION_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("boost_ideology_mission_factor"   , ("MODIFIER_BOOST_IDEOLOGY_MISSION_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("boost_resistance_factor"         , ("MODIFIER_BOOST_RESISTANCE_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("propaganda_mission_factor"       , ("MODIFIER_PROPAGANDA_MISSION_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("target_sabotage_factor"          , ("MODIFIER_TARGET_SABOTAGE_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("crypto_strength"                 , ("MODIFIER_CRYPTO_STRENGTH", MsgModifierColourPos, Just 0))
+        ,("decryption_power"                , ("MODIFIER_DECRYPTION_POWER", MsgModifierColourPos, Just 0))
+        ,("decryption_power_factor"         , ("MODIFIER_DECRYPTION_POWER_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("intel_from_combat_factor"        , ("MODIFIER_INTEL_FROM_COMBAT_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("intel_from_operatives_factor"    , ("MODIFIER_INTEL_FROM_OPERATIVES_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("civilian_intel_to_others"        , ("MODIFIER_CIVILIAN_INTEL_TO_OTHERS", MsgModifierPcNeg, Just 1))
+        ,("foreign_subversive_activites"    , ("MODIFIER_FOREIGN_SUBVERSIVE_ACTIVITIES", MsgModifierPcNegReduced, Just 0))
+        ,("intelligence_agency_defense"     , ("MODIFIER_INTELLIGENCE_AGENCY_DEFENSE", MsgModifierColourPos, Just 2))
+        ,("root_out_resistance_effectiveness_factor", ("MODIFIER_ROOT_OUT_RESISTANCE_EFFECTIVENESS_FACTOR", MsgModifierPcPosReduced, Just 0))
 
             -- Operatives
-        ,("own_operative_detection_chance_factor" , ("MODIFIER_OWN_OPERATIVE_DETECTION_CHANCE_FACTOR", MsgModifierPcNegReduced))
-        ,("enemy_operative_capture_chance_factor" , ("MODIFIER_ENEMY_OPERATIVE_CAPTURE_CHANCE_FACTOR", MsgModifierPcNegReduced))
-        ,("enemy_operative_detection_chance" , ("MODIFIER_ENEMY_OPERATIVE_DETECTION_CHANCE", MsgModifierPcPos))
-        ,("enemy_operative_detection_chance_factor" , ("MODIFIER_ENEMY_OPERATIVE_DETECTION_CHANCE_FACTOR", MsgModifierPcPosReduced))
-        ,("enemy_operative_intel_extraction_rate" , ("MODIFIER_ENEMY_OPERATIVE_INTEL_EXTRACTION_RATE", MsgModifierPcNegReduced))
-        ,("new_operative_slot_bonus"        , ("MODIFIER_NEW_OPERATIVE_SLOT_BONUS", MsgModifierColourPos))
-        ,("operative_slot"                  , ("MODIFIER_OPERATIVE_SLOT", MsgModifierColourPos))
+        ,("own_operative_detection_chance_factor" , ("MODIFIER_OWN_OPERATIVE_DETECTION_CHANCE_FACTOR", MsgModifierPcNegReduced, Just 0))
+        ,("enemy_operative_capture_chance_factor" , ("MODIFIER_ENEMY_OPERATIVE_CAPTURE_CHANCE_FACTOR", MsgModifierPcNegReduced, Just 0))
+        ,("enemy_operative_detection_chance" , ("MODIFIER_ENEMY_OPERATIVE_DETECTION_CHANCE", MsgModifierPcPos, Just 2))
+        ,("enemy_operative_detection_chance_factor" , ("MODIFIER_ENEMY_OPERATIVE_DETECTION_CHANCE_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("enemy_operative_intel_extraction_rate" , ("MODIFIER_ENEMY_OPERATIVE_INTEL_EXTRACTION_RATE", MsgModifierPcNegReduced, Just 0))
+        ,("new_operative_slot_bonus"        , ("MODIFIER_NEW_OPERATIVE_SLOT_BONUS", MsgModifierColourPos, Just 0))
+        ,("operative_slot"                  , ("MODIFIER_OPERATIVE_SLOT", MsgModifierColourPos, Just 0))
 
             -- AI
-        ,("ai_badass_factor"                , ("MODIFIER_AI_BADASS_FACTOR", MsgModifierPcReducedSign))
-        ,("ai_call_ally_desire_factor"      , ("MODIFIER_AI_GET_ALLY_DESIRE_FACTOR", MsgModifierSign))
-        ,("ai_desired_divisions_factor"     , ("MODIFIER_AI_DESIRED_DIVISIONS_FACTOR", MsgModifierPcReducedSign))
-        ,("ai_focus_aggressive_factor"      , ("MODIFIER_AI_FOCUS_AGGRESSIVE_FACTOR", MsgModifierPcReducedSign))
-        ,("ai_focus_defense_factor"         , ("MODIFIER_AI_FOCUS_DEFENSE_FACTOR", MsgModifierPcReducedSign)) --precision 1
-        ,("ai_focus_aviation_factor"        , ("MODIFIER_AI_FOCUS_AVIATION_FACTOR", MsgModifierPcReducedSign))
-        ,("ai_focus_military_advancements_factor" , ("MODIFIER_AI_FOCUS_MILITARY_ADVANCEMENTS_FACTOR", MsgModifierPcReducedSign))
-        ,("ai_focus_military_equipment_factor" , ("MODIFIER_AI_FOCUS_MILITARY_EQUIPMENT_FACTOR", MsgModifierPcReducedSign))
-        ,("ai_focus_naval_air_factor"       , ("MODIFIER_AI_FOCUS_NAVAL_AIR_FACTOR", MsgModifierPcReducedSign))
-        ,("ai_focus_naval_factor"           , ("MODIFIER_AI_FOCUS_NAVAL_FACTOR", MsgModifierPcReducedSign))
-        ,("ai_focus_war_production_factor"  , ("MODIFIER_AI_FOCUS_WAR_PRODUCTION_FACTOR", MsgModifierPcReducedSign))
-        ,("ai_focus_peaceful_factor"        , ("MODIFIER_AI_FOCUS_PEACEFUL_FACTOR", MsgModifierPcReducedSign)) --precision 1
-        ,("ai_get_ally_desire_factor"       , ("MODIFIER_AI_GET_ALLY_DESIRE_FACTOR", MsgModifierSign))
-        ,("ai_join_ally_desire_factor"      , ("MODIFIER_AI_JOIN_ALLY_DESIRE_FACTOR", MsgModifierSign))
-        ,("ai_license_acceptance"           , ("MODIFIER_AI_LICENSE_ACCEPTANCE", MsgModifierSign))
+        ,("ai_badass_factor"                , ("MODIFIER_AI_BADASS_FACTOR", MsgModifierPcReducedSign, Just 1))
+        ,("ai_call_ally_desire_factor"      , ("MODIFIER_AI_GET_ALLY_DESIRE_FACTOR", MsgModifierSign, Just 0))
+        ,("ai_desired_divisions_factor"     , ("MODIFIER_AI_DESIRED_DIVISIONS_FACTOR", MsgModifierPcReducedSign, Just 1))
+        ,("ai_focus_aggressive_factor"      , ("MODIFIER_AI_FOCUS_AGGRESSIVE_FACTOR", MsgModifierPcReducedSign, Just 1))
+        ,("ai_focus_defense_factor"         , ("MODIFIER_AI_FOCUS_DEFENSE_FACTOR", MsgModifierPcReducedSign, Just 1)) --precision 1
+        ,("ai_focus_aviation_factor"        , ("MODIFIER_AI_FOCUS_AVIATION_FACTOR", MsgModifierPcReducedSign, Just 1))
+        ,("ai_focus_military_advancements_factor" , ("MODIFIER_AI_FOCUS_MILITARY_ADVANCEMENTS_FACTOR", MsgModifierPcReducedSign, Just 1))
+        ,("ai_focus_military_equipment_factor" , ("MODIFIER_AI_FOCUS_MILITARY_EQUIPMENT_FACTOR", MsgModifierPcReducedSign, Just 1))
+        ,("ai_focus_naval_air_factor"       , ("MODIFIER_AI_FOCUS_NAVAL_AIR_FACTOR", MsgModifierPcReducedSign, Just 1))
+        ,("ai_focus_naval_factor"           , ("MODIFIER_AI_FOCUS_NAVAL_FACTOR", MsgModifierPcReducedSign, Just 1))
+        ,("ai_focus_war_production_factor"  , ("MODIFIER_AI_FOCUS_WAR_PRODUCTION_FACTOR", MsgModifierPcReducedSign, Just 1))
+        ,("ai_focus_peaceful_factor"        , ("MODIFIER_AI_FOCUS_PEACEFUL_FACTOR", MsgModifierPcReducedSign, Just 1)) --precision 1
+        ,("ai_get_ally_desire_factor"       , ("MODIFIER_AI_GET_ALLY_DESIRE_FACTOR", MsgModifierSign, Just 0))
+        ,("ai_join_ally_desire_factor"      , ("MODIFIER_AI_JOIN_ALLY_DESIRE_FACTOR", MsgModifierSign, Just 0))
+        ,("ai_license_acceptance"           , ("MODIFIER_AI_LICENSE_ACCEPTANCE", MsgModifierSign, Just 0))
 
             -- MIOs
-        ,("military_industrial_organization_funds_gain" , ("MODIFIER_MIO_FUNDS_GAIN", MsgModifierPcPosReduced))
+        ,("military_industrial_organization_funds_gain" , ("MODIFIER_MIO_FUNDS_GAIN", MsgModifierPcPosReduced, Just 0))
 
             -- Unit Leaders
-        ,("female_random_army_leader_chance", ("MODIFIER_FEMALE_ARMY_LEADER_CHANCE", MsgModifierPcReducedSign))
-        ,("army_leader_cost_factor"         , ("MODIFIER_ARMY_LEADER_COST_FACTOR", MsgModifierPcNegReduced))
-        ,("army_leader_start_level"         , ("MODIFIER_ARMY_LEADER_START_LEVEL", MsgModifierColourPos))
-        ,("army_leader_start_attack_level"  , ("MODIFIER_ARMY_LEADER_START_ATTACK_LEVEL", MsgModifierColourPos))
-        ,("army_leader_start_defense_level" , ("MODIFIER_ARMY_LEADER_START_DEFENSE_LEVEL", MsgModifierColourPos))
-        ,("army_leader_start_logistics_level" , ("MODIFIER_ARMY_LEADER_START_LOGISTICS_LEVEL", MsgModifierColourPos))
-        ,("army_leader_start_planning_level" , ("MODIFIER_ARMY_LEADER_START_PLANNING_LEVEL", MsgModifierColourPos))
-        ,("military_leader_cost_factor"     , ("MODIFIER_MILITARY_LEADER_COST_FACTOR", MsgModifierPcNegReduced))
-        ,("navy_leader_start_attack_level"  , ("MODIFIER_NAVY_LEADER_START_ATTACK_LEVEL", MsgModifierColourPos)) --precision 0
-        ,("grant_medal_cost_factor"         , ("MODIFIER_GRANT_MEDAL_COST_FACTOR", MsgModifierPcNegReduced))
-        ,("female_divisional_commander_chance", ("MODIFIER_FEMALE_DIVISIONAL_COMMANDER_CHANCE", MsgModifierPcReducedSign))
+        ,("female_random_army_leader_chance", ("MODIFIER_FEMALE_ARMY_LEADER_CHANCE", MsgModifierPcReducedSign, Just 0))
+        ,("army_leader_cost_factor"         , ("MODIFIER_ARMY_LEADER_COST_FACTOR", MsgModifierPcNegReduced, Just 1))
+        ,("army_leader_start_level"         , ("MODIFIER_ARMY_LEADER_START_LEVEL", MsgModifierColourPos, Just 0))
+        ,("army_leader_start_attack_level"  , ("MODIFIER_ARMY_LEADER_START_ATTACK_LEVEL", MsgModifierColourPos, Just 0))
+        ,("army_leader_start_defense_level" , ("MODIFIER_ARMY_LEADER_START_DEFENSE_LEVEL", MsgModifierColourPos, Just 0))
+        ,("army_leader_start_logistics_level" , ("MODIFIER_ARMY_LEADER_START_LOGISTICS_LEVEL", MsgModifierColourPos, Just 0))
+        ,("army_leader_start_planning_level" , ("MODIFIER_ARMY_LEADER_START_PLANNING_LEVEL", MsgModifierColourPos, Just 0))
+        ,("military_leader_cost_factor"     , ("MODIFIER_MILITARY_LEADER_COST_FACTOR", MsgModifierPcNegReduced, Just 1))
+        ,("navy_leader_start_attack_level"  , ("MODIFIER_NAVY_LEADER_START_ATTACK_LEVEL", MsgModifierColourPos, Just 0)) --precision 0
+        ,("grant_medal_cost_factor"         , ("MODIFIER_GRANT_MEDAL_COST_FACTOR", MsgModifierPcNegReduced, Just 1))
+        ,("female_divisional_commander_chance", ("MODIFIER_FEMALE_DIVISIONAL_COMMANDER_CHANCE", MsgModifierPcReducedSign, Just 0))
 
             -- General Combat
-        ,("offence"                         , ("MODIFIER_OFFENCE", MsgModifierPcPosReduced))
-        ,("defence"                         , ("MODIFIER_DEFENCE", MsgModifierPcPosReduced))
+        ,("offence"                         , ("MODIFIER_OFFENCE", MsgModifierPcPosReduced, Just 2))
+        ,("defence"                         , ("MODIFIER_DEFENCE", MsgModifierPcPosReduced, Just 2))
 
             -- Land Combat
-        ,("acclimatization_cold_climate_gain_factor", ("MODIFIER_ACCLIMATIZATION_COLD_CLIMATE_GAIN_FACTOR", MsgModifierPcPosReduced))
-        ,("acclimatization_hot_climate_gain_factor", ("MODIFIER_ACCLIMATIZATION_HOT_CLIMATE_GAIN_FACTOR", MsgModifierPcPosReduced))
-        ,("air_superiority_bonus_in_combat" , ("MODIFIER_AIR_SUPERIORITY_BONUS_IN_COMBAT", MsgModifierPcPosReduced))
-        ,("army_attack_factor"              , ("MODIFIERS_ARMY_ATTACK_FACTOR", MsgModifierPcPosReduced))
-        ,("army_core_attack_factor"         , ("MODIFIERS_ARMY_CORE_ATTACK_FACTOR", MsgModifierPcPosReduced))
-        ,("army_attack_against_major_factor", ("MODIFIERS_ARMY_ATTACK_AGAINST_MAJOR_FACTOR", MsgModifierPcPosReduced))
-        ,("army_attack_against_minor_factor", ("MODIFIERS_ARMY_ATTACK_AGAINST_MINOR_FACTOR", MsgModifierPcPosReduced))
-        ,("army_attack_speed_factor"        , ("MODIFIER_ARMY_ATTACK_SPEED_FACTOR", MsgModifierPcPosReduced))
-        ,("army_breakthrough_against_major_factor", ("MODIFIERS_ARMY_BREAKTHROUGH_AGAINST_MAJOR_FACTOR", MsgModifierPcPosReduced))
-        ,("army_breakthrough_against_minor_factor", ("MODIFIERS_ARMY_BREAKTHROUGH_AGAINST_MINOR_FACTOR", MsgModifierPcPosReduced))
-        ,("army_defence_factor"             , ("MODIFIERS_ARMY_DEFENCE_FACTOR", MsgModifierPcPosReduced))
-        ,("army_core_defence_factor"        , ("MODIFIERS_ARMY_CORE_DEFENCE_FACTOR", MsgModifierPcPosReduced))
-        ,("army_strength_factor"            , ("MODIFIERS_ARMY_STRENGTH", MsgModifierPcPosReduced)) --precision 2
-        ,("army_infantry_attack_factor"     , ("MODIFIER_ARMY_INFANTRY_ATTACK_FACTOR", MsgModifierPcPosReduced))
-        ,("army_infantry_defence_factor"    , ("MODIFIER_ARMY_INFANTRY_DEFENCE_FACTOR", MsgModifierPcPosReduced))
-        ,("army_armor_attack_factor"        , ("MODIFIER_ARMY_ARMOR_ATTACK_FACTOR", MsgModifierPcPosReduced))
-        ,("army_armor_defence_factor"       , ("MODIFIER_ARMY_ARMOR_DEFENCE_FACTOR", MsgModifierPcPosReduced))
-        ,("army_artillery_attack_factor"    , ("MODIFIER_ARMY_ARTILLERY_ATTACK_FACTOR", MsgModifierPcPosReduced))
-        ,("army_artillery_defence_factor"   , ("MODIFIER_ARMY_ARTILLERY_DEFENCE_FACTOR", MsgModifierPcPosReduced))
-        ,("special_forces_attack_factor"    , ("MODIFIER_SPECIAL_FORCES_ATTACK_FACTOR", MsgModifierPcPosReduced))
-        ,("special_forces_defence_factor"   , ("MODIFIER_SPECIAL_FORCES_DEFENCE_FACTOR", MsgModifierPcPosReduced))
-        ,("motorized_attack_factor"         , ("MODIFIER_MOTORIZED_ATTACK_FACTOR", MsgModifierPcPosReduced))
-        ,("motorized_defence_factor"        , ("MODIFIER_MOTORIZED_DEFENCE_FACTOR", MsgModifierPcPosReduced))
-        ,("mechanized_attack_factor"        , ("MODIFIER_MECHANIZED_ATTACK_FACTOR", MsgModifierPcPosReduced))
-        ,("mechanized_defence_factor"       , ("MODIFIER_MECHANIZED_DEFENCE_FACTOR", MsgModifierPcPosReduced))
-        ,("cavalry_attack_factor"           , ("MODIFIER_CAVALRY_ATTACK_FACTOR", MsgModifierPcPosReduced))
-        ,("cavalry_defence_factor"          , ("MODIFIER_CAVALRY_DEFENCE_FACTOR", MsgModifierPcPosReduced))
-        ,("army_speed_factor"               , ("MODIFIER_ARMY_SPEED_FACTOR", MsgModifierPcPosReduced))
-        ,("army_armor_speed_factor"         , ("MODIFIER_ARMY_ARMOR_SPEED_FACTOR", MsgModifierPcPosReduced))
-        ,("army_morale_factor"              , ("MODIFIER_ARMY_MORALE_FACTOR", MsgModifierPcPosReduced))
-        ,("army_org"                        , ("MODIFIER_ARMY_ORG", MsgModifierColourPos))
-        ,("army_org_factor"                 , ("MODIFIER_ARMY_ORG_FACTOR", MsgModifierPcPosReduced))
-        ,("army_org_regain"                 , ("MODIFIER_ARMY_ORG_REGAIN", MsgModifierPcPosReduced))
-        ,("breakthrough_factor"             , ("MODIFIER_BREAKTHROUGH", MsgModifierPcPosReduced))
-        ,("cas_damage_reduction"            , ("MODIFIER_CAS_DAMAGE_REDUCTION", MsgModifierPcPosReduced))
-        ,("combat_width_factor"             , ("MODIFIER_COMBAT_WIDTH_FACTOR", MsgModifierPcNegReduced))
-        ,("coordination_bonus"              , ("MODIFIER_COORDINATION_BONUS", MsgModifierPcPosReduced))
-        ,("dig_in_speed"                    , ("MODIFIER_DIG_IN_SPEED", MsgModifierColourPos))
-        ,("dig_in_speed_factor"             , ("MODIFIER_DIG_IN_SPEED_FACTOR", MsgModifierPcPosReduced))
-        ,("experience_gain_army_unit_factor" , ("MODIFIER_XP_GAIN_ARMY_UNIT_FACTOR", MsgModifierPcPosReduced)) --precision 1
-        ,("experience_loss_factor"          , ("MODIFIER_EXPERIENCE_LOSS_FACTOR", MsgModifierPcNegReduced))
-        ,("initiative_factor"               , ("MODIFIER_INITIATIVE_FACTOR", MsgModifierPcPosReduced)) --precision 1
-        ,("land_night_attack"               , ("MODIFIER_LAND_NIGHT_ATTACK", MsgModifierPcPosReduced))
-        ,("max_dig_in"                      , ("MODIFIER_MAX_DIG_IN", MsgModifierColourPos))
-        ,("max_dig_in_factor"               , ("MODIFIER_MAX_DIG_IN_FACTOR", MsgModifierPcPosReduced))
-        ,("max_planning"                    , ("MODIFIER_MAX_PLANNING", MsgModifierPcPosReduced))
-        ,("max_planning_factor"             , ("MODIFIER_MAX_PLANNING_FACTOR", MsgModifierPcPosReduced))
-        ,("pocket_penalty"                  , ("MODIFIER_POCKET_PENALTY", MsgModifierPcNegReduced))
-        ,("recon_factor"                    , ("MODIFIER_RECON_FACTOR", MsgModifierPcPosReduced))
-        ,("recon_factor_while_entrenched"   , ("MODIFIER_RECON_FACTOR_WHILE_ENTRENCHED", MsgModifierPcPosReduced))
-        ,("special_forces_cap"              , ("MODIFIER_SPECIAL_FORCES_CAP", MsgModifierPcPosReduced))
-        ,("special_forces_min"              , ("MODIFIER_SPECIAL_FORCES_MIN", MsgModifierColourPos))
-        ,("terrain_penalty_reduction"       , ("MODIFIER_TERRAIN_PENALTY_REDUCTION", MsgModifierPcPosReduced))
-        ,("org_loss_at_low_org_factor"      , ("MODIFIER_ORG_LOSS_AT_LOW_ORG_FACTOR", MsgModifierPcNegReduced))
-        ,("org_loss_when_moving"            , ("MODIFIER_ORG_LOSS_WHEN_MOVING", MsgModifierPcNegReduced))
-        ,("planning_speed"                  , ("MODIFIER_PLANNING_SPEED", MsgModifierPcPosReduced))
+        ,("acclimatization_cold_climate_gain_factor", ("MODIFIER_ACCLIMATIZATION_COLD_CLIMATE_GAIN_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("acclimatization_hot_climate_gain_factor", ("MODIFIER_ACCLIMATIZATION_HOT_CLIMATE_GAIN_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("air_superiority_bonus_in_combat" , ("MODIFIER_AIR_SUPERIORITY_BONUS_IN_COMBAT", MsgModifierPcPosReduced, Just 1))
+        ,("army_attack_factor"              , ("MODIFIERS_ARMY_ATTACK_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("army_core_attack_factor"         , ("MODIFIERS_ARMY_CORE_ATTACK_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("army_attack_against_major_factor", ("MODIFIERS_ARMY_ATTACK_AGAINST_MAJOR_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("army_attack_against_minor_factor", ("MODIFIERS_ARMY_ATTACK_AGAINST_MINOR_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("army_attack_speed_factor"        , ("MODIFIER_ARMY_ATTACK_SPEED_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("army_breakthrough_against_major_factor", ("MODIFIERS_ARMY_BREAKTHROUGH_AGAINST_MAJOR_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("army_breakthrough_against_minor_factor", ("MODIFIERS_ARMY_BREAKTHROUGH_AGAINST_MINOR_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("army_defence_factor"             , ("MODIFIERS_ARMY_DEFENCE_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("army_core_defence_factor"        , ("MODIFIERS_ARMY_CORE_DEFENCE_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("army_strength_factor"            , ("MODIFIER_ARMY_STRENGTH", MsgModifierPcPosReduced, Just 2)) --precision 2
+        ,("army_infantry_attack_factor"     , ("MODIFIER_ARMY_INFANTRY_ATTACK_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("army_infantry_defence_factor"    , ("MODIFIER_ARMY_INFANTRY_DEFENCE_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("army_armor_attack_factor"        , ("MODIFIER_ARMY_ARMOR_ATTACK_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("army_armor_defence_factor"       , ("MODIFIER_ARMY_ARMOR_DEFENCE_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("army_artillery_attack_factor"    , ("MODIFIER_ARMY_ARTILLERY_ATTACK_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("army_artillery_defence_factor"   , ("MODIFIER_ARMY_ARTILLERY_DEFENCE_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("special_forces_attack_factor"    , ("MODIFIER_SPECIAL_FORCES_ATTACK_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("special_forces_defence_factor"   , ("MODIFIER_SPECIAL_FORCES_DEFENCE_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("motorized_attack_factor"         , ("MODIFIER_MOTORIZED_ATTACK_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("motorized_defence_factor"        , ("MODIFIER_MOTORIZED_DEFENCE_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("mechanized_attack_factor"        , ("MODIFIER_MECHANIZED_ATTACK_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("mechanized_defence_factor"       , ("MODIFIER_MECHANIZED_DEFENCE_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("cavalry_attack_factor"           , ("MODIFIER_CAVALRY_ATTACK_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("cavalry_defence_factor"          , ("MODIFIER_CAVALRY_DEFENCE_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("army_speed_factor"               , ("MODIFIER_ARMY_SPEED_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("army_armor_speed_factor"         , ("MODIFIER_ARMY_ARMOR_SPEED_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("army_morale_factor"              , ("MODIFIER_ARMY_MORALE_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("army_org"                        , ("MODIFIER_ARMY_ORG", MsgModifierColourPos, Just 1))
+        ,("army_org_factor"                 , ("MODIFIER_ARMY_ORG_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("army_org_regain"                 , ("MODIFIER_ARMY_ORG_REGAIN", MsgModifierPcPosReduced, Just 2))
+        ,("breakthrough_factor"             , ("MODIFIER_BREAKTHROUGH", MsgModifierPcPosReduced, Just 2))
+        ,("cas_damage_reduction"            , ("MODIFIER_CAS_DAMAGE_REDUCTION", MsgModifierPcPosReduced, Just 1))
+        ,("combat_width_factor"             , ("MODIFIER_COMBAT_WIDTH_FACTOR", MsgModifierPcNegReduced, Just 1))
+        ,("coordination_bonus"              , ("MODIFIER_COORDINATION_BONUS", MsgModifierPcPosReduced, Just 1))
+        ,("dig_in_speed"                    , ("MODIFIER_DIG_IN_SPEED", MsgModifierColourPos, Just 0))
+        ,("dig_in_speed_factor"             , ("MODIFIER_DIG_IN_SPEED_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("experience_gain_army_unit_factor" , ("MODIFIER_XP_GAIN_ARMY_UNIT_FACTOR", MsgModifierPcPosReduced, Just 1)) --precision 1
+        ,("experience_loss_factor"          , ("MODIFIER_EXPERIENCE_LOSS_FACTOR", MsgModifierPcNegReduced, Just 1))
+        ,("initiative_factor"               , ("MODIFIER_INITIATIVE_FACTOR", MsgModifierPcPosReduced, Just 1)) --precision 1
+        ,("land_night_attack"               , ("MODIFIER_LAND_NIGHT_ATTACK", MsgModifierPcPosReduced, Just 1))
+        ,("max_dig_in"                      , ("MODIFIER_MAX_DIG_IN", MsgModifierColourPos, Just 1))
+        ,("max_dig_in_factor"               , ("MODIFIER_MAX_DIG_IN_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("max_planning"                    , ("MODIFIER_MAX_PLANNING", MsgModifierPcPosReduced, Just 1))
+        ,("max_planning_factor"             , ("MODIFIER_MAX_PLANNING_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("pocket_penalty"                  , ("MODIFIER_POCKET_PENALTY", MsgModifierPcNegReduced, Just 1))
+        ,("recon_factor"                    , ("MODIFIER_RECON_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("recon_factor_while_entrenched"   , ("MODIFIER_RECON_FACTOR_WHILE_ENTRENCHED", MsgModifierPcPosReduced, Just 1))
+        ,("special_forces_cap"              , ("MODIFIER_SPECIAL_FORCES_CAP", MsgModifierPcPosReduced, Just 1))
+        ,("special_forces_min"              , ("MODIFIER_SPECIAL_FORCES_MIN", MsgModifierColourPos, Just 0))
+        ,("terrain_penalty_reduction"       , ("MODIFIER_TERRAIN_PENALTY_REDUCTION", MsgModifierPcPosReduced, Just 1))
+        ,("org_loss_at_low_org_factor"      , ("MODIFIER_ORG_LOSS_AT_LOW_ORG_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("org_loss_when_moving"            , ("MODIFIER_ORG_LOSS_WHEN_MOVING", MsgModifierPcNegReduced, Just 1))
+        ,("planning_speed"                  , ("MODIFIER_PLANNING_SPEED", MsgModifierPcPosReduced, Just 1))
 
             -- naval invasions
-        ,("naval_invasion_prep_speed"       , ("MODIFIER_NAVAL_INVASION_PREPARATION_SPEED", MsgModifierPcPosReduced)) --precision 1
-        ,("naval_invasion_capacity"         , ("MODIFIER_NAVAL_INVASION_CAPACITY", MsgModifierColourPos)) --precision 0
-        ,("amphibious_invasion"             , ("MODIFIER_AMPHIBIOUS_INVASION", MsgModifierPcPosReduced))
-        ,("amphibious_invasion_defence"     , ("MODIFIER_NAVAL_INVASION_DEFENSE", MsgModifierPcPosReduced))
-        ,("invasion_preparation"            , ("MODIFIER_NAVAL_INVASION_PREPARATION", MsgModifierPcNegReduced))
+        ,("naval_invasion_prep_speed"       , ("MODIFIER_NAVAL_INVASION_PREPARATION_SPEED", MsgModifierPcPosReduced, Just 1)) --precision 1
+        ,("naval_invasion_capacity"         , ("MODIFIER_NAVAL_INVASION_CAPACITY", MsgModifierColourPos, Just 0)) --precision 0
+        ,("amphibious_invasion"             , ("MODIFIER_AMPHIBIOUS_INVASION", MsgModifierPcPosReduced, Just 1))
+        ,("amphibious_invasion_defence"     , ("MODIFIER_NAVAL_INVASION_DEFENSE", MsgModifierPcPosReduced, Just 0))
+        ,("invasion_preparation"            , ("MODIFIER_NAVAL_INVASION_PREPARATION", MsgModifierPcNegReduced, Just 1))
 
             -- Naval combat
-        ,("convoy_escort_efficiency"        , ("MODIFIER_MISSION_CONVOY_ESCORT_EFFICIENCY", MsgModifierPcPosReduced))
-        ,("convoy_raiding_efficiency_factor" , ("MODIFIER_CONVOY_RAIDING_EFFICIENCY_FACTOR", MsgModifierPcPosReduced))
-        ,("convoy_retreat_speed"            , ("MODIFIER_CONVOY_RETREAT_SPEED", MsgModifierPcPosReduced))
-        ,("critical_receive_chance"         , ("MODIFIER_NAVAL_CRITICAL_RECEIVE_CHANCE_FACTOR", MsgModifierPcNegReduced))
-        ,("experience_gain_navy_unit_factor" , ("MODIFIER_XP_GAIN_NAVY_UNIT_FACTOR", MsgModifierPcPosReduced))
-        ,("mines_planting_by_fleets_factor" , ("MODIFIER_MINES_PLANTING_BY_FLEETS_FACTOR", MsgModifierPcPosReduced))
-        ,("mines_sweeping_by_fleets_factor" , ("MODIFIER_MINES_SWEEPING_BY_FLEETS_FACTOR", MsgModifierPcPosReduced))
-        ,("navy_anti_air_attack_factor"     , ("MODIFIER_NAVY_ANTI_AIR_ATTACK_FACTOR", MsgModifierPcPosReduced))
-        ,("naval_coordination"              , ("MODIFIER_NAVAL_COORDINATION", MsgModifierPcPosReduced))
-        ,("naval_critical_effect_factor"    , ("MODIFIER_NAVAL_CRITICAL_EFFECT_FACTOR", MsgModifierPcNegReduced))
-        ,("naval_critical_score_chance_factor" , ("MODIFIER_NAVAL_CRITICAL_SCORE_CHANCE_FACTOR", MsgModifierPcPosReduced))
-        ,("naval_damage_factor"             , ("MODIFIER_NAVAL_DAMAGE_FACTOR", MsgModifierPcPosReduced))
-        ,("naval_defense_factor"            , ("MODIFIER_NAVAL_DEFENSE_FACTOR", MsgModifierPcPosReduced))
-        ,("naval_detection"                 , ("MODIFIER_NAVAL_DETECTION", MsgModifierPcPosReduced))
-        ,("naval_enemy_fleet_size_ratio_penalty_factor" , ("MODIFIER_NAVAL_ENEMY_FLEET_SIZE_RATIO_PENALTY_FACTOR", MsgModifierPcPosReduced))
-        ,("naval_enemy_retreat_chance"      , ("MODIFIER_NAVAL_ENEMY_RETREAT_CHANCE", MsgModifierPcNegReduced))
-        ,("naval_has_potf_in_combat_attack" , ("MODIFIER_NAVAL_HAS_POTF_IN_COMBAT_ATTACK", MsgModifierPcPosReduced))
-        ,("naval_has_potf_in_combat_defense" , ("MODIFIER_NAVAL_HAS_POTF_IN_COMBAT_DEFENSE", MsgModifierPcPosReduced))
-        ,("naval_hit_chance"                , ("MODIFIER_NAVAL_HIT_CHANCE", MsgModifierPcPosReduced))
-        ,("naval_mines_effect_reduction"    , ("MODIFIER_NAVAL_MINES_EFFECT_REDUCTION", MsgModifierPcPosReduced))
-        ,("naval_morale_factor"             , ("MODIFIER_NAVAL_MORALE_FACTOR", MsgModifierPcPosReduced))
-        ,("naval_night_attack"             , ("MODIFIER_NAVAL_MORALE_FACTOR", MsgModifierPcPosReduced))
-        ,("naval_retreat_chance"            , ("MODIFIER_NAVAL_RETREAT_CHANCE", MsgModifierPcPosReduced))
-        ,("naval_retreat_speed"             , ("MODIFIER_NAVAL_RETREAT_SPEED", MsgModifierPcPosReduced))
-        ,("navy_org"                        , ("MODIFIER_NAVY_ORG", MsgModifierColourPos))
-        ,("navy_org_factor"                 , ("MODIFIER_NAVY_ORG_FACTOR", MsgModifierPcPosReduced))
-        ,("navy_max_range_factor"           , ("MODIFIER_NAVY_MAX_RANGE_FACTOR", MsgModifierPcPosReduced))
-        ,("naval_torpedo_cooldown_factor"   , ("MODIFIER_NAVAL_TORPEDO_COOLDOWN_FACTOR", MsgModifierPcNegReduced))
-        ,("naval_torpedo_hit_chance_factor" , ("MODIFIER_NAVAL_TORPEDO_HIT_CHANCE_FACTOR", MsgModifierPcPosReduced))
-        ,("naval_torpedo_reveal_chance_factor" , ("MODIFIER_NAVAL_TORPEDO_REVEAL_CHANCE_FACTOR", MsgModifierPcNegReduced))
-        ,("naval_torpedo_screen_penetration_factor" , ("MODIFIER_NAVAL_TORPEDO_SCREEN_PENETRATION_FACTOR", MsgModifierPcPosReduced))
-        ,("navy_capital_ship_attack_factor" , ("MODIFIER_NAVY_CAPITAL_SHIP_ATTACK_FACTOR", MsgModifierPcPosReduced))
-        ,("navy_capital_ship_defence_factor" , ("MODIFIER_NAVY_CAPITAL_SHIP_DEFENCE_FACTOR", MsgModifierPcPosReduced))
-        ,("navy_screen_attack_factor"       , ("MODIFIER_NAVY_SCREEN_ATTACK_FACTOR", MsgModifierPcPosReduced))
-        ,("navy_screen_defence_factor"      , ("MODIFIER_NAVY_SCREEN_DEFENCE_FACTOR", MsgModifierPcPosReduced))
-        ,("naval_speed_factor"              , ("MODIFIER_NAVAL_SPEED_FACTOR", MsgModifierPcPosReduced))
-        ,("navy_visibility"                 , ("MODIFIER_NAVAL_VISIBILITY_FACTOR", MsgModifierPcNegReduced))
-        ,("navy_submarine_attack_factor"    , ("MODIFIER_NAVY_SUBMARINE_ATTACK_FACTOR", MsgModifierPcPosReduced))
-        ,("navy_submarine_defence_factor"   , ("MODIFIER_NAVY_SUBMARINE_DEFENCE_FACTOR", MsgModifierPcPosReduced))
-        ,("navy_submarine_detection_factor" , ("MODIFIERS_SUBMARINE_DETECTION_FACTOR", MsgModifierPcPosReduced))
-        ,("positioning"                     , ("MODIFIER_POSITIONING", MsgModifierPcPosReduced))
-        ,("repair_speed_factor"             , ("MODIFIER_REPAIR_SPEED_FACTOR", MsgModifierPcPosReduced))
-        ,("screening_efficiency"            , ("MODIFIER_SCREENING_EFFICIENCY", MsgModifierPcPosReduced))
-        ,("screening_without_screens"       , ("MODIFIER_SCREENING_WITHOUT_SCREENS", MsgModifierPcPosReduced))
-        ,("ships_at_battle_start"           , ("MODIFIER_SHIPS_AT_BATTLE_START_FACTOR", MsgModifierPcPosReduced))
-        ,("spotting_chance"                 , ("MODIFIER_SPOTTING_CHANCE", MsgModifierPcPosReduced))
-        ,("strike_force_movement_org_loss"  , ("MODIFIER_STRIKE_FORCE_MOVING_ORG", MsgModifierPcNegReduced))--precision 2
-        ,("sub_retreat_speed"               , ("MODIFIER_SUB_RETREAT_SPEED", MsgModifierPcPosReduced)) --precision 0
+        ,("convoy_escort_efficiency"        , ("MODIFIER_MISSION_CONVOY_ESCORT_EFFICIENCY", MsgModifierPcPosReduced, Just 1))
+        ,("convoy_raiding_efficiency_factor" , ("MODIFIER_CONVOY_RAIDING_EFFICIENCY_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("convoy_retreat_speed"            , ("MODIFIER_CONVOY_RETREAT_SPEED", MsgModifierPcPosReduced, Just 0))
+        ,("critical_receive_chance"         , ("MODIFIER_NAVAL_CRITICAL_RECEIVE_CHANCE_FACTOR", MsgModifierPcNegReduced, Just 1))
+        ,("experience_gain_navy_unit_factor" , ("MODIFIER_XP_GAIN_NAVY_UNIT_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("mines_planting_by_fleets_factor" , ("MODIFIER_MINES_PLANTING_BY_FLEETS_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("mines_sweeping_by_fleets_factor" , ("MODIFIER_MINES_SWEEPING_BY_FLEETS_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("navy_anti_air_attack_factor"     , ("MODIFIER_NAVY_ANTI_AIR_ATTACK_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("naval_coordination"              , ("MODIFIER_NAVAL_COORDINATION", MsgModifierPcPosReduced, Just 0))
+        ,("naval_critical_effect_factor"    , ("MODIFIER_NAVAL_CRITICAL_EFFECT_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("naval_critical_score_chance_factor" , ("MODIFIER_NAVAL_CRITICAL_SCORE_CHANCE_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("naval_damage_factor"             , ("MODIFIER_NAVAL_DAMAGE_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("naval_defense_factor"            , ("MODIFIER_NAVAL_DEFENSE_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("naval_detection"                 , ("MODIFIER_NAVAL_DETECTION", MsgModifierPcPosReduced, Just 0))
+        ,("naval_enemy_fleet_size_ratio_penalty_factor" , ("MODIFIER_NAVAL_ENEMY_FLEET_SIZE_RATIO_PENALTY_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("naval_enemy_retreat_chance"      , ("MODIFIER_NAVAL_ENEMY_RETREAT_CHANCE", MsgModifierPcNegReduced, Just 2))
+        ,("naval_has_potf_in_combat_attack" , ("MODIFIER_NAVAL_HAS_POTF_IN_COMBAT_ATTACK", MsgModifierPcPosReduced, Just 2))
+        ,("naval_has_potf_in_combat_defense" , ("MODIFIER_NAVAL_HAS_POTF_IN_COMBAT_DEFENSE", MsgModifierPcPosReduced, Just 2))
+        ,("naval_hit_chance"                , ("MODIFIER_NAVAL_HIT_CHANCE", MsgModifierPcPosReduced, Just 0))
+        ,("naval_mines_effect_reduction"    , ("MODIFIER_NAVAL_MINES_EFFECT_REDUCTION", MsgModifierPcPosReduced, Just 0))
+        ,("naval_morale_factor"             , ("MODIFIER_NAVAL_MORALE_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("naval_night_attack"             , ("MODIFIER_NAVAL_MORALE_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("naval_retreat_chance"            , ("MODIFIER_NAVAL_RETREAT_CHANCE", MsgModifierPcPosReduced, Just 0))
+        ,("naval_retreat_speed"             , ("MODIFIER_NAVAL_RETREAT_SPEED", MsgModifierPcPosReduced, Just 1))
+        ,("navy_org"                        , ("MODIFIER_NAVY_ORG", MsgModifierColourPos, Just 1))
+        ,("navy_org_factor"                 , ("MODIFIER_NAVY_ORG_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("navy_max_range_factor"           , ("MODIFIER_NAVY_MAX_RANGE_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("naval_torpedo_cooldown_factor"   , ("MODIFIER_NAVAL_TORPEDO_COOLDOWN_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("naval_torpedo_hit_chance_factor" , ("MODIFIER_NAVAL_TORPEDO_HIT_CHANCE_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("naval_torpedo_reveal_chance_factor" , ("MODIFIER_NAVAL_TORPEDO_REVEAL_CHANCE_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("naval_torpedo_screen_penetration_factor" , ("MODIFIER_NAVAL_TORPEDO_SCREEN_PENETRATION_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("navy_capital_ship_attack_factor" , ("MODIFIER_NAVY_CAPITAL_SHIP_ATTACK_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("navy_capital_ship_defence_factor" , ("MODIFIER_NAVY_CAPITAL_SHIP_DEFENCE_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("navy_screen_attack_factor"       , ("MODIFIER_NAVY_SCREEN_ATTACK_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("navy_screen_defence_factor"      , ("MODIFIER_NAVY_SCREEN_DEFENCE_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("naval_speed_factor"              , ("MODIFIER_NAVAL_SPEED_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("navy_visibility"                 , ("MODIFIER_NAVAL_VISIBILITY_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("navy_submarine_attack_factor"    , ("MODIFIER_NAVY_SUBMARINE_ATTACK_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("navy_submarine_defence_factor"   , ("MODIFIER_NAVY_SUBMARINE_DEFENCE_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("navy_submarine_detection_factor" , ("MODIFIERS_SUBMARINE_DETECTION_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("positioning"                     , ("MODIFIER_POSITIONING", MsgModifierPcPosReduced, Just 1))
+        ,("repair_speed_factor"             , ("MODIFIER_REPAIR_SPEED_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("screening_efficiency"            , ("MODIFIER_SCREENING_EFFICIENCY", MsgModifierPcPosReduced, Just 1))
+        ,("screening_without_screens"       , ("MODIFIER_SCREENING_WITHOUT_SCREENS", MsgModifierPcPosReduced, Just 1))
+        ,("ships_at_battle_start"           , ("MODIFIER_SHIPS_AT_BATTLE_START_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("spotting_chance"                 , ("MODIFIER_SPOTTING_CHANCE", MsgModifierPcPosReduced, Just 0))
+        ,("strike_force_movement_org_loss"  , ("MODIFIER_STRIKE_FORCE_MOVING_ORG", MsgModifierPcNegReduced, Just 2))--precision 2
+        ,("sub_retreat_speed"               , ("MODIFIER_SUB_RETREAT_SPEED", MsgModifierPcPosReduced, Just 0)) --precision 0
 
             -- carriers and their planes
-        ,("navy_carrier_air_agility_factor" , ("MODIFIER_NAVAL_CARRIER_AIR_AGILITY_FACTOR", MsgModifierPcPosReduced))
-        ,("navy_carrier_air_attack_factor"  , ("MODIFIER_NAVAL_CARRIER_AIR_ATTACK_FACTOR", MsgModifierPcPosReduced))
-        ,("navy_carrier_air_targetting_factor" , ("MODIFIER_NAVAL_CARRIER_AIR_TARGETTING_FACTOR", MsgModifierPcPosReduced))
-        ,("air_carrier_night_penalty_reduction_factor" , ("MODIFIER_AIR_CARRIER_NIGHT_PENALTY_REDUCTION_FACTOR", MsgModifierPcPosReduced)) --precision 2
-        ,("sortie_efficiency"               , ("MODIFIER_STAT_CARRIER_SORTIE_EFFICIENCY", MsgModifierPcPosReduced))
-        ,("fighter_sortie_efficiency"       , ("MODIFIER_CARRIER_FIGHTER_SORTIE_EFFICIENCY_FACTOR", MsgModifierPcPosReduced))
+        ,("navy_carrier_air_agility_factor" , ("MODIFIER_NAVAL_CARRIER_AIR_AGILITY_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("navy_carrier_air_attack_factor"  , ("MODIFIER_NAVAL_CARRIER_AIR_ATTACK_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("navy_carrier_air_targetting_factor" , ("MODIFIER_NAVAL_CARRIER_AIR_TARGETTING_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("air_carrier_night_penalty_reduction_factor" , ("MODIFIER_AIR_CARRIER_NIGHT_PENALTY_REDUCTION_FACTOR", MsgModifierPcPosReduced, Just 2)) --precision 2
+        ,("sortie_efficiency"               , ("MODIFIER_STAT_CARRIER_SORTIE_EFFICIENCY", MsgModifierPcPosReduced, Just 0))
+        ,("fighter_sortie_efficiency"       , ("MODIFIER_CARRIER_FIGHTER_SORTIE_EFFICIENCY_FACTOR", MsgModifierPcPosReduced, Just 0))
 
             -- Air combat
-        ,("air_accidents_factor"            , ("MODIFIER_AIR_ACCIDENTS_FACTOR", MsgModifierPcNegReduced))
-        ,("air_ace_generation_chance_factor" , ("MODIFIER_AIR_ACE_GENERATION_CHANCE_FACTOR", MsgModifierPcPosReduced))
-        ,("air_agility_factor"              , ("MODIFIER_AIR_AGILITY_FACTOR", MsgModifierPcPosReduced))
-        ,("air_attack_factor"               , ("MODIFIER_AIR_ATTACK_FACTOR", MsgModifierPcPosReduced))
-        ,("air_defence_factor"              , ("MODIFIER_AIR_DEFENCE_FACTOR", MsgModifierPcPosReduced))
-        ,("air_close_air_support_org_damage_factor" , ("MODIFIER_AIR_CAS_ORG_DAMAGE_FACTOR", MsgModifierPcPosReduced))
-        ,("rocket_attack_factor"            , ("MODIFIER_ROCKET_ATTACK_FACTOR", MsgModifierPcPosReduced))
+        ,("air_accidents_factor"            , ("MODIFIER_AIR_ACCIDENTS_FACTOR", MsgModifierPcNegReduced, Just 1))
+        ,("air_ace_generation_chance_factor" , ("MODIFIER_AIR_ACE_GENERATION_CHANCE_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("air_agility_factor"              , ("MODIFIER_AIR_AGILITY_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("air_attack_factor"               , ("MODIFIER_AIR_ATTACK_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("air_defence_factor"              , ("MODIFIER_AIR_DEFENCE_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("air_close_air_support_org_damage_factor" , ("MODIFIER_AIR_CAS_ORG_DAMAGE_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("rocket_attack_factor"            , ("MODIFIER_ROCKET_ATTACK_FACTOR", MsgModifierPcPosReduced, Just 1))
 
-        ,("air_close_air_support_agility_factor" , ("MODIFIER_CAS_AGILITY_FACTOR", MsgModifierPcPosReduced))
-        ,("air_close_air_support_attack_factor" , ("MODIFIER_CAS_ATTACK_FACTOR", MsgModifierPcPosReduced))
-        ,("air_close_air_support_defence_factor" , ("MODIFIER_CAS_DEFENCE_FACTOR", MsgModifierPcPosReduced))
-        ,("air_air_superiority_agility_factor", ("MODIFIER_AIR_SUPERIORITY_AGILITY_FACTOR", MsgModifierPcPosReduced))
-        ,("air_air_superiority_attack_factor", ("MODIFIER_AIR_SUPERIORITY_ATTACK_FACTOR", MsgModifierPcPosReduced))
-        ,("air_air_superiority_defence_factor", ("MODIFIER_AIR_SUPERIORITY_DEFENCE_FACTOR", MsgModifierPcPosReduced))
-        ,("air_interception_agility_factor"  , ("MODIFIER_INTERCEPTION_AGILITY_FACTOR", MsgModifierPcPosReduced))
-        ,("air_interception_attack_factor"  , ("MODIFIER_INTERCEPTION_ATTACK_FACTOR", MsgModifierPcPosReduced))
-        ,("air_interception_defence_factor" , ("MODIFIER_INTERCEPTION_DEFENCE_FACTOR", MsgModifierPcPosReduced))
-        ,("air_strategic_bomber_agility_factor" , ("MODIFIER_STRATEGIC_BOMBER_AGILITY_FACTOR", MsgModifierPcPosReduced))
-        ,("air_strategic_bomber_attack_factor" , ("MODIFIER_STRATEGIC_BOMBER_ATTACK_FACTOR", MsgModifierPcPosReduced))
-        ,("air_strategic_bomber_defence_factor" , ("MODIFIER_STRATEGIC_BOMBER_DEFENCE_FACTOR", MsgModifierPcPosReduced))
-        ,("naval_strike_agility_factor"     , ("MODIFIER_NAVAL_STRIKE_AGILITY_FACTOR", MsgModifierPcPosReduced))
-        ,("naval_strike_attack_factor"      , ("MODIFIER_NAVAL_STRIKE_ATTACK_FACTOR", MsgModifierPcPosReduced))
-        ,("air_paradrop_attack_factor"      , ("MODIFIER_PARADROP_ATTACK_FACTOR", MsgModifierPcPosReduced))
-        ,("air_paradrop_agility_factor"     , ("MODIFIER_AIR_SUPERIORITY_AGILITY_FACTOR", MsgModifierPcPosReduced))
-        ,("air_paradrop_defence_factor"     , ("MODIFIER_PARADROP_DEFENCE_FACTOR", MsgModifierPcPosReduced))
+        ,("air_close_air_support_agility_factor" , ("MODIFIER_CAS_AGILITY_FACTOR", MsgModifierPcPosReduced, Nothing))
+        ,("air_close_air_support_attack_factor" , ("MODIFIER_CAS_ATTACK_FACTOR", MsgModifierPcPosReduced, Nothing))
+        ,("air_close_air_support_defence_factor" , ("MODIFIER_CAS_DEFENCE_FACTOR", MsgModifierPcPosReduced, Nothing))
+        ,("air_air_superiority_agility_factor", ("MODIFIER_AIR_SUPERIORITY_AGILITY_FACTOR", MsgModifierPcPosReduced, Nothing))
+        ,("air_air_superiority_attack_factor", ("MODIFIER_AIR_SUPERIORITY_ATTACK_FACTOR", MsgModifierPcPosReduced, Nothing))
+        ,("air_air_superiority_defence_factor", ("MODIFIER_AIR_SUPERIORITY_DEFENCE_FACTOR", MsgModifierPcPosReduced, Nothing))
+        ,("air_interception_agility_factor"  , ("MODIFIER_INTERCEPTION_AGILITY_FACTOR", MsgModifierPcPosReduced, Nothing))
+        ,("air_interception_attack_factor"  , ("MODIFIER_INTERCEPTION_ATTACK_FACTOR", MsgModifierPcPosReduced, Nothing))
+        ,("air_interception_defence_factor" , ("MODIFIER_INTERCEPTION_DEFENCE_FACTOR", MsgModifierPcPosReduced, Nothing))
+        ,("air_strategic_bomber_agility_factor" , ("MODIFIER_STRATEGIC_BOMBER_AGILITY_FACTOR", MsgModifierPcPosReduced, Nothing))
+        ,("air_strategic_bomber_attack_factor" , ("MODIFIER_STRATEGIC_BOMBER_ATTACK_FACTOR", MsgModifierPcPosReduced, Nothing))
+        ,("air_strategic_bomber_defence_factor" , ("MODIFIER_STRATEGIC_BOMBER_DEFENCE_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("naval_strike_agility_factor"     , ("MODIFIER_NAVAL_STRIKE_AGILITY_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("naval_strike_attack_factor"      , ("MODIFIER_NAVAL_STRIKE_ATTACK_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("air_paradrop_attack_factor"      , ("MODIFIER_PARADROP_ATTACK_FACTOR", MsgModifierPcPosReduced, Nothing))
+        ,("air_paradrop_agility_factor"     , ("MODIFIER_AIR_SUPERIORITY_AGILITY_FACTOR", MsgModifierPcPosReduced, Nothing))
+        ,("air_paradrop_defence_factor"     , ("MODIFIER_PARADROP_DEFENCE_FACTOR", MsgModifierPcPosReduced, Nothing))
 
-        ,("naval_strike_targetting_factor"  , ("MODIFIER_NAVAL_STRIKE_TARGETTING_FACTOR", MsgModifierPcPosReduced))
-        ,("air_bombing_targetting"          , ("MODIFIER_AIR_BOMBING_TARGETTING", MsgModifierPcPosReduced))
-        ,("air_cas_efficiency"              , ("MODIFIER_AIR_CAS_EFFICIENCY", MsgModifierPcPosReduced))
-        ,("air_cas_present_factor"          , ("MODIFIER_AIR_CAS_PRESENT_FACTOR", MsgModifierPcPosReduced))
-        ,("air_intercept_efficiency"        , ("MODIFIER_AIR_INTERCEPT_EFFICIENCY", MsgModifierPcPosReduced))
-        ,("air_maximum_speed_factor"        , ("MODIFIER_AIR_MAX_SPEED_FACTOR", MsgModifierPcPosReduced))
-        ,("air_mission_efficiency"          , ("MODIFIER_AIR_MISSION_EFFICIENCY", MsgModifierPcPosReduced))
-        ,("air_mission_xp_gain_factor"      , ("MODIFIER_AIR_MISSION_XP_FACTOR", MsgModifierPcPosReduced)) --precision 0
-        ,("air_nav_efficiency"              , ("MODIFIER_AIR_NAV_EFFICIENCY", MsgModifierPcPosReduced)) --precison 0
-        ,("air_night_penalty"               , ("MODIFIER_AIR_NIGHT_PENALTY", MsgModifierPcNegReduced))
-        ,("air_range_factor"                , ("MODIFIER_AIR_RANGE_FACTOR", MsgModifierPcPosReduced))
-        ,("air_strategic_bomber_bombing_factor" , ("MODIFIER_STRATEGIC_BOMBER_BOMBING_FACTOR", MsgModifierPcPosReduced))
-        ,("air_strategic_bomber_night_penalty" , ("MODIFIER_AIR_STRAT_BOMBER_NIGHT_PENALTY", MsgModifierPcNegReduced)) --precision 2
-        ,("air_superiority_efficiency"      , ("MODIFIER_AIR_SUPERIORITY_EFFICIENCY", MsgModifierPcPosReduced)) --precision 0
-        ,("air_training_xp_gain_factor"     , ("MODIFIER_AIR_TRAINING_XP_FACTOR", MsgModifierPcPosReduced))
-        ,("air_weather_penalty"             , ("MODIFIER_AIR_WEATHER_PENALTY", MsgModifierPcNegReduced))
-        ,("air_wing_xp_loss_when_killed_factor" , ("MODIFIER_AIR_WING_XP_LOSS_WHEN_KILLED_FACTOR", MsgModifierPcNegReduced)) --precision 0
-        ,("army_bonus_air_superiority_factor" , ("MODIFIER_ARMY_BONUS_AIR_SUPERIORITY_FACTOR", MsgModifierPcPosReduced))
-        ,("enemy_army_bonus_air_superiority_factor" , ("MODIFIER_ENEMY_ARMY_BONUS_AIR_SUPERIORITY_FACTOR", MsgModifierPcNegReduced))
-        ,("ground_attack_factor"            , ("MODIFIER_GROUND_ATTACK_FACTOR", MsgModifierPcPosReduced)) --precision 1
-        ,("mines_planting_by_air_factor"    , ("MODIFIER_MINES_PLANTING_BY_AIR_FACTOR", MsgModifierPcPosReduced))
-        ,("strategic_bomb_visibility"       , ("MODIFIER_STRAT_BOMBING_VISIBILITY", MsgModifierPcNegReduced)) --precison 0
+        ,("naval_strike_targetting_factor"  , ("MODIFIER_NAVAL_STRIKE_TARGETTING_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("air_bombing_targetting"          , ("MODIFIER_AIR_BOMBING_TARGETTING", MsgModifierPcPosReduced, Just 1))
+        ,("air_cas_efficiency"              , ("MODIFIER_AIR_CAS_EFFICIENCY", MsgModifierPcPosReduced, Just 0))
+        ,("air_cas_present_factor"          , ("MODIFIER_AIR_CAS_PRESENT_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("air_intercept_efficiency"        , ("MODIFIER_AIR_INTERCEPT_EFFICIENCY", MsgModifierPcPosReduced, Just 0))
+        ,("air_maximum_speed_factor"        , ("MODIFIER_AIR_MAX_SPEED_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("air_mission_efficiency"          , ("MODIFIER_AIR_MISSION_EFFICIENCY", MsgModifierPcPosReduced, Just 1))
+        ,("air_mission_xp_gain_factor"      , ("MODIFIER_AIR_MISSION_XP_FACTOR", MsgModifierPcPosReduced, Just 0)) --precision 0
+        ,("air_nav_efficiency"              , ("MODIFIER_AIR_NAV_EFFICIENCY", MsgModifierPcPosReduced, Just 0)) --precison 0
+        ,("air_night_penalty"               , ("MODIFIER_AIR_NIGHT_PENALTY", MsgModifierPcNegReduced, Just 2))
+        ,("air_range_factor"                , ("MODIFIER_AIR_RANGE_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("air_strategic_bomber_bombing_factor" , ("MODIFIER_STRATEGIC_BOMBER_BOMBING_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("air_strategic_bomber_night_penalty" , ("MODIFIER_AIR_STRAT_BOMBER_NIGHT_PENALTY", MsgModifierPcNegReduced, Just 2)) --precision 2
+        ,("air_superiority_efficiency"      , ("MODIFIER_AIR_SUPERIORITY_EFFICIENCY", MsgModifierPcPosReduced, Just 0)) --precision 0
+        ,("air_training_xp_gain_factor"     , ("MODIFIER_AIR_TRAINING_XP_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("air_weather_penalty"             , ("MODIFIER_AIR_WEATHER_PENALTY", MsgModifierPcNegReduced, Just 2))
+        ,("air_wing_xp_loss_when_killed_factor" , ("MODIFIER_AIR_WING_XP_LOSS_WHEN_KILLED_FACTOR", MsgModifierPcNegReduced, Just 0)) --precision 0
+        ,("army_bonus_air_superiority_factor" , ("MODIFIER_ARMY_BONUS_AIR_SUPERIORITY_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("enemy_army_bonus_air_superiority_factor" , ("MODIFIER_ENEMY_ARMY_BONUS_AIR_SUPERIORITY_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("ground_attack_factor"            , ("MODIFIER_GROUND_ATTACK_FACTOR", MsgModifierPcPosReduced, Just 1)) --precision 1
+        ,("mines_planting_by_air_factor"    , ("MODIFIER_MINES_PLANTING_BY_AIR_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("strategic_bomb_visibility"       , ("MODIFIER_STRAT_BOMBING_VISIBILITY", MsgModifierPcNegReduced, Just 0)) --precison 0
 
             -- targeted
-        ,("extra_trade_to_target_factor"    , ("MODIFIER_TRADE_TO_TARGET_FACTOR", MsgModifierPcPosReduced))
-        ,("trade_cost_for_target_factor"    , ("MODIFIER_TRADE_COST_TO_TARGET_FACTOR", MsgModifierPcNegReduced))
-        ,("generate_wargoal_tension_against" , ("MODIFIER_GENERATE_WARGOAL_TENSION_LIMIT_AGAINST_COUNTRY",  MsgModifierPcReducedSign))
-        ,("attack_bonus_against"            , ("MODIFIER_ATTACK_BONUS_AGAINST_A_COUNTRY", MsgModifierPcPosReduced))
-        ,("attack_bonus_against_cores"      , ("MODIFIER_ATTACK_BONUS_AGAINST_A_COUNTRY_ON_ITS_CORES", MsgModifierPcPosReduced))
-        ,("cic_to_target_factor"            , ("MODIFIER_CIC_TO_TARGET_FACTOR", MsgModifierPcNegReduced))
-        ,("mic_to_target_factor"            , ("MODIFIER_MIC_TO_TARGET_FACTOR", MsgModifierPcNegReduced))
-        ,("targeted_legitimacy_daily"       , ("MODIFIER_TARGETED_LEGITIMACY_DAILY", MsgModifierColourPos))
-        ,("breakthrough_bonus_against"      , ("MODIFIER_BREAKTHROUGH_BONUS_AGAINST_A_COUNTRY", MsgModifierPcPosReduced))
-        ,("defense_bonus_against"           , ("MODIFIER_DEFENSE_BONUS_AGAINST_A_COUNTRY", MsgModifierPcPosReduced))
+        ,("extra_trade_to_target_factor"    , ("MODIFIER_TRADE_TO_TARGET_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("trade_cost_for_target_factor"    , ("MODIFIER_TRADE_COST_TO_TARGET_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("generate_wargoal_tension_against" , ("MODIFIER_GENERATE_WARGOAL_TENSION_LIMIT_AGAINST_COUNTRY", MsgModifierPcReducedSign, Just 1))
+        ,("attack_bonus_against"            , ("MODIFIER_ATTACK_BONUS_AGAINST_A_COUNTRY", MsgModifierPcPosReduced, Just 1))
+        ,("attack_bonus_against_cores"      , ("MODIFIER_ATTACK_BONUS_AGAINST_A_COUNTRY_ON_ITS_CORES", MsgModifierPcPosReduced, Just 1))
+        ,("cic_to_target_factor"            , ("MODIFIER_CIC_TO_TARGET_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("mic_to_target_factor"            , ("MODIFIER_MIC_TO_TARGET_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("targeted_legitimacy_daily"       , ("MODIFIER_TARGETED_LEGITIMACY_DAILY", MsgModifierColourPos, Just 2))
+        ,("breakthrough_bonus_against"      , ("MODIFIER_BREAKTHROUGH_BONUS_AGAINST_A_COUNTRY", MsgModifierPcPosReduced, Just 1))
+        ,("defense_bonus_against"           , ("MODIFIER_DEFENSE_BONUS_AGAINST_A_COUNTRY", MsgModifierPcPosReduced, Just 1))
 
         -- State Scope
-        ,("army_speed_factor_for_controller" , ("MODIFIER_ARMY_SPEED_FACTOR_FOR_CONTROLLER", MsgModifierPcPosReduced))
-        ,("attrition_for_controller"        , ("MODIFIER_ATTRITION_FOR_CONTROLLER", MsgModifierPcNegReduced)) --precision 1
-        ,("compliance_gain"                 , ("MODIFIER_COMPLIANCE_GAIN_ADD", MsgModifierPcPos))
-        ,("compliance_growth"               , ("MODIFIER_COMPLIANCE_GROWTH", MsgModifierPcPosReduced))
-        ,("disable_strategic_redeployment"  , ("MODIFIER_STRATEGIC_REDEPLOYMENT_DISABLED", MsgModifierNoYes))
-        ,("enemy_intel_network_gain_factor_over_occupied_tag" , ("MODIFIER_ENEMY_INTEL_NETWORK_GAIN_FACTOR_OVER_OCCUPIED_TAG", MsgModifierPcNegReduced))
-        ,("local_building_slots"            , ("MODIFIER_LOCAL_BUILDING_SLOTS", MsgModifierPcPos))
-        ,("local_building_slots_factor"     , ("MODIFIER_LOCAL_BUILDING_SLOTS_FACTOR", MsgModifierPcPosReduced))
-        ,("local_factories"                 , ("MODIFIER_LOCAL_FACTORIES", MsgModifierPcPosReduced))
-        ,("local_factory_sabotage"         , ("MODIFIER_LOCAL_FACTORY_SABOTAGE", MsgModifierPcNegReduced)) --precision 0
-        ,("local_intel_to_enemies"          , ("MODIFIER_LOCAL_INTEL_TO_ENEMIES", MsgModifierPcNegReduced))
-        ,("local_manpower"                  , ("MODIFIER_LOCAL_MANPOWER", MsgModifierPcPosReduced))
-        ,("local_non_core_manpower"         , ("MODIFIER_LOCAL_NON_CORE_MANPOWER", MsgModifierPcPosReduced))
-        ,("local_org_regain"                , ("MODIFIER_LOCAL_ORG_REGAIN", MsgModifierPcPosReduced))
-        ,("local_resources"                 , ("MODIFIER_LOCAL_RESOURCES", MsgModifierPcPosReduced))
-        ,("local_supplies"                  , ("MODIFIER_LOCAL_SUPPLIES", MsgModifierPcPosReduced))
-        ,("local_supplies_for_controller"   , ("MODIFIER_LOCAL_SUPPLIES_FOR_CONTROLLER", MsgModifierPcPosReduced)) --precision 0
-        ,("local_supply_impact_factor"      , ("MODIFIER_LOCAL_SUPPLY_IMPACT", MsgModifierPcNegReduced)) --precision 0
-        ,("local_non_core_supply_impact_factor" , ("MODIFIER_LOCAL_NON_CORE_SUPPLY_IMPACT", MsgModifierPcNegReduced)) --precision 0
-        ,("mobilization_speed"              , ("MODIFIER_MOBILIZATION_SPEED", MsgModifierPcPosReduced))
-        ,("non_core_manpower"               , ("MODIFIER_GLOBAL_NON_CORE_MANPOWER", MsgModifierPcPosReduced))
-        ,("non_core_manpower"               , ("MODIFIER_GLOBAL_NON_CORE_MANPOWER", MsgModifierPcPosReduced))
-        ,("recruitable_population_factor"   , ("MODIFIER_RECRUITABLE_POPULATION_FACTOR", MsgModifierPcPosReduced))
-        ,("resistance_damage_to_garrison"   , ("MODIFIER_RESISTANCE_DAMAGE_TO_GARRISONS", MsgModifierPcNegReduced))
-        ,("resistance_decay"                , ("MODIFIER_RESISTANCE_DECAY", MsgModifierPcPosReduced))
-        ,("resistance_garrison_penetration_chance" , ("MODIFIER_RESISTANCE_GARRISON_PENETRATION_CHANCE", MsgModifierPcNegReduced))
-        ,("resistance_growth"               , ("MODIFIER_RESISTANCE_GROWTH", MsgModifierPcNegReduced))
-        ,("resistance_target"               , ("MODIFIER_RESISTANCE_TARGET", MsgModifierPcNegReduced))
-        ,("starting_compliance"             , ("MODIFIER_COMPLIANCE_STARTING_VALUE", MsgModifierPcPosReduced))
-        ,("state_resources_factor"          , ("MODIFIER_STATE_RESOURCES_FACTOR", MsgModifierPcPosReduced))
-        ,("state_production_speed_buildings_factor" , ("MODIFIER_STATE_PRODUCTION_SPEED_BUILDINGS_FACTOR", MsgModifierPcPosReduced))
-        ,("enemy_operative_detection_chance_factor_over_occupied_tag" , ("MODIFIER_ENEMY_OPERATIVE_DETECTION_CHANCE_FACTOR_OVER_OCCUPIED_TAG", MsgModifierPcPosReduced)) --precision 0
+        ,("army_speed_factor_for_controller" , ("MODIFIER_ARMY_SPEED_FACTOR_FOR_CONTROLLER", MsgModifierPcPosReduced, Just 2))
+        ,("attrition_for_controller"        , ("MODIFIER_ATTRITION_FOR_CONTROLLER", MsgModifierPcNegReduced, Just 1)) --precision 1
+        ,("compliance_gain"                 , ("MODIFIER_COMPLIANCE_GAIN_ADD", MsgModifierPcPos, Just 3))
+        ,("compliance_growth"               , ("MODIFIER_COMPLIANCE_GROWTH", MsgModifierPcPosReduced, Just 0))
+        ,("disable_strategic_redeployment"  , ("MODIFIER_STRATEGIC_REDEPLOYMENT_DISABLED", modNoYes, Just 0))
+        ,("enemy_intel_network_gain_factor_over_occupied_tag" , ("MODIFIER_ENEMY_INTEL_NETWORK_GAIN_FACTOR_OVER_OCCUPIED_TAG", MsgModifierPcNegReduced, Just 0))
+        ,("local_building_slots"            , ("MODIFIER_LOCAL_BUILDING_SLOTS", MsgModifierPcPos, Just 0))
+        ,("local_building_slots_factor"     , ("MODIFIER_LOCAL_BUILDING_SLOTS_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("local_factories"                 , ("MODIFIER_LOCAL_FACTORIES", MsgModifierPcPosReduced, Just 0))
+        ,("local_factory_sabotage"         , ("MODIFIER_LOCAL_FACTORY_SABOTAGE", MsgModifierPcNegReduced, Just 0)) --precision 0
+        ,("local_intel_to_enemies"          , ("MODIFIER_LOCAL_INTEL_TO_ENEMIES", MsgModifierPcNegReduced, Just 0))
+        ,("local_manpower"                  , ("MODIFIER_LOCAL_MANPOWER", MsgModifierPcPosReduced, Just 0))
+        ,("local_non_core_manpower"         , ("MODIFIER_LOCAL_NON_CORE_MANPOWER", MsgModifierPcPosReduced, Just 2))
+        ,("local_org_regain"                , ("MODIFIER_LOCAL_ORG_REGAIN", MsgModifierPcPosReduced, Just 2))
+        ,("local_resources"                 , ("MODIFIER_LOCAL_RESOURCES", MsgModifierPcPosReduced, Just 0))
+        ,("local_supplies"                  , ("MODIFIER_LOCAL_SUPPLIES", MsgModifierPcPosReduced, Just 0))
+        ,("local_supplies_for_controller"   , ("MODIFIER_LOCAL_SUPPLIES_FOR_CONTROLLER", MsgModifierPcPosReduced, Just 0)) --precision 0
+        ,("local_supply_impact_factor"      , ("MODIFIER_LOCAL_SUPPLY_IMPACT", MsgModifierPcNegReduced, Just 0)) --precision 0
+        ,("local_non_core_supply_impact_factor" , ("MODIFIER_LOCAL_NON_CORE_SUPPLY_IMPACT", MsgModifierPcNegReduced, Just 0)) --precision 0
+        ,("mobilization_speed"              , ("MODIFIER_MOBILIZATION_SPEED", MsgModifierPcPosReduced, Just 2))
+        ,("non_core_manpower"               , ("MODIFIER_GLOBAL_NON_CORE_MANPOWER", MsgModifierPcPosReduced, Just 2))
+        ,("non_core_manpower"               , ("MODIFIER_GLOBAL_NON_CORE_MANPOWER", MsgModifierPcPosReduced, Just 2))
+        ,("recruitable_population_factor"   , ("MODIFIER_RECRUITABLE_POPULATION_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("resistance_damage_to_garrison"   , ("MODIFIER_RESISTANCE_DAMAGE_TO_GARRISONS", MsgModifierPcNegReduced, Just 2))
+        ,("resistance_decay"                , ("MODIFIER_RESISTANCE_DECAY", MsgModifierPcPosReduced, Just 0))
+        ,("resistance_garrison_penetration_chance" , ("MODIFIER_RESISTANCE_GARRISON_PENETRATION_CHANCE", MsgModifierPcNegReduced, Just 2))
+        ,("resistance_growth"               , ("MODIFIER_RESISTANCE_GROWTH", MsgModifierPcNegReduced, Just 0))
+        ,("resistance_target"               , ("MODIFIER_RESISTANCE_TARGET", MsgModifierPcNegReduced, Just 0))
+        ,("starting_compliance"             , ("MODIFIER_COMPLIANCE_STARTING_VALUE", MsgModifierPcPosReduced, Just 0))
+        ,("state_resources_factor"          , ("MODIFIER_STATE_RESOURCES_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("state_production_speed_buildings_factor" , ("MODIFIER_STATE_PRODUCTION_SPEED_BUILDINGS_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("enemy_operative_detection_chance_factor_over_occupied_tag" , ("MODIFIER_ENEMY_OPERATIVE_DETECTION_CHANCE_FACTOR_OVER_OCCUPIED_TAG", MsgModifierPcPosReduced, Just 0)) --precision 0
 
         -- Unit Leader Scope
-        ,("cannot_use_abilities"            , ("MODIFIER_CANNOT_USE_ABILITIES", MsgModifierNoYes))
-        ,("dont_lose_dig_in_on_attack"      , ("MsgMODIFIER_DONT_LOSE_DIGIN_ON_ATTACK_MOVE", MsgModifierYesNo))
-        ,("exiled_divisions_attack_factor"  , ("MODIFIER_EXILED_DIVISIONS_ATTACK_FACTOR", MsgModifierPcPosReduced))
-        ,("exiled_divisions_defense_factor" , ("MODIFIER_EXILED_DIVISIONS_DEFENSE_FACTOR", MsgModifierPcPosReduced))
-        ,("own_exiled_divisions_attack_factor" , ("MODIFIER_OWN_EXILED_DIVISIONS_ATTACK_FACTOR", MsgModifierPcPosReduced))
-        ,("own_exiled_divisions_defense_factor" , ("MODIFIER_OWN_EXILED_DIVISIONS_DEFENSE_FACTOR", MsgModifierPcPosReduced))
-        ,("experience_gain_factor"          , ("MODIFIER_XP_GAIN_FACTOR", MsgModifierPcPosReduced))
-        ,("fortification_collateral_chance" , ("MODIFIER_FORTIFICATION_COLLATERAL_CHANCE", MsgModifierPcPosReduced))
-        ,("max_commander_army_size"         , ("MODIFIER_ARMY_LEADER_MAX_ARMY_SIZE", MsgModifierColourPos))
-        ,("max_army_group_size"             , ("MODIFIER_ARMY_LEADER_MAX_ARMY_GROUP_SIZE", MsgModifierColourPos))
-        ,("paradrop_organization_factor"    , ("MODIFIER_PARADROP_ORGANIZATION_FACTOR", MsgModifierPcPosReduced))
-        ,("paratrooper_aa_defense"          , ("MODIFIER_PARATROOPER_DEFENSE", MsgModifierPcPosReduced))
-        ,("promote_cost_factor"             , ("MODIFIER_UNIT_LEADER_PROMOTE_COST_FACTOR", MsgModifierPcNegReduced))
-        ,("reassignment_duration_factor"    , ("MODIFIER_REASSIGNMENT_DURATION_FACTOR", MsgModifierPcNegReduced))
-        ,("sickness_chance"                 , ("MODIFIER_SICKNESS_CHANCE", MsgModifierPcNegReduced))
-        ,("skill_bonus_factor"              , ("MODIFIER_UNIT_LEADER_SKILL_BONUS_FACTOR", MsgModifierPcPosReduced))
-        ,("terrain_trait_xp_gain_factor"    , ("MODIFIER_TERRAIN_TRAIT_XP_GAIN_FACTOR", MsgModifierPcPosReduced)) --precision 2
-        ,("wounded_chance_factor"           , ("MODIFIER_WOUNDED_CHANCE_FACTOR", MsgModifierPcNegReduced))
-        ,("shore_bombardment_bonus"         , ("MODIFIER_SHORE_BOMBARDMENT", MsgModifierPcPosReduced))
+        ,("cannot_use_abilities"            , ("MODIFIER_CANNOT_USE_ABILITIES", modNoYes, Just 0))
+        ,("dont_lose_dig_in_on_attack"      , ("MODIFIER_DONT_LOSE_DIGIN_ON_ATTACK_MOVE", modYesNo, Just 0))
+        ,("exiled_divisions_attack_factor"  , ("MODIFIER_EXILED_DIVISIONS_ATTACK_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("exiled_divisions_defense_factor" , ("MODIFIER_EXILED_DIVISIONS_DEFENSE_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("own_exiled_divisions_attack_factor" , ("MODIFIER_OWN_EXILED_DIVISIONS_ATTACK_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("own_exiled_divisions_defense_factor" , ("MODIFIER_OWN_EXILED_DIVISIONS_DEFENSE_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("experience_gain_factor"          , ("MODIFIER_XP_GAIN_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("fortification_collateral_chance" , ("MODIFIER_FORTIFICATION_COLLATERAL_CHANCE", MsgModifierPcPosReduced, Just 1))
+        ,("max_commander_army_size"         , ("MODIFIER_ARMY_LEADER_MAX_ARMY_SIZE", MsgModifierColourPos, Just 0))
+        ,("max_army_group_size"             , ("MODIFIER_ARMY_LEADER_MAX_ARMY_GROUP_SIZE", MsgModifierColourPos, Just 0))
+        ,("paradrop_organization_factor"    , ("MODIFIER_PARADROP_ORGANIZATION_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("paratrooper_aa_defense"          , ("MODIFIER_PARATROOPER_DEFENSE", MsgModifierPcPosReduced, Just 1))
+        ,("promote_cost_factor"             , ("MODIFIER_UNIT_LEADER_PROMOTE_COST_FACTOR", MsgModifierPcNegReduced, Just 1))
+        ,("reassignment_duration_factor"    , ("MODIFIER_REASSIGNMENT_DURATION_FACTOR", MsgModifierPcNegReduced, Just 1))
+        ,("sickness_chance"                 , ("MODIFIER_SICKNESS_CHANCE", MsgModifierPcNegReduced, Just 2))
+        ,("skill_bonus_factor"              , ("MODIFIER_UNIT_LEADER_SKILL_BONUS_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("terrain_trait_xp_gain_factor"    , ("MODIFIER_TERRAIN_TRAIT_XP_GAIN_FACTOR", MsgModifierPcPosReduced, Just 2)) --precision 2
+        ,("wounded_chance_factor"           , ("MODIFIER_WOUNDED_CHANCE_FACTOR", MsgModifierPcNegReduced, Just 1))
+        ,("shore_bombardment_bonus"         , ("MODIFIER_SHORE_BOMBARDMENT", MsgModifierPcPosReduced, Just 1))
 
         -- Strategic region scope
-        ,("air_accidents"                   , ("MODIFIER_AIR_ACCIDENTS", MsgModifierPcNegReduced))
-        ,("air_detection"                   , ("MODIFIER_AIR_DETECTION", MsgModifierPcPosReduced))
+        ,("air_accidents"                   , ("MODIFIER_AIR_ACCIDENTS", MsgModifierPcNegReduced, Just 1))
+        ,("air_detection"                   , ("MODIFIER_AIR_DETECTION", MsgModifierPcPosReduced, Just 1))
 
         -- Special Projects
-        ,("special_project_facility_supply_consumption_factor"  , (T.replace "$FACTOR$" "" "MODIFIER_SPECIAL_PROJECT_FACILITY_SUPPLY_CONSUMPTION_FACTOR", MsgModifierPcNegReduced))
-        ,("special_project_speed_factor"    , ("MODIFIER_SPECIAL_PROJECT_SPEED_FACTOR", MsgModifierPcPosReduced))
+        ,("special_project_facility_supply_consumption_factor"  , (T.replace "$FACTOR$" "" "MODIFIER_SPECIAL_PROJECT_FACILITY_SUPPLY_CONSUMPTION_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("special_project_speed_factor"    , ("MODIFIER_SPECIAL_PROJECT_SPEED_FACTOR", MsgModifierPcPosReduced, Just 2))
 
         -- equipment/stats
-        ,("build_cost_ic"           , ("STAT_COMMON_BUILD_COST_IC", MsgModifierPcNegReduced))
-        ,("reliability"             , ("STAT_COMMON_RELIABILITY", MsgModifierPcPosReduced))
-        ,("armor_value"             , ("STAT_COMMON_ARMOR", MsgModifierPcPosReduced))
-        ,("maximum_speed"           , ("STAT_COMMON_MAXIMUM_SPEED", MsgModifierPcPosReduced))
-        ,("fuel_consumption"        , ("STAT_COMMON_FUEL_CONSUMPTION", MsgModifierPcNegReduced))
-        ,("ap_attack"               , ("STAT_COMMON_PIERCING", MsgModifierPcPosReduced))
-        ,("max_strength"            , ("STAT_COMMON_MAX_STRENGTH", MsgModifierPcPosReduced))
+        ,("build_cost_ic"           , ("STAT_COMMON_BUILD_COST_IC", MsgModifierPcNegReduced, Nothing))
+        ,("reliability"             , ("STAT_COMMON_RELIABILITY", MsgModifierPcPosReduced, Nothing))
+        ,("armor_value"             , ("STAT_COMMON_ARMOR", MsgModifierPcPosReduced, Nothing))
+        ,("maximum_speed"           , ("STAT_COMMON_MAXIMUM_SPEED", MsgModifierPcPosReduced, Nothing))
+        ,("fuel_consumption"        , ("STAT_COMMON_FUEL_CONSUMPTION", MsgModifierPcNegReduced, Nothing))
+        ,("ap_attack"               , ("STAT_COMMON_PIERCING", MsgModifierPcPosReduced, Nothing))
+        ,("max_strength"            , ("STAT_COMMON_MAX_STRENGTH", MsgModifierPcPosReduced, Nothing))
 
-        ,("attack"                  , ("STAT_ADJUSTER_ATTACK", MsgModifierPcPosReduced))
-        ,("defense"                 , ("STAT_ADJUSTER_DEFENCE", MsgModifierPcPosReduced))
-        ,("movement"                , ("STAT_ADJUSTER_MOVEMENT", MsgModifierPcPosReduced))
+        ,("attack"                  , ("STAT_ADJUSTER_ATTACK", MsgModifierPcPosReduced, Nothing))
+        ,("defense"                 , ("STAT_ADJUSTER_DEFENCE", MsgModifierPcPosReduced, Nothing))
+        ,("movement"                , ("STAT_ADJUSTER_MOVEMENT", MsgModifierPcPosReduced, Nothing))
 
-        ,("breakthrough"            , ("STAT_ARMY_BREAKTHROUGH", MsgModifierPcPosReduced))
-        ,("hardness"                , ("STAT_ARMY_HARDNESS", MsgModifierPcPosReduced))
-        ,("supply_consumption"      , ("STAT_ARMY_SUPPLY_CONSUMPTION", MsgModifierPcPosReduced)) --precision 0
-        ,("soft_attack"             , ("STAT_ARMY_SOFT_ATTACK", MsgModifierPcPosReduced))
-        ,("hard_attack"             , ("STAT_ARMY_HARD_ATTACK", MsgModifierPcPosReduced))
+        ,("breakthrough"            , ("STAT_ARMY_BREAKTHROUGH", MsgModifierPcPosReduced, Nothing))
+        ,("hardness"                , ("STAT_ARMY_HARDNESS", MsgModifierPcPosReduced, Nothing))
+        ,("supply_consumption"      , ("STAT_ARMY_SUPPLY_CONSUMPTION", MsgModifierPcPosReduced, Nothing)) --precision 0
+        ,("soft_attack"             , ("STAT_ARMY_SOFT_ATTACK", MsgModifierPcPosReduced, Nothing))
+        ,("hard_attack"             , ("STAT_ARMY_HARD_ATTACK", MsgModifierPcPosReduced, Nothing))
 
-        ,("air_agility"             , ("STAT_AIR_AGILITY", MsgModifierPcPosReduced))
-        ,("air_attack"              , ("STAT_AIR_ATTACK", MsgModifierPcPosReduced))
-        ,("air_range"               , ("STAT_AIR_RANGE", MsgModifierPcPosReduced))
-        ,("air_defence"             , ("STAT_AIR_DEFENCE", MsgModifierPcPosReduced))
-        ,("air_ground_attack"       , ("STAT_AIR_GROUND_ATTACK", MsgModifierPcPosReduced))
-        ,("air_bombing"             , ("STAT_AIR_BOMBING", MsgModifierPcPosReduced))
-        ,("naval_strike_attack"     , ("STAT_AIR_NAVAL_STRIKE_ATTACK", MsgModifierPcPosReduced))
+        ,("air_agility"             , ("STAT_AIR_AGILITY", MsgModifierPcPosReduced, Nothing))
+        ,("air_attack"              , ("STAT_AIR_ATTACK", MsgModifierPcPosReduced, Nothing))
+        ,("air_range"               , ("STAT_AIR_RANGE", MsgModifierPcPosReduced, Nothing))
+        ,("air_defence"             , ("STAT_AIR_DEFENCE", MsgModifierPcPosReduced, Nothing))
+        ,("air_ground_attack"       , ("STAT_AIR_GROUND_ATTACK", MsgModifierPcPosReduced, Nothing))
+        ,("air_bombing"             , ("STAT_AIR_BOMBING", MsgModifierPcPosReduced, Nothing))
+        ,("naval_strike_attack"     , ("STAT_AIR_NAVAL_STRIKE_ATTACK", MsgModifierPcPosReduced, Nothing))
 
-        ,("surface_detection"       , ("STAT_NAVY_SURFACE_DETECTION", MsgModifierPcPosReduced))
-        ,("sub_detection"           , ("STAT_NAVY_SUB_DETECTION", MsgModifierPcPosReduced))
-        ,("sub_visibility"          , ("STAT_NAVY_SUB_VISIBILITY", MsgModifierPcNegReduced))
-        ,("anti_air_attack"         , ("STAT_NAVY_ANTI_AIR_ATTACK", MsgModifierPcPosReduced))
-        ,("surface_visibility"      , ("STAT_NAVY_SURFACE_VISIBILITY", MsgModifierPcNegReduced))
-        ,("naval_speed"             , ("STAT_NAVY_MAXIMUM_SPEED", MsgModifierPcPosReduced))
-        ,("naval_range"             , ("STAT_NAVY_RANGE", MsgModifierPcPosReduced))
-        ,("lg_attack"               , ("STAT_NAVY_LG_ATTACK", MsgModifierPcPosReduced))
-        ,("hg_attack"               , ("STAT_NAVY_HG_ATTACK", MsgModifierPcPosReduced))
-        ,("carrier_size"            , ("STAT_CARRIER_SIZE", MsgModifierColourPos))
-        ,("torpedo_attack"          , ("STAT_NAVY_TORPEDO_ATTACK", MsgModifierPcPosReduced))
+        ,("surface_detection"       , ("STAT_NAVY_SURFACE_DETECTION", MsgModifierPcPosReduced, Nothing))
+        ,("sub_detection"           , ("STAT_NAVY_SUB_DETECTION", MsgModifierPcPosReduced, Nothing))
+        ,("sub_visibility"          , ("STAT_NAVY_SUB_VISIBILITY", MsgModifierPcNegReduced, Nothing))
+        ,("anti_air_attack"         , ("STAT_NAVY_ANTI_AIR_ATTACK", MsgModifierPcPosReduced, Nothing))
+        ,("surface_visibility"      , ("STAT_NAVY_SURFACE_VISIBILITY", MsgModifierPcNegReduced, Nothing))
+        ,("naval_speed"             , ("STAT_NAVY_MAXIMUM_SPEED", MsgModifierPcPosReduced, Nothing))
+        ,("naval_range"             , ("STAT_NAVY_RANGE", MsgModifierPcPosReduced, Nothing))
+        ,("lg_attack"               , ("STAT_NAVY_LG_ATTACK", MsgModifierPcPosReduced, Nothing))
+        ,("hg_attack"               , ("STAT_NAVY_HG_ATTACK", MsgModifierPcPosReduced, Nothing))
+        ,("carrier_size"            , ("STAT_CARRIER_SIZE", MsgModifierColourPos, Nothing))
+        ,("torpedo_attack"          , ("STAT_NAVY_TORPEDO_ATTACK", MsgModifierPcPosReduced, Nothing))
+
+        -- Modifiers the game documents that had no entry above. Where its
+        -- localization writes the value itself, the kind of value and whether
+        -- more of it is good news are read from the format it writes it with;
+        -- the rest are judged from what the modifier is called. The decimal
+        -- places are the ones the game documents for each.
+        ,("ace_effectiveness_factor"                                           , ("MODIFIER_ACE_EFFECTIVENESS_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("air_ace_bonuses_factor"                                             , ("MODIFIER_ACE_BONUSES_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("air_escort_efficiency"                                              , ("MODIFIER_AIR_ESCORT_EFFICIENCY", MsgModifierPcPosReduced, Just 0))
+        ,("air_home_defence_factor"                                            , ("MODIFIER_AIR_HOME_DEFENCE_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("air_interception_detect_factor"                                     , ("MODIFIER_AIR_INTERCEPTION_DETECT_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("air_invasion_division_cap"                                          , ("MODIFIER_AIR_INVASION_DIVISION_CAP", MsgModifierColourPos, Just 0))
+        ,("air_invasion_plan_cap"                                              , ("MODIFIER_AIR_INVASION_PLAN_CAP", MsgModifierColourPos, Just 0))
+        ,("air_invasion_preparation"                                           , ("MODIFIER_AIR_INVASION_PREPARATION", MsgModifierColourPos, Just 1))
+        ,("air_manpower_requirement_factor"                                    , ("MODIFIER_AIR_MANPOWER_REQUIREMENT_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("air_power_projection_factor"                                        , ("MODIFIER_AIR_POWER_PROJECTION_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("air_superiority_detect_factor"                                      , ("MODIFIER_AIR_SUPERIORITY_DETECT_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("air_untrained_pilots_penalty_factor"                                , ("MODIFIER_AIR_UNTRAINED_PILOTS_PENALTY_FACTOR", MsgModifierPcNegReduced, Just 0))
+        ,("airforce_intel_decryption_bonus"                                    , ("MODIFIER_AIRFORCE_INTEL_DECRYPTION_BONUS", MsgModifierColourPos, Just 0))
+        ,("annex_subject_cost_factor"                                          , ("MODIFIER_ANNEX_SUBJECT_COST_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("armor_factor"                                                       , ("MODIFIER_ARMOR", MsgModifierPcPosReduced, Just 2))
+        ,("army_claim_attack_factor"                                           , ("MODIFIERS_ARMY_CLAIM_ATTACK_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("army_claim_defence_factor"                                          , ("MODIFIERS_ARMY_CLAIM_DEFENCE_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("army_defence_against_major_factor"                                  , ("MODIFIERS_ARMY_DEFENCE_AGAINST_MAJOR_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("army_defence_against_minor_factor"                                  , ("MODIFIERS_ARMY_DEFENCE_AGAINST_MINOR_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("army_experience_from_volunteers"                                    , ("MODIFIER_ARMY_EXPERIENCE_FROM_VOLUNTEERS", MsgModifierPcPosReduced, Just 1))
+        ,("army_fuel_capacity_factor"                                          , ("MODIFIER_ARMY_FUEL_CAPACITY_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("army_intel_decryption_bonus"                                        , ("MODIFIER_ARMY_INTEL_DECRYPTION_BONUS", MsgModifierColourPos, Just 0))
+        ,("army_morale"                                                        , ("MODIFIER_ARMY_MORALE", MsgModifierColourPos, Just 1))
+        ,("army_non_core_attack_factor"                                        , ("MODIFIERS_ARMY_NON_CORE_ATTACK_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("army_non_core_defence_factor"                                       , ("MODIFIERS_ARMY_NON_CORE_DEFENCE_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("army_retreat_speed_factor"                                          , ("MODIFIER_ARMY_RETREAT_SPEED_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("assign_army_leader_cp_cost"                                         , ("MODIFIER_ASSIGN_ARMY_LEADER_CP_COST", MsgModifierColourNeg, Just 0))
+        ,("assign_navy_leader_cp_cost"                                         , ("MODIFIER_ASSIGN_NAVY_LEADER_CP_COST", MsgModifierColourNeg, Just 0))
+        ,("automatic_grant_medal_chance"                                       , ("automatic_grant_medal_chance", MsgModifierColourPos, Just 0))
+        ,("autonomy_gain_ll_to_overlord_factor"                                , ("MODIFIER_AUTONOMY_GAIN_LL_TO_OVERLORD_FACTOR", MsgModifierPcReducedSign, Just 2))
+        ,("autonomy_gain_ll_to_subject"                                        , ("MODIFIER_AUTONOMY_GAIN_LL_TO_SUBJECT", MsgModifierColourPos, Just 2))
+        ,("autonomy_gain_ll_to_subject_factor"                                 , ("MODIFIER_AUTONOMY_GAIN_LL_TO_SUBJECT_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("autonomy_gain_trade"                                                , ("MODIFIER_AUTONOMY_GAIN_TRADE", MsgModifierColourPos, Just 2))
+        ,("autonomy_gain_warscore"                                             , ("MODIFIER_AUTONOMY_GAIN_WARSCORE", MsgModifierPcPosReduced, Just 2))
+        ,("autonomy_gain_warscore_factor"                                      , ("MODIFIER_AUTONOMY_GAIN_WARSCORE_FACTOR", MsgModifierPcReducedSign, Just 2))
+        ,("autonomy_manpower_share_from_subjects"                              , ("MODIFIER_AUTONOMY_MANPOWER_SHARE_FROM_SUBJECTS", MsgModifierPcReducedSign, Just 2))
+        ,("cannot_retreat_while_attacking"                                     , ("MODIFIER_CANNOT_RETREAT_WHILE_ATTACKING", MsgModifierColourPos, Just 0))
+        ,("cannot_retreat_while_defending"                                     , ("MODIFIER_CANNOT_RETREAT_WHILE_DEFENDING", MsgModifierColourPos, Just 0))
+        ,("carrier_capacity_penalty_reduction"                                 , ("MODIFIER_CARRIER_CAPACITY_PENALTY_REDUCTION", MsgModifierPcPosReduced, Just 1))
+        ,("carrier_night_traffic"                                              , ("MODIFIER_CARRIER_NIGHT_TRAFFIC", MsgModifierPcPosReduced, Just 2))
+        ,("carrier_sortie_hours_delay"                                         , ("MODIFIER_CARRIER_SORTIE_HOURS_DELAY", MsgModifierColourPos, Just 0))
+        ,("carrier_traffic"                                                    , ("MODIFIER_CARRIER_TRAFFIC", MsgModifierColourPos, Just 0))
+        ,("casualty_trickleback"                                               , ("MODIFIER_CASUALTY_TRICKLEBACK", MsgModifierPcPosReduced, Just 2))
+        ,("cic_construction_boost"                                             , ("MODIFIER_CIC_CONSTRUCTION_BOOST", MsgModifierPcPosReduced, Just 1))
+        ,("cic_construction_boost_factor"                                      , ("MODIFIER_CIC_CONSTRUCTION_BOOST_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("civilian_intel_decryption_bonus"                                    , ("MODIFIER_CIVILIAN_INTEL_DECRYPTION_BONUS", MsgModifierColourPos, Just 0))
+        ,("combat_entrenchment"                                                , ("MODIFIER_COMBAT_ENTRENCHMENT", MsgModifierPcPosReduced, Just 1))
+        ,("commando_trait_chance_factor"                                       , ("MODIFIER_COMMANDO_TRAIT_CHANCE_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("consumer_goods_expected_value"                                      , ("MODIFIER_CONSUMER_GOODS_EXPECTED_VALUE", MsgModifierPcNegReduced, Just 1))
+        ,("crypto_department_enabled"                                          , ("MODIFIER_CRYPTO_DEPARTMENT_ENABLED", modYesNo, Just 0))
+        ,("defense_impact_on_blueprint_stealing"                               , ("MODIFIER_DEFENSE_IMPACT_ON_BLUEPRINT_STEALING", MsgModifierColourPos, Just 1))
+        ,("enemy_army_speed_factor"                                            , ("MODIFIER_ENEMY_ARMY_SPEED_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("enemy_attrition"                                                    , ("MODIFIER_ENEMY_ATTRITION", MsgModifierPcPosReduced, Just 1))
+        ,("enemy_local_supplies"                                               , ("MODIFIER_ENEMY_LOCAL_SUPPLIES", MsgModifierPcNegReduced, Just 0))
+        ,("enemy_operative_detection_chance_over_occupied_tag"                 , ("MODIFIER_ENEMY_OPERATIVE_DETECTION_CHANCE_OVER_OCCUPIED_TAG", MsgModifierColourPos, Just 2))
+        ,("enemy_operative_forced_into_hiding_time_factor"                     , ("MODIFIER_ENEMY_OPERATIVE_FORCED_INTO_HIDING_TIME_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("enemy_operative_harmed_time_factor"                                 , ("MODIFIER_ENEMY_OPERATIVE_HARMED_TIME_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("enemy_operative_recruitment_chance"                                 , ("MODIFIER_ENEMY_OPERATIVE_RECRUITMENT_CHANCE", MsgModifierColourPos, Just 0))
+        ,("enemy_spy_negative_status_factor"                                   , ("MODIFIER_ENEMY_SPY_NEGATIVE_STATUS_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("enemy_truck_attrition_factor"                                       , ("MODIFIER_ENEMY_TRUCK_ATTRITION_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("energy_gain_factor"                                                 , ("MODIFIER_ENERGY_GAIN_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("energy_scale_per_trade_factory_export_factor"                       , ("MODIFIER_ENERGY_SCALE_PER_TRADE_FACTORY_EXPORT_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("equipment_capture_factor_for_controller"                            , ("MODIFIER_EQUIPMENT_CAPTURE_FACTOR_FOR_CONTROLLER", MsgModifierColourPos, Just 1))
+        ,("equipment_capture_for_controller"                                   , ("MODIFIER_EQUIPMENT_CAPTURE_FOR_CONTROLLER", MsgModifierColourPos, Just 1))
+        ,("faction_influence_contribution_factor"                              , ("MODIFIER_FACTION_INFLUENCE_CONTRIBUTION", MsgModifierPcReducedSign, Just 2))
+        ,("faction_subject_contribution_gain"                                  , ("MODIFIER_FACTION_SUBJECT_CONTRIBUTION_GAIN", MsgModifierColourPos, Just 2))
+        ,("factory_energy_consumption"                                         , ("MODIFIER_FACTORY_ENERGY_CONSUMPTION", MsgModifierPcNegReduced, Just 2))
+        ,("field_officer_promotion_penalty"                                    , ("MODIFIER_FIELD_OFFICER_PROMOTION_PENALTY", MsgModifierPcNegReduced, Just 0))
+        ,("floating_harbor_duration"                                           , ("MODIFIER_FLOATING_HARBOR_DURATION", MsgModifierColourPos, Just 0))
+        ,("floating_harbor_range"                                              , ("MODIFIER_FLOATING_HARBOR_RANGE", MsgModifierColourPos, Just 0))
+        ,("floating_harbor_supply"                                             , ("MODIFIER_FLOATING_HARBOR_SUPPLY", MsgModifierColourPos, Just 0))
+        ,("forced_surrender_limit"                                             , ("MODIFIER_FORCED_SURRENDER_LIMIT", MsgModifierColourNeg, Just 2))
+        ,("fuel_gain_from_states"                                              , ("MODIFIER_FUEL_GAIN_FROM_STATES", MsgModifierColourPos, Just 2))
+        ,("ground_attack"                                                      , ("MODIFIER_GROUND_ATTACK", MsgModifierColourPos, Just 1))
+        ,("headquarters_experience_gain_factor"                                , ("headquarters_experience_gain_factor", MsgModifierPcPosReduced, Just 2))
+        ,("industrial_capacity_dockyard_powered"                               , ("MODIFIER_INDUSTRIAL_CAPACITY_DOCKYARD_POWERED_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("industrial_capacity_factory_powered"                                , ("MODIFIER_INDUSTRIAL_CAPACITY_POWERED_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("intelligence_operation_speed"                                       , ("MODIFIER_INTELLIGENCE_OPERATION_SPEED", MsgModifierColourPos, Just 0))
+        ,("license_anti_tank_eq_cost_factor"                                   , ("MODIFIER_LICENSE_ANTI_TANK_EQ_COST_FACTOR", MsgModifierPcNegReduced, Just 0))
+        ,("license_anti_tank_eq_production_speed_factor"                       , ("MODIFIER_LICENSE_ANTI_TANK_EQ_PRODUCTION_SPEED_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("license_anti_tank_eq_tech_difference_speed_factor"                  , ("MODIFIER_LICENSE_ANTI_TANK_EQ_TECH_DIFFERENCE_SPEED_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("license_artillery_eq_cost_factor"                                   , ("MODIFIER_LICENSE_ARTILLERY_EQ_COST_FACTOR", MsgModifierPcNegReduced, Just 0))
+        ,("license_artillery_eq_production_speed_factor"                       , ("MODIFIER_LICENSE_ARTILLERY_EQ_PRODUCTION_SPEED_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("license_artillery_eq_tech_difference_speed_factor"                  , ("MODIFIER_LICENSE_ARTILLERY_EQ_TECH_DIFFERENCE_SPEED_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("license_infantry_eq_cost_factor"                                    , ("MODIFIER_LICENSE_INFANTRY_EQ_COST_FACTOR", MsgModifierPcNegReduced, Just 0))
+        ,("license_infantry_eq_production_speed_factor"                        , ("MODIFIER_LICENSE_INFANTRY_EQ_PRODUCTION_SPEED_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("license_infantry_eq_tech_difference_speed_factor"                   , ("MODIFIER_LICENSE_INFANTRY_EQ_TECH_DIFFERENCE_SPEED_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("license_infantry_purchase_cost"                                     , ("MODIFIER_LICENSE_INFANTRY_PURCHASE_COST", MsgModifierColourNeg, Just 0))
+        ,("license_light_tank_eq_cost_factor"                                  , ("MODIFIER_LICENSE_LIGHT_TANK_EQ_COST_FACTOR", MsgModifierPcNegReduced, Just 0))
+        ,("license_light_tank_eq_production_speed_factor"                      , ("MODIFIER_LICENSE_LIGHT_TANK_EQ_PRODUCTION_SPEED_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("license_light_tank_eq_tech_difference_speed_factor"                 , ("MODIFIER_LICENSE_LIGHT_TANK_EQ_TECH_DIFFERENCE_SPEED_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("license_subject_master_purchase_cost"                               , ("MODIFIER_LICENSE_SUBJECT_MASTER_PURCHASE_COST", MsgModifierPcPosReduced, Just 2))
+        ,("local_factory_energy_consumption"                                   , ("MODIFIER_LOCAL_FACTORY_ENERGY_CONSUMPTION", MsgModifierPcPosReduced, Just 0))
+        ,("local_factory_energy_consumption_per_infrastructure"                , ("MODIFIER_LOCAL_FACTORY_ENERGY_CONSUMPTION_PER_INFRASTRUCTURE", MsgModifierColourNeg, Just 2))
+        ,("local_resource_gain_efficiency_per_infrastructure"                  , ("MODIFIER_LOCAL_RESOURCE_GAIN_EFFICIENCY_PER_INFRASTRUCTURE", MsgModifierPcPosReduced, Just 2))
+        ,("marines_special_forces_contribution_factor"                         , ("MODIFIER_MARINES_SPECIAL_FORCES_CONTRIBUTION_FACTOR", MsgModifierPcNegReduced, Just 0))
+        ,("master_build_autonomy_factor"                                       , ("MODIFIER_MASTER_BUILD_AUTONOMY_FACTOR", modYesNo, Just 0))
+        ,("max_organisation"                                                   , ("MODIFIER_MAX_ORGANISATION_FACTOR", MsgModifierColourPos, Just 0))
+        ,("military_industrial_organization_research_bonus"                    , ("MODIFIER_MIO_RESEARCH_BONUS", MsgModifierPcPosReduced, Just 0))
+        ,("mines_sweeping_by_air_factor"                                       , ("MODIFIER_MINES_SWEEPING_BY_AIR_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("modifier_army_sub_unit_armored_car_attack_factor"                   , ("modifier_army_sub_unit_armored_car_attack_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_armored_car_defence_factor"                  , ("modifier_army_sub_unit_armored_car_defence_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_armored_car_max_org_factor"                  , ("modifier_army_sub_unit_armored_car_max_org_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_armored_car_recon_attack_factor"             , ("modifier_army_sub_unit_armored_car_recon_attack_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_armored_car_recon_defence_factor"            , ("modifier_army_sub_unit_armored_car_recon_defence_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_armored_car_recon_max_org_factor"            , ("modifier_army_sub_unit_armored_car_recon_max_org_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_armored_car_recon_speed_factor"              , ("modifier_army_sub_unit_armored_car_recon_speed_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_armored_car_speed_factor"                    , ("modifier_army_sub_unit_armored_car_speed_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_blackshirt_assault_battalion_attack_factor"  , ("modifier_army_sub_unit_blackshirt_assault_battalion_attack_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_blackshirt_assault_battalion_defence_factor" , ("modifier_army_sub_unit_blackshirt_assault_battalion_defence_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_blackshirt_assault_battalion_max_org_factor" , ("modifier_army_sub_unit_blackshirt_assault_battalion_max_org_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_blackshirt_assault_battalion_speed_factor"   , ("modifier_army_sub_unit_blackshirt_assault_battalion_speed_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_camelry_attack_factor"                       , ("modifier_army_sub_unit_camelry_attack_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_camelry_defence_factor"                      , ("modifier_army_sub_unit_camelry_defence_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_camelry_speed_factor"                        , ("modifier_army_sub_unit_camelry_speed_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_category_rocket_artillery_attack_factor"     , ("modifier_army_sub_unit_category_rocket_artillery_attack_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_category_special_forces_max_org_factor"      , ("modifier_army_sub_unit_category_special_forces_max_org_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_cavalry_attack_factor"                       , ("modifier_army_sub_unit_cavalry_attack_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_cavalry_defence_factor"                      , ("modifier_army_sub_unit_cavalry_defence_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_cavalry_speed_factor"                        , ("modifier_army_sub_unit_cavalry_speed_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_infantry_attack_factor"                      , ("modifier_army_sub_unit_infantry_attack_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_infantry_defence_factor"                     , ("modifier_army_sub_unit_infantry_defence_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_infantry_speed_factor"                       , ("modifier_army_sub_unit_infantry_speed_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_irregular_infantry_attack_factor"            , ("modifier_army_sub_unit_irregular_infantry_attack_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_irregular_infantry_defence_factor"           , ("modifier_army_sub_unit_irregular_infantry_defence_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_irregular_infantry_max_org_factor"           , ("modifier_army_sub_unit_irregular_infantry_max_org_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_irregular_infantry_speed_factor"             , ("modifier_army_sub_unit_irregular_infantry_speed_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_light_tank_recon_attack_factor"              , ("modifier_army_sub_unit_light_tank_recon_attack_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_light_tank_recon_defence_factor"             , ("modifier_army_sub_unit_light_tank_recon_defence_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_light_tank_recon_max_org_factor"             , ("modifier_army_sub_unit_light_tank_recon_max_org_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_light_tank_recon_speed_factor"               , ("modifier_army_sub_unit_light_tank_recon_speed_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_long_range_patrol_support_attack_factor"     , ("modifier_army_sub_unit_long_range_patrol_support_attack_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_long_range_patrol_support_defence_factor"    , ("modifier_army_sub_unit_long_range_patrol_support_defence_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_marine_attack_factor"                        , ("modifier_army_sub_unit_marine_attack_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_marine_defence_factor"                       , ("modifier_army_sub_unit_marine_defence_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_marine_max_org_factor"                       , ("modifier_army_sub_unit_marine_max_org_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_marine_speed_factor"                         , ("modifier_army_sub_unit_marine_speed_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_military_police_attack_factor"               , ("modifier_army_sub_unit_military_police_attack_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_military_police_defence_factor"              , ("modifier_army_sub_unit_military_police_defence_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_military_police_max_org_factor"              , ("modifier_army_sub_unit_military_police_max_org_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_military_police_speed_factor"                , ("modifier_army_sub_unit_military_police_speed_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_militia_attack_factor"                       , ("modifier_army_sub_unit_militia_attack_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_militia_defence_factor"                      , ("modifier_army_sub_unit_militia_defence_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_militia_max_org_factor"                      , ("modifier_army_sub_unit_militia_max_org_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_militia_org_recovery_cap_factor"             , ("modifier_army_sub_unit_militia_org_recovery_cap_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_militia_speed_factor"                        , ("modifier_army_sub_unit_militia_speed_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_mountaineers_attack_factor"                  , ("modifier_army_sub_unit_mountaineers_attack_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_mountaineers_defence_factor"                 , ("modifier_army_sub_unit_mountaineers_defence_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_mountaineers_max_org_factor"                 , ("modifier_army_sub_unit_mountaineers_max_org_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_mountaineers_speed_factor"                   , ("modifier_army_sub_unit_mountaineers_speed_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_paratrooper_attack_factor"                   , ("modifier_army_sub_unit_paratrooper_attack_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_paratrooper_defence_factor"                  , ("modifier_army_sub_unit_paratrooper_defence_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_paratrooper_max_org_factor"                  , ("modifier_army_sub_unit_paratrooper_max_org_factor", MsgModifierPcPosReduced, Just 2))
+        ,("modifier_army_sub_unit_paratrooper_speed_factor"                    , ("modifier_army_sub_unit_paratrooper_speed_factor", MsgModifierPcPosReduced, Just 2))
+        ,("mountaineers_special_forces_contribution_factor"                    , ("MODIFIER_MOUNTAINEERS_SPECIAL_FORCES_CONTRIBUTION_FACTOR", MsgModifierPcNegReduced, Just 0))
+        ,("naval_accidents_chance"                                             , ("MODIFIER_NAVAL_ACCIDENTS_CHANCE", MsgModifierPcNegReduced, Just 2))
+        ,("naval_commando_raid_distance"                                       , ("MODIFIER_NAVAL_COMMANDO_RAID_DISTANCE", MsgModifierColourPos, Just 0))
+        ,("naval_enemy_positioning_in_initial_attack"                          , ("MODIFIER_NAVAL_ENEMY_POSITIONING_IN_INITIAL_ATTACK", MsgModifierColourPos, Just 0))
+        ,("naval_equipment_upgrade_xp_cost"                                    , ("MODIFIER_NAVAL_EQUIPMENT_UPGRADE_XP_COST", MsgModifierPcNegReduced, Just 0))
+        ,("naval_heavy_gun_hit_chance_factor"                                  , ("MODIFIER_NAVAL_HEAVY_GUN_HIT_CHANCE_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("naval_invasion_division_cap"                                        , ("MODIFIER_NAVAL_INVASION_DIVISION_CAP", MsgModifierColourPos, Just 0))
+        ,("naval_invasion_penalty"                                             , ("MODIFIER_NAVAL_INVASION_PENALTY", MsgModifierPcNegReduced, Just 0))
+        ,("naval_invasion_plan_cap"                                            , ("MODIFIER_NAVAL_INVASION_PLAN_CAP", MsgModifierColourPos, Just 0))
+        ,("naval_light_gun_hit_chance_factor"                                  , ("MODIFIER_NAVAL_LIGHT_GUN_HIT_CHANCE_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("naval_mine_hit_chance"                                              , ("MODIFIER_NAVAL_MINE_HIT_CHANCE", MsgModifierPcPosReduced, Just 2))
+        ,("naval_mines_damage_factor"                                          , ("MODIFIER_NAVAL_MINES_DAMAGE_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("naval_mission_xp_factor"                                            , ("MODIFIER_NAVAL_MISSION_XP_FACTOR", MsgModifierPcPosReduced, Just 3))
+        ,("naval_morale"                                                       , ("MODIFIER_NAVAL_MORALE", MsgModifierColourPos, Just 1))
+        ,("naval_retreat_chance_after_initial_combat"                          , ("MODIFIER_NAVAL_RETREAT_CHANCE_AFTER_INITIAL_COMBAT", MsgModifierPcPosReduced, Just 0))
+        ,("naval_retreat_speed_after_initial_combat"                           , ("MODIFIER_NAVAL_RETREAT_SPEED_AFTER_INITIAL_COMBAT", MsgModifierPcPosReduced, Just 0))
+        ,("naval_ship_recovery_chance"                                         , ("MODIFIER_NAVAL_SHIP_RECOVERY_CHANCE", MsgModifierPcPosReduced, Just 0))
+        ,("naval_ship_recovery_chance_factor"                                  , ("MODIFIER_NAVAL_SHIP_RECOVERY_CHANCE_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("naval_strike"                                                       , ("MODIFIER_NAVAL_STRIKE", MsgModifierPcPosReduced, Just 0))
+        ,("naval_supply_consumption_factor"                                    , ("MODIFIER_NAVAL_SUPPLY_CONSUMPTION_FACTOR", MsgModifierPcNegReduced, Just 1))
+        ,("naval_torpedo_damage_reduction_factor"                              , ("MODIFIER_NAVAL_TORPEDO_DAMAGE_REDUCTION_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("naval_torpedo_enemy_critical_chance_factor"                         , ("MODIFIER_NAVAL_TORPEDO_ENEMY_CRITICAL_CHANCE_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("navy_anti_air_attack"                                               , ("MODIFIER_NAVY_ANTI_AIR_ATTACK", MsgModifierColourPos, Just 1))
+        ,("navy_casualty_on_hit"                                               , ("MODIFIER_NAVAL_CASUALTY_ON_HIT_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("navy_casualty_on_sink"                                              , ("MODIFIER_NAVAL_CASUALTY_ON_SINK_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("navy_intel_decryption_bonus"                                        , ("MODIFIER_NAVY_INTEL_DECRYPTION_BONUS", MsgModifierColourPos, Just 0))
+        ,("navy_leader_cost_factor"                                            , ("MODIFIER_NAVY_LEADER_COST_FACTOR", MsgModifierPcNegReduced, Just 1))
+        ,("navy_leader_start_coordination_level"                               , ("MODIFIER_NAVY_LEADER_START_COORDINATION_LEVEL", MsgModifierColourPos, Just 0))
+        ,("navy_leader_start_defense_level"                                    , ("MODIFIER_NAVY_LEADER_START_DEFENSE_LEVEL", MsgModifierColourPos, Just 0))
+        ,("navy_leader_start_level"                                            , ("MODIFIER_NAVY_LEADER_START_LEVEL", MsgModifierColourPos, Just 0))
+        ,("navy_leader_start_maneuvering_level"                                , ("MODIFIER_NAVY_LEADER_START_MANEUVERING_LEVEL", MsgModifierColourPos, Just 0))
+        ,("navy_max_range"                                                     , ("MODIFIER_NAVY_MAX_RANGE", MsgModifierColourPos, Just 1))
+        ,("navy_weather_penalty"                                               , ("MODIFIER_NAVY_WEATHER_PENALTY", MsgModifierPcNegReduced, Just 2))
+        ,("night_spotting_chance"                                              , ("MODIFIER_NIGHT_SPOTTING_CHANCE", MsgModifierColourPos, Just 1))
+        ,("nuclear_production"                                                 , ("MODIFIER_NUCLEAR_PRODUCTION", modYesNo, Just 0))
+        ,("occupied_operative_recruitment_chance"                              , ("MODIFIER_OCCUPIED_OPERATIVE_RECRUITMENT_CHANCE", MsgModifierColourPos, Just 0))
+        ,("operation_cost"                                                     , ("operation_cost", MsgModifierColourNeg, Just 0))
+        ,("operation_infiltrate_outcome"                                       , ("operation_infiltrate_outcome", MsgModifierPcPosReduced, Just 0))
+        ,("operation_outcome"                                                  , ("operation_outcome", MsgModifierPcPosReduced, Just 0))
+        ,("operative_death_on_capture_chance"                                  , ("MODIFIER_OPERATIVE_DEATH_ON_CAPTURE_CHANCE", MsgModifierColourPos, Just 0))
+        ,("org_damage_multiplier"                                              , ("MODIFIER_ORG_DAMAGE_MULTIPLIER", MsgModifierPcNegReduced, Just 1))
+        ,("out_of_power_impact_factor"                                         , ("MODIFIER_OUT_OF_POWER_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("own_operative_capture_chance_factor"                                , ("MODIFIER_OWN_OPERATIVE_CAPTURE_CHANCE_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("own_operative_detection_chance"                                     , ("MODIFIER_OWN_OPERATIVE_DETECTION_CHANCE", MsgModifierColourPos, Just 2))
+        ,("own_operative_forced_into_hiding_time_factor"                       , ("MODIFIER_OWN_OPERATIVE_FORCED_INTO_HIDING_TIME_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("own_operative_harmed_time_factor"                                   , ("MODIFIER_OWN_OPERATIVE_HARMED_TIME_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("own_operative_intel_extraction_rate"                                , ("MODIFIER_OWN_OPERATIVE_INTEL_EXTRACTION_RATE", MsgModifierColourPos, Just 0))
+        ,("paratroopers_special_forces_contribution_factor"                    , ("MODIFIER_PARATROOPERS_SPECIAL_FORCES_CONTRIBUTION_FACTOR", MsgModifierPcNegReduced, Just 0))
+        ,("peace_score_ratio_transferred_to_overlord"                          , ("MODIFIER_PEACE_SCORE_RATIO_TRANSFERRED_TO_OVERLORD", MsgModifierPcPosReduced, Just 2))
+        ,("peace_score_ratio_transferred_to_players"                           , ("MODIFIER_PEACE_SCORE_RATIO_TRANSFERRED_TO_PLAYERS", MsgModifierPcPosReduced, Just 2))
+        ,("planning_decay_rate_factor"                                         , ("MODIFIER_PLANNING_DECAY_RATE_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("port_strike"                                                        , ("MODIFIER_PORT_STRIKE_ATTACK_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("production_speed_buildings_powered_factor"                          , ("MODIFIER_PRODUCTION_SPEED_BUILDINGS_POWERED_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("production_speed_facility_factor"                                   , ("MODIFIER_PRODUCTION_SPEED_FACILITY_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("railway_gun_bombardment_factor"                                     , ("MODIFIER_RAILWAY_GUN_BOMBARDMENT_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("rangers_special_forces_contribution_factor"                         , ("MODIFIER_RANGERS_SPECIAL_FORCES_CONTRIBUTION_FACTOR", MsgModifierPcNegReduced, Just 0))
+        ,("recruitable_population"                                             , ("MODIFIER_RECRUITABLE_POPULATION", MsgModifierPcPosReduced, Just 3))
+        ,("resources_to_overlord_factor"                                       , ("MODIFIER_RESOURCES_TO_OVERLORD_FACTOR", MsgModifierPcReducedSign, Just 2))
+        ,("scientist_breakthrough_bonus_factor"                                , ("MODIFIER_SCIENTIST_BREAKTHROUGH_BONUS_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("scientist_research_bonus_factor"                                    , ("MODIFIER_SCIENTIST_RESEARCH_BONUS_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("scientist_xp_gain_factor"                                           , ("MODIFIER_SCIENTIST_XP_GAIN_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("shore_bombardment_collateral_damage_factor"                         , ("MODIFIER_SHORE_BOMBARDMENT_COLLATERAL_DAMAGE_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("special_forces_doctrine_cost_factor"                                , ("MODIFIER_SPECIAL_FORCES_DOCTRINE_COST_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("special_project_facility_supply_consumption_factor"                 , ("MODIFIER_SPECIAL_PROJECT_FACILITY_SUPPLY_CONSUMPTION_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("state_production_speed_facility_factor"                             , ("MODIFIER_STATE_PRODUCTION_SPEED_FACILITY_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("str_damage_multiplier"                                              , ("MODIFIER_STR_DAMAGE_MULTIPLIER", MsgModifierPcNegReduced, Just 1))
+        ,("submarine_attack"                                                   , ("MODIFIER_SUBMARINE_ATTACK", MsgModifierColourPos, Just 1))
+        ,("tech_air_damage_factor"                                             , ("MODIFIER_TECH_AIR_DAMAGE_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("thermonuclear_production"                                           , ("MODIFIER_THERMONUCLEAR_PRODUCTION", modYesNo, Just 0))
+        ,("thermonuclear_production_factor"                                    , ("MODIFIER_THERMONUCLEAR_PRODUCTION_FACTOR", MsgModifierColourPos, Just 0))
+        ,("training_time_army"                                                 , ("MODIFIER_TRAINING_TIME_ARMY", MsgModifierColourPos, Just 1))
+        ,("transport_capacity"                                                 , ("MODIFIER_TRANSPORT_CAPACITY", MsgModifierPcPosReduced, Just 0))
+        ,("truck_attrition"                                                    , ("MODIFIER_TRUCK_ATTRITION", MsgModifierColourNeg, Just 2))
+        ,("underway_replenishment_convoy_cost"                                 , ("MODIFIER_UNDERWAY_REPLENISHMENT_CONVOY_COST", MsgModifierPcNegReduced, Just 2))
+        ,("underway_replenishment_range"                                       , ("MODIFIER_UNDERWAY_REPLENISHMENT_RANGE", MsgModifierPcPosReduced, Just 2))
+        ,("unit_medal_effectiveness"                                           , ("unit_medal_effectiveness", MsgModifierPcPosReduced, Just 0))
+        ,("unit_upkeep_attrition_factor"                                       , ("MODIFIER_UNIT_UPKEEP_ATTRITION_FACTOR", MsgModifierPcNegReduced, Just 0))
+        ,("war_support_reduction_on_damage"                                    , ("MODIFIER_WAR_SUPPORT_REDUCTION_ON_DAMAGE", MsgModifierPcNegReduced, Just 1))
+        ,("winter_attrition"                                                   , ("MODIFIER_WINTER_ATTRITION", MsgModifierPcNegReduced, Just 1))
+
+        -- Modifiers the documentation lists whose localization key the game
+        -- does not spell the way it spells the modifier: a targeted one is named
+        -- "… against a country", an industrial organization shortens to MIO, and
+        -- a few are named for something else entirely. Run down by hand against
+        -- the game.
+        ,("additional_brigade_column_size"                                       , ("MODIFIER_BRIGADE_SIZE", MsgModifierColourPos, Just 0))
+        ,("air_invasion_prep_days"                                               , ("MODIFIER_AIR_INVASION_PREPARATION_DAYS", MsgModifierColourNeg, Just 1))
+        ,("amphibious_invasion_against"                                          , ("MODIFIER_AMPHIBIOUS_INVASION_AGAINST_A_COUNTRY", MsgModifierPcPosReduced, Just 1))
+        ,("can_guarantee_other_ideologies"                                       , ("MODIFIER_GUARANTEE_OTHER_IDEOLOGIES", modYesNo, Just 0))
+        ,("choose_preferred_tactics_cost"                                        , ("MODIFIER_CHOOSE_PREFERRED_TACTIC_COST", MsgModifierColourNeg, Just 0))
+        ,("disable_strategic_redeployment_for_controller"                        , ("MODIFIER_STRATEGIC_REDEPLOYMENT_DISABLED_FOR_CONTROLLER", modNoYes, Just 0))
+        ,("experience_gain_army_unit"                                            , ("MODIFIER_XP_GAIN_ARMY_UNIT", MsgModifierColourPos, Just 1))
+        ,("experience_gain_navy_unit"                                            , ("MODIFIER_XP_GAIN_NAVY_UNIT", MsgModifierColourPos, Just 1))
+        ,("female_random_admiral_chance"                                         , ("MODIFIER_FEMALE_ADMIRAL_CHANCE", MsgModifierSign, Just 0))
+        ,("female_random_country_leader_chance"                                  , ("MODIFIER_FEMALE_COUNTRY_LEADER_CHANCE", MsgModifierSign, Just 0))
+        ,("female_random_operative_chance"                                       , ("MODIFIER_FEMALE_OPERATIVE_CHANCE", MsgModifierSign, Just 0))
+        ,("female_random_scientist_chance"                                       , ("MODIFIER_FEMALE_SCIENTIST_CHANCE", MsgModifierSign, Just 0))
+        ,("fortification_damage"                                                 , ("MODIFIER_FORTIFICATION_COLLATERAL_DAMAGE", MsgModifierPcPosReduced, Just 1))
+        ,("invasion_preparation_against"                                         , ("MODIFIER_NAVAL_INVASION_PREPARATION_AGAINST_A_COUNTRY", MsgModifierColourNeg, Just 1))
+        ,("lend_lease_tension_with_overlord"                                     , ("MODIFIER_LEND_LEASE_TENSION_LIMIT_WITH_OVERLORD", MsgModifierPcNegReduced, Just 1))
+        ,("max_fuel_building"                                                    , ("MODIFIER_MAX_FUEL_ADD", MsgModifierColourPos, Just 2))
+        ,("military_industrial_organization_design_team_assign_cost"             , ("MODIFIER_MIO_DESIGN_TEAM_ASSIGN_COST", MsgModifierPcNegReduced, Just 0))
+        ,("military_industrial_organization_design_team_change_cost"             , ("MODIFIER_MIO_DESIGN_TEAM_CHANGE_COST", MsgModifierPcNegReduced, Just 0))
+        ,("military_industrial_organization_industrial_manufacturer_assign_cost" , ("MODIFIER_MIO_INDUSTRIAL_MANUFACTURER_ASSIGN_COST", MsgModifierPcNegReduced, Just 0))
+        ,("military_industrial_organization_policy_cooldown"                     , ("MODIFIER_MIO_POLICY_COOLDOWN_FACTOR", MsgModifierPcNegReduced, Just 0))
+        ,("military_industrial_organization_policy_cost"                         , ("MODIFIER_MIO_POLICY_COST_FACTOR", MsgModifierPcNegReduced, Just 0))
+        ,("military_industrial_organization_size_up_requirement"                 , ("MODIFIER_MIO_FUNDS_SIZE_UP_REQUIREMENT", MsgModifierPcNegReduced, Just 0))
+        ,("military_industrial_organization_task_capacity"                        , ("MODIFIER_MIO_TASK_CAPACITY", MsgModifierColourPos, Just 0))
+        ,("naval_critical_score_chance_factor_against"                           , ("MODIFIER_NAVAL_CRITICAL_SCORE_CHANCE_FACTOR_AGAINST_A_COUNTRY", MsgModifierPcPosReduced, Just 2))
+        ,("naval_hit_chance_against"                                             , ("MODIFIER_NAVAL_HIT_CHANCE_AGAINST_A_COUNTRY", MsgModifierPcPosReduced, Just 0))
+        ,("naval_invasion_planning_bonus_speed"                                  , ("MODIFIER_NAVAL_INVASION_PLANNING_SPEED", MsgModifierPcPosReduced, Just 0))
+        ,("naval_invasion_prep_days"                                             , ("MODIFIER_NAVAL_INVASION_PREPARATION_DAYS", MsgModifierColourNeg, Just 0))
+        ,("navy_capital_ship_attack_factor_against"                              , ("MODIFIER_NAVY_CAPITAL_SHIP_ATTACK_FACTOR_AGAINST_A_COUNTRY", MsgModifierPcPosReduced, Just 2))
+        ,("navy_capital_ship_defence_factor_against"                             , ("MODIFIER_NAVY_CAPITAL_SHIP_DEFENCE_FACTOR_AGAINST_A_COUNTRY", MsgModifierPcPosReduced, Just 2))
+        ,("navy_screen_attack_factor_against"                                    , ("MODIFIER_NAVY_SCREEN_ATTACK_FACTOR_AGAINST_A_COUNTRY", MsgModifierPcPosReduced, Just 2))
+        ,("navy_screen_defence_factor_against"                                   , ("MODIFIER_NAVY_SCREEN_DEFENCE_FACTOR_AGAINST_A_COUNTRY", MsgModifierPcPosReduced, Just 2))
+        ,("paratrooper_weight_factor"                                            , ("MODIFIER_UNIT_SIZE_FACTOR_FOR_PARADROP", MsgModifierPcNegReduced, Just 1))
+        ,("river_crossing_factor"                                                , ("MODIFIER_RIVER_CROSSING_PENALTY_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("river_crossing_factor_against"                                        , ("MODIFIER_RIVER_CROSSING_PENALTY_FACTOR_AGAINST_A_COUNTRY", MsgModifierPcNegReduced, Just 2))
+        ,("spotting_chance_against"                                              , ("MODIFIER_SPOTTING_CHANCE_AGAINST_A_COUNTRY", MsgModifierPcPosReduced, Just 0))
         ]
 
 -------------------------------------------------

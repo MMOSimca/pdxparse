@@ -39,7 +39,7 @@ import Abstract -- everything
 import QQ (pdx)
 import SettingsTypes ( PPT, Settings
                      , IsGame (..), IsGameData (..), IsGameState (..))
-import HOI4.Messages (ScriptMessage)
+import HOI4.Messages (ScriptMessage, ModifierDisplay)
 --import Doc
 
 --------------------------------------------
@@ -94,7 +94,7 @@ data HOI4Data = HOI4Data {
     ,   hoi4scriptedtriggerScripts :: HashMap FilePath GenericScript
     ,   hoi4scriptedtriggers :: HashMap Text GenericStatement
     ,   hoi4modifierdefinitionScripts :: HashMap FilePath GenericScript
-    ,   hoi4modifierdefinitions :: HashMap Text (Text -> Double -> ScriptMessage)
+    ,   hoi4modifierdefinitions :: HashMap Text ModifierDisplay
     ,   hoi4bopScripts :: HashMap FilePath GenericScript
     ,   hoi4bops :: HashMap Text HOI4BopRange
     ,   hoi4techScripts :: HashMap FilePath GenericScript
@@ -214,7 +214,7 @@ class (IsGame g,
     -- | Get modifier definition scripts
     getModifierDefintionScripts  :: Monad m => PPT g m (HashMap FilePath GenericScript)
     -- | Get the modifier definition  parsed
-    getModifierDefinitions  :: Monad m => PPT g m (HashMap Text (Text -> Double -> ScriptMessage))
+    getModifierDefinitions  :: Monad m => PPT g m (HashMap Text ModifierDisplay)
     -- | Get balance of power script
     getBopScripts  :: Monad m => PPT g m (HashMap FilePath GenericScript)
     -- | Get the balance of power parsed
