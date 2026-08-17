@@ -35,6 +35,7 @@ module HOI4.SpecialHandlers (
     ,   addTimedTrait
     ,   swapLeaderTrait
     ,   customEffectTooltip
+    ,   eventOptionTooltip
     ,   customOverrideTooltip
     ,   tooltip
     ,   tooltipWith
@@ -2161,6 +2162,24 @@ getUnitTraits trait = do
 -- game's own summary of an effect we would otherwise have to spell out.
 customEffectTooltip :: (HOI4Info g, Monad m) => StatementHandler g m
 customEffectTooltip = tooltipWith MsgCustomEffectTooltip
+
+-- | Handler for @event_option_tooltip@, which stands next to the effect that
+-- will offer an event and says what picking one of its options comes to. What
+-- the game draws is that option's effects, not the words written on its button,
+-- so the effects are what we write out.
+--
+-- The option is named by its localization key, which by convention is the id of
+-- the event it belongs to with the option's letter on the end, so the event to
+-- look in is everything up to the last dot.
+eventOptionTooltip :: (HOI4Info g, Monad m) => StatementHandler g m
+eventOptionTooltip stmt@[pdx| %_ = ?key |] = do
+    events <- getEvents
+    case HM.lookup (T.dropEnd 1 (T.dropWhileEnd (/= '.') key)) events of
+        Just evt | Just opt <- find isNamedKey (fromMaybe [] (hoi4evt_options evt)) ->
+            setIsInEffect True (ppMany (fromMaybe [] (hoi4opt_effects opt)))
+        _ -> preStatement stmt
+    where isNamedKey opt = hoi4opt_name opt == Just key
+eventOptionTooltip stmt = preStatement stmt
 
 -- | Handler for a @tooltip@, the sentence written in place of whatever conditions
 -- or effects it stands next to. Written the same two ways as a custom effect

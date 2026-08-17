@@ -556,6 +556,7 @@ handlersYesNo = Tr.fromList
         ,("has_intelligence_agency"     , withBool MsgHasIntelligenceAgency)
         ,("has_offensive_war"           , withBool MsgHasOffensiveWar)
         ,("has_war"                     , withBool MsgHasWar)
+        ,("has_war_with_major"          , withBool MsgHasWarWithMajor)
         ,("is_capital"                  , withBool MsgIsCapital)
         ,("is_coastal"                  , withBool MsgIsCoastal)
         ,("is_country_leader"           , withBool MsgIsCountryLeader)
@@ -681,6 +682,7 @@ handlersSpecialComplex = Tr.fromList
         ,("state_event"                  , triggerEvent MsgStateEvent)
         ,("unit_leader_event"            , triggerEvent MsgUnitLeaderEvent)
         ,("operative_leader_event"       , triggerEvent MsgOperativeEvent)
+
         -- flags
         ,("set_character_flag"           , setFlag MsgCharacterFlag)
         ,("set_country_flag"             , setFlag MsgCountryFlag)
@@ -729,7 +731,11 @@ handlersSpecialComplex = Tr.fromList
         ,("remove_targeted_decision"     , textAtomKey "target" "decision" MsgRemoveTargetedDecision flagMaybeText)
         ,("unlock_decision_category_tooltip" , withLocAtom MsgUnlockDecisionCategoryTooltip)
         ,("unlock_decision_tooltip"       , unlockDecisionTooltip)
+        ,("add_days_remove"              , textValueKey "decision" "days" MsgAddDaysRemove MsgAddDaysRemoveVar)
+        ,("add_days_mission_timeout"     , textValueKey "mission" "days" MsgAddDaysMissionTimeout MsgAddDaysMissionTimeoutVar)
         ,("activate_mission_tooltip"      , withLocAtom MsgActivateMissionTooltip)
+
+        -- tooltips
         ,("show_unit_leaders_tooltip"     , showUnitLeader)
         ,("character_list_tooltip"        , characterListTooltip)
         ,("show_mio_tooltip"              , showMio)
@@ -739,11 +745,9 @@ handlersSpecialComplex = Tr.fromList
         -- Written inside a modifier block, where 'modifierMSG' handles it; this
         -- is for anywhere else it may turn up.
         ,("custom_modifier_tooltip"       , tooltipWith MsgCustomModifierTooltip)
-        -- The text of an event option, for an effect that will offer the player
-        -- that event.
-        ,("event_option_tooltip"          , customEffectTooltip)
-        ,("add_days_remove"              , textValueKey "decision" "days" MsgAddDaysRemove MsgAddDaysRemoveVar)
-        ,("add_days_mission_timeout"     , textValueKey "mission" "days" MsgAddDaysMissionTimeout MsgAddDaysMissionTimeoutVar)
+        -- What one option of an event comes to, for an effect that will offer
+        -- the player that event.
+        ,("event_option_tooltip"          , eventOptionTooltip)
         ]
 
 -- | Handlers for idea groups

@@ -448,6 +448,7 @@ data ScriptMessage
     | MsgIsInFaction {scriptMessageYn :: Bool}
     | MsgIsInHomeArea {scriptMessageYn :: Bool}
     | MsgHasWar {scriptMessageYn :: Bool}
+    | MsgHasWarWithMajor {scriptMessageYn :: Bool}
     | MsgIsCapital {scriptMessageYn :: Bool}
     | MsgIsCoastal {scriptMessageYn :: Bool}
     | MsgIsCountryLeader {scriptMessageYn :: Bool}
@@ -2551,6 +2552,11 @@ instance RenderMessage Script ScriptMessage where
                 [ "Is "
                 , toMessage (ifThenElseT _yn "at war" "at peace")
                 ]
+        MsgHasWarWithMajor {scriptMessageYn = _yn}
+            -> mconcat
+                [ "Is "
+                , toMessage (ifThenElseT _yn "at war with a major country" "at peace with all major countries")
+                ]
         MsgIsCapital {scriptMessageYn = _yn}
             -> mconcat
                 [ "Is"
@@ -2656,20 +2662,20 @@ instance RenderMessage Script ScriptMessage where
                 , "}} towards "
                 , _whom
                 ]
+        -- These name the kind of event a trigger_event message is about.
         MsgCountryEvent
-            -> "country event"
+            -> "Gets event"
         MsgNewsEvent
-            -> "news event"
+            -> "Gets news event"
         MsgStateEvent
-            -> "state event"
+            -> "Gets state event"
         MsgOperativeEvent
-            -> "operative event"
+            -> "Gets operative event"
         MsgUnitLeaderEvent
-            -> "unit leader event"
+            -> "Gets unit leader event"
         MsgTriggerEvent {scriptMessageEvttype = _evttype, scriptMessageEvtid = _evtid, scriptMessageName = _name}
             -> mconcat
-                [ "Trigger "
-                , _evttype
+                [ _evttype
                 , " "
                 , toMessage (iquotes _name)
                 , " <!-- "
@@ -2678,8 +2684,7 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgTriggerEventDays {scriptMessageEvttype = _evttype, scriptMessageEvtid = _evtid, scriptMessageName = _name, scriptMessageDays = _days}
             -> mconcat
-                [ "Trigger "
-                , _evttype
+                [ _evttype
                 , " "
                 , toMessage (iquotes _name)
                 , " <!-- "
@@ -2689,8 +2694,7 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgTriggerEventTime {scriptMessageEvttype = _evttype, scriptMessageEvtid = _evtid, scriptMessageName = _name, scriptMessageTime = _time}
             -> mconcat
-                [ "Trigger "
-                , _evttype
+                [ _evttype
                 , " "
                 , toMessage (iquotes _name)
                 , " <!-- "

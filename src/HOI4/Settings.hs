@@ -603,6 +603,5 @@ writeHOI4Scripts = do
         writeHOI4Technologies
         liftIO $ putStrLn "Writing opinion modifiers."
         writeHOI4OpinionModifiers
---        writeHOI4OpinionModifiers'
         liftIO $ putStrLn "Writing dynamic modifiers."
         writeHOI4DynamicModifiers
