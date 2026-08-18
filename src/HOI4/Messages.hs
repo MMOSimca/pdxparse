@@ -773,7 +773,8 @@ data ScriptMessage
     | MsgUnlockDecisionCategoryTooltip {scriptMessageWhat :: Text}
     | MsgUnlockDecisionTooltip {scriptMessageWhat :: Text, scriptMessageKey :: Text}
     | MsgIsPuppet {scriptMessageYn :: Bool}
-    | MsgAddDynamicModifier {scriptMessageWhat :: Text, scriptMessageWho :: Text, scriptMessageDaysText :: Text}
+    | MsgAddDynamicModifier {scriptMessageWho :: Text, scriptMessageDaysText :: Text}
+    | MsgAddDynamicModifierNamed {scriptMessageWho :: Text, scriptMessageDaysText :: Text, scriptMessageIcon :: Text, scriptMessageKey :: Text, scriptMessageLoc :: Text}
     | MsgModifyDynamicModifier
     | MsgSetDynamicModifier
     | MsgIsFactionLeader {scriptMessageYn :: Bool}
@@ -4926,15 +4927,31 @@ instance RenderMessage Script ScriptMessage where
                 [ "Is "
                 , ifThenElseT _yn " a subject" "fully independent"
                 ]
-        MsgAddDynamicModifier {scriptMessageWhat = _what, scriptMessageWho = _who, scriptMessageDaysText = _days}
+        -- The effect box that follows carries the modifier's name and image, so
+        -- this only has to say that it is handed out, and for how long when the
+        -- script bothers to say. A scope on the effect does not change who gets
+        -- the modifier: it names whose variables the numbers behind it are read
+        -- from, and whom a targeted modifier among them is aimed at.
+        MsgAddDynamicModifier {scriptMessageWho = _who, scriptMessageDaysText = _days}
             -> mconcat
-                [ "Add the dynamic modifier "
-                , _what
-                , " to "
-                , _who
-                , if T.null _days then "" else " for "
-                , _days
-                , " providing the following effects:"
+                [ "Gets the dynamic modifier"
+                , if T.null _days then "" else " for " <> _days
+                , ifThenElseT (T.null _who) "" (", with values from " <> _who)
+                , ":"
+                ]
+        -- Every value the modifier grants is zero as it is handed out, which
+        -- leaves nothing for an effect box to hold, so it is named in passing
+        -- instead.
+        MsgAddDynamicModifierNamed {scriptMessageWho = _who, scriptMessageDaysText = _days, scriptMessageIcon = _icon, scriptMessageKey = _key, scriptMessageLoc = _loc}
+            -> mconcat
+                [ "Gets the dynamic modifier "
+                , ifThenElseT (T.null _icon) "" ("[[File:" <> _icon <> ".png|28px]] ")
+                , "<!-- "
+                , _key
+                , " -->"
+                , toMessage (iquotes _loc)
+                , if T.null _days then "" else " for " <> _days
+                , ifThenElseT (T.null _who) "" (", with values from " <> _who)
                 ]
         MsgModifyDynamicModifier
             -> "Modify the Dynamic Modifier by:"
@@ -5310,27 +5327,65 @@ imsg2doc msgs = PP.vsep <$>
 -- | As 'imsg2doc', but use HTML to format the messages instead of wiki markup.
 -- This behaves better with <pre> blocks but doesn't play well with idea
 -- groups.
+-- | One entry of an html list: a message on its own, or an effect box together
+-- with the lines it lists and the message that closes it.
+data HtmlItem = HtmlMsg ScriptMessage | HtmlBox ScriptMessage IndentedMessages [ScriptMessage]
+
 imsg2doc_html :: forall g m. (IsGameData (GameData g), Monad m) => IndentedMessages -> PPT g m Doc
 imsg2doc_html [] = return mempty
 imsg2doc_html msgs
-    | base > 0  = PP.enclose "<ul>" "</ul>" <$> items base msgs
-    | otherwise = items base msgs
+    | base > 0  = PP.enclose "<ul>" "</ul>" <$> items base grouped
+    | otherwise = items base grouped
     where
-        -- Start from the shallowest message there is, so that 'items' never
-        -- meets one shallower than the level it was asked for and drops it.
-        base = minimum (map fst msgs)
-        -- Format every message at the given level, each with the deeper ones
+        grouped = group 1 msgs
+        -- Start from the shallowest entry there is, so that 'items' never meets
+        -- one shallower than the level it was asked for and drops it. This is
+        -- read off the grouped entries rather than the messages: an effect box
+        -- is written at a level of its own, having to break out of a wiki list
+        -- in the other rendering, and so are the lines inside it, none of which
+        -- says anything about how deep the list it stands in goes.
+        base = case map fst grouped of
+            [] -> 1
+            levels -> minimum levels
+        isBoxEnd MsgEffectBoxEnd {} = True
+        isBoxEnd _ = False
+
+        -- Bundle each effect box with the lines inside it. A box is one template
+        -- call written out over several messages, the modifiers it lists being
+        -- an argument of that call, so a list item opened or closed in the
+        -- middle would break the call apart. The run stands at the level of
+        -- whatever came before it, which is what it belongs beside.
+        group :: Int -> IndentedMessages -> [(Int, HtmlItem)]
+        group _ [] = []
+        group lvl ((_, msg@MsgEffectBox {}) : rest) =
+            let (inner, after) = break (isBoxEnd . snd) rest
+                (end, rest') = splitAt 1 after
+            in (lvl, HtmlBox msg inner (map snd end)) : group lvl rest'
+        -- The end of a box with no beginning to it, which should not happen and
+        -- must not be allowed to pull the list it lands in out of shape.
+        group lvl ((_, msg@MsgEffectBoxEnd {}) : rest) = (lvl, HtmlMsg msg) : group lvl rest
+        group _ ((i, msg) : rest) = (i, HtmlMsg msg) : group i rest
+
+        entry :: HtmlItem -> PPT g m Doc
+        entry (HtmlMsg msg) = message msg
+        entry (HtmlBox msg inner end) = do
+            headd <- message msg
+            innerd <- imsg2doc_html inner
+            endd <- mconcat <$> mapM message end
+            return (headd <> innerd <> endd)
+
+        -- Format every entry at the given level, each with the deeper ones
         -- following it nested underneath, and stop at the first one shallower
         -- than the level, which belongs to whoever asked.
-        items :: Int -> IndentedMessages -> PPT g m Doc
+        items :: Int -> [(Int, HtmlItem)] -> PPT g m Doc
         items _ [] = return mempty
-        items lvl ((i, rm):msgs)
+        items lvl ((i, it):its)
             | i < lvl = return mempty
             | otherwise = do
-                m <- message rm
-                -- Everything deeper than this message, up to the next one at
+                m <- entry it
+                -- Everything deeper than this entry, up to the next one at
                 -- this level or shallower, is what goes under it.
-                let (deeper, rest) = span ((> lvl) . fst) msgs
+                let (deeper, rest) = span ((> lvl) . fst) its
                 nested <- case deeper of
                     [] -> return mempty
                     ((i',_):_) -> PP.enclose "<ul>" "</ul>" <$> items i' deeper

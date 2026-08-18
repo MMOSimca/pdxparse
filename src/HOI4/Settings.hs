@@ -117,6 +117,7 @@ instance IsGame HOI4 where
                 ,   hoi4nationalfocusScripts = HM.empty
                 ,   hoi4nationalfocus = HM.empty
                 ,   hoi4countryHistory = HM.empty
+                ,   hoi4initialvariables = HM.empty
                 ,   hoi4countryHistoryScripts = HM.empty
                 ,   hoi4characterScripts = HM.empty
                 ,   hoi4characters = HM.empty
@@ -258,6 +259,9 @@ instance HOI4Info HOI4 where
     getCountryHistory = do
         HOI4D ed <- get
         return (hoi4countryHistory ed)
+    getInitialVariables = do
+        HOI4D ed <- get
+        return (hoi4initialvariables ed)
     getCharacterScripts = do
         HOI4D ed <- get
         return (hoi4characterScripts ed)
@@ -521,7 +525,7 @@ parseHOI4Scripts = do
     on_actions <- getOnActionsScripts
     nationalFocus <- parseHOI4NationalFocuses =<< getNationalFocusScripts
 
-    countryHistory <- parseHOI4CountryHistory =<< getCountryHistoryScripts
+    (countryHistory, initialVariables) <- parseHOI4CountryHistory =<< getCountryHistoryScripts
     (characters, chartoken) <- parseHOI4Characters =<< getCharacterScripts
     countryleadertraits <- parseHOI4CountryLeaderTraits =<< getCountryLeaderTraitScripts
     unitleadertraits <- parseHOI4UnitLeaderTraits =<< getUnitLeaderTraitScripts
@@ -568,6 +572,7 @@ parseHOI4Scripts = do
             ,   hoi4modifiers = modifiers
 
             ,   hoi4countryHistory = countryHistory
+            ,   hoi4initialvariables = initialVariables
             ,   hoi4characters = characters
             ,   hoi4countryleadertraits = countryleadertraits
             ,   hoi4unitleadertraits = unitleadertraits

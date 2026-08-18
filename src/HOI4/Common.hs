@@ -694,6 +694,7 @@ handlersTextAtom = Tr.fromList
         ]
 
 -- | Handlers for special complex statements
+-- most of these have a non-standard right-hand side which contains multiple fields in brackets
 handlersSpecialComplex :: (HOI4Info g, Monad m) => Trie (StatementHandler g m)
 handlersSpecialComplex = Tr.fromList
         [("add_building_construction"    , addBuildingConstruction)
@@ -734,7 +735,6 @@ handlersSpecialComplex = Tr.fromList
         ,("add_opinion_modifier"         , opinion MsgAddOpinion (\modid what who _years -> MsgAddOpinion modid what who))
         ,("load_focus_tree"              , loadFocusTree)
         ,("modify_building_resources"    , modifyBuildingResources)
-        ,("news_event"                   , triggerEvent MsgNewsEvent)
         ,("naval_strength_comparison"    , navalStrengthComparison)
         ,("release_autonomy"             , setAutonomy MsgReleaseAutonomy)
         ,("remove_opinion_modifier"      , opinion MsgRemoveOpinionMod (\modid what who _years -> MsgRemoveOpinionMod modid what who))
@@ -744,11 +744,14 @@ handlersSpecialComplex = Tr.fromList
         ,("set_party_name"               , setPartyName)
         ,("start_civil_war"              , startCivilWar)
         ,("start_border_war"             , startBorderWar)
+
+        -- Events
+        ,("news_event"                   , triggerEvent MsgNewsEvent)
         ,("state_event"                  , triggerEvent MsgStateEvent)
         ,("unit_leader_event"            , triggerEvent MsgUnitLeaderEvent)
         ,("operative_leader_event"       , triggerEvent MsgOperativeEvent)
 
-        -- flags
+        -- Flags
         ,("set_character_flag"           , setFlag MsgCharacterFlag)
         ,("set_country_flag"             , setFlag MsgCountryFlag)
         ,("set_global_flag"              , setFlag MsgGlobalFlag)
@@ -786,7 +789,7 @@ handlersSpecialComplex = Tr.fromList
         ,("clear_variable"              , withNonlocAtom MsgClearVariable)
         ,("has_variable"                , withNonlocAtom MsgHasVariable)
 
-        --decisions
+        -- Decisions
         ,("activate_decision"            , locandid MsgActivateDecision)
         ,("remove_decision"              , locandid MsgRemoveDecision)
         ,("activate_mission"             , locandid MsgActivateMission)
@@ -800,7 +803,7 @@ handlersSpecialComplex = Tr.fromList
         ,("add_days_mission_timeout"     , textValueKey "mission" "days" MsgAddDaysMissionTimeout MsgAddDaysMissionTimeoutVar)
         ,("activate_mission_tooltip"      , withLocAtom MsgActivateMissionTooltip)
 
-        -- tooltips
+        -- Tooltips
         ,("show_unit_leaders_tooltip"     , showUnitLeader)
         ,("character_list_tooltip"        , characterListTooltip)
         ,("show_mio_tooltip"              , showMio)
@@ -850,7 +853,7 @@ handlersMisc = Tr.fromList
         ,("delete_unit_template_and_units" , deleteUnits MsgDeleteUnitTemplateAndunits)
         ,("delete_units"                , deleteUnits MsgDeleteUnits)
         ,("division_template"           , divisionTemplate)
-        ,("army_manpower_in_state"          , divisionsInState MsgArmyManpowerInState)
+        ,("army_manpower_in_state"      , divisionsInState MsgArmyManpowerInState)
         ,("divisions_in_state"          , divisionsInState MsgDivisionsInState)
         ,("divisions_in_border_state"   , divisionsInState MsgDivisionsInBorderState)
         ,("add_country_leader_trait"    , addRemoveLeaderTrait MsgAddCountryLeaderTrait)
@@ -866,9 +869,10 @@ handlersMisc = Tr.fromList
         ,("has_start_date"              , handleDate "Game initially started after" "Game initially started before")
         ,("random"                      , random)
         ,("random_list"                 , randomList)
+
         -- Special
-        ,("add_trait"                   , handleTrait True)
-        ,("remove_trait"                , handleTrait False)
+        ,("add_trait"           , handleTrait True)
+        ,("remove_trait"        , handleTrait False)
         ,("diplomatic_relation" , diplomaticRelation)
         ,("give_resource_rights" , giveResourceRights)
         ,("has_character"       , withCharacter MsgHasCharacter)

@@ -49,9 +49,13 @@ import HOI4.Messages (ScriptMessage (..), ModifierDisplay, modYesNo, modNoYes)
 newHOI4CountryHistory :: Text -> HOI4CountryHistory
 newHOI4CountryHistory chtag = HOI4CountryHistory chtag undefined
 
+-- | What the country history says about each country: which party rules it, and
+-- alongside that the value every variable the history writes to starts the game
+-- holding. The two are read off the same files in the one pass over them.
 parseHOI4CountryHistory :: (IsGameState (GameState g), IsGameData (GameData g), Monad m) =>
-    HashMap String GenericScript -> PPT g m (HashMap Text HOI4CountryHistory)
-parseHOI4CountryHistory scripts = HM.unions . HM.elems <$> do
+    HashMap String GenericScript
+        -> PPT g m (HashMap Text HOI4CountryHistory, HashMap Text Double)
+parseHOI4CountryHistory scripts = (, initialVariables) . HM.unions . HM.elems <$> do
     tryParse <- hoistExceptions $
         HM.traverseWithKey
             (\sourceFile scr -> setCurrentFile sourceFile $ mapM processPolitics $ concatMap mapHisto scr)
@@ -75,6 +79,47 @@ parseHOI4CountryHistory scripts = HM.unions . HM.elems <$> do
         mapHisto scr = case scr of
             stmt@[pdx| set_politics = @pol |] -> [stmt]
             _ -> []
+
+        -- Script keeps the numbers behind a dynamic modifier in variables, so
+        -- that it can raise and lower what the modifier grants as the game goes
+        -- on, and it gives them their opening values here. A variable no history
+        -- writes to is not in this table at all, which is the same as holding
+        -- zero.
+        --
+        -- Only the plain writes are read: a variable set from another variable,
+        -- or worked out with arithmetic, has no one number to name it by. A name
+        -- two countries start with different values under is dropped as well,
+        -- since nothing here says which of them is meant; these are written with
+        -- the country's tag on the front by convention, so there are only a
+        -- handful.
+        initialVariables :: HashMap Text Double
+        initialVariables = HM.mapMaybe id $ HM.fromListWith agree
+            [ (var, Just val)
+            | stmt <- concat (HM.elems scripts), (var, val) <- setVariables stmt ]
+        agree new old = if new == old then old else Nothing
+
+        -- History puts the opening state of a country inside date blocks and
+        -- inside conditionals on which packs are installed, so every level has
+        -- to be followed down into.
+        setVariables :: GenericStatement -> [(Text, Double)]
+        setVariables [pdx| set_variable = @scr |] = maybe [] pure (assignment scr)
+        setVariables [pdx| %_ = @scr |] = concatMap setVariables scr
+        setVariables _ = []
+
+        -- The two spellings of a write: the variable named on the left with the
+        -- number on the right, or both spelled out as @var@ and @value@.
+        assignment :: GenericScript -> Maybe (Text, Double)
+        assignment scr = case (mapMaybe varName scr, mapMaybe varValue scr) of
+            (var:_, val:_) -> Just (var, val)
+            _ -> case mapMaybe plainAssignment scr of
+                [pair] -> Just pair
+                _ -> Nothing
+        varName [pdx| var = ?v |] = Just v
+        varName _ = Nothing
+        varValue [pdx| value = !v |] = Just v
+        varValue _ = Nothing
+        plainAssignment [pdx| $v = !n |] = Just (v, n)
+        plainAssignment _ = Nothing
 
 processPolitics :: (IsGameState (GameState g), IsGameData (GameData g), MonadError Text m) =>
     GenericStatement -> PPT g m (Either Text (Maybe HOI4CountryHistory))
@@ -118,6 +163,49 @@ processPoliticsAddSection cohi stmt
             = trace ("unknown set_politics in history: " ++ T.unpack other) $ return cohi
         processPoliticsAddSection' cohi _
             = trace "unrecognised form for set_politics in history" $ return cohi
+
+-- | The value each variable holds when the game starts. Script keeps the numbers
+-- behind a dynamic modifier in variables, so that it can raise and lower what the
+-- modifier grants as the game goes on, and it gives them their opening values in
+-- the country history. A variable no history writes to is not in here at all,
+-- which is the same as holding zero.
+--
+-- Only country history is read, and only the plain writes in it: a variable set
+-- from another variable, or worked out with arithmetic, has no one number to name
+-- it by. A name two countries start with different values under is dropped as
+-- well, since nothing here says which of them is meant; these are written with
+-- the country's tag on the front by convention, so there are only a handful.
+parseHOI4InitialVariables :: (IsGameState (GameState g), IsGameData (GameData g), Monad m) =>
+    HashMap String GenericScript -> PPT g m (HashMap Text Double)
+parseHOI4InitialVariables scripts = return $ HM.mapMaybe id $
+    HM.fromListWith agree
+        [ (var, Just val)
+        | stmt <- concat (HM.elems scripts), (var, val) <- setVariables stmt ]
+    where
+        agree new old = if new == old then old else Nothing
+
+        -- History puts the opening state of a country inside date blocks and
+        -- inside conditionals on which packs are installed, so every level has
+        -- to be followed down into.
+        setVariables :: GenericStatement -> [(Text, Double)]
+        setVariables [pdx| set_variable = @scr |] = maybe [] pure (assignment scr)
+        setVariables [pdx| %_ = @scr |] = concatMap setVariables scr
+        setVariables _ = []
+
+        -- The two spellings of a write: the variable named on the left with the
+        -- number on the right, or both spelled out as @var@ and @value@.
+        assignment :: GenericScript -> Maybe (Text, Double)
+        assignment scr = case (mapMaybe varName scr, mapMaybe varValue scr) of
+            (var:_, val:_) -> Just (var, val)
+            _ -> case mapMaybe plainAssignment scr of
+                [pair] -> Just pair
+                _ -> Nothing
+        varName [pdx| var = ?v |] = Just v
+        varName _ = Nothing
+        varValue [pdx| value = !v |] = Just v
+        varValue _ = Nothing
+        plainAssignment [pdx| $v = !n |] = Just (v, n)
+        plainAssignment _ = Nothing
 
 {-
 parseHOI4Interface :: (IsGameState (GameState g), IsGameData (GameData g), Monad m) =>

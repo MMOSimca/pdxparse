@@ -59,6 +59,7 @@ import Data.Char (isDigit)
 import Data.List (foldl', sortOn, elemIndex, find)
 import Data.Maybe
 
+import Control.Applicative ((<|>))
 import Control.Monad.State (gets)
 import Data.Foldable (fold)
 
@@ -1496,39 +1497,104 @@ modifiersTable = HM.fromList
 -------------------------------------------------
 data AddDynamicModifier = AddDynamicModifier
     { adm_modifier :: Text
-    , adm_scope :: Either Text (Text, Text)
+    , adm_scope :: Maybe (Either Text (Text, Text))
     , adm_days :: Maybe Double
     }
 newADM :: AddDynamicModifier
-newADM = AddDynamicModifier undefined (Left "THIS") Nothing
+newADM = AddDynamicModifier undefined Nothing Nothing
 addDynamicModifier :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
 addDynamicModifier stmt@[pdx| %_ = @scr |] =
     pp_adm (foldl' addLine newADM scr)
     where
         addLine adm [pdx| modifier = $mod |] = adm { adm_modifier = mod }
-        addLine adm [pdx| scope = $tag |] = adm { adm_scope = Left tag }
-        addLine adm [pdx| scope = $vartag:$var |] = adm { adm_scope = Right (vartag, var) }
+        addLine adm [pdx| scope = $tag |] = adm { adm_scope = Just (Left tag) }
+        addLine adm [pdx| scope = $vartag:$var |] = adm { adm_scope = Just (Right (vartag, var)) }
         addLine adm [pdx| days = !amt |] = adm { adm_days = Just amt }
         addLine adm stmt = trace ("Unknown in add_dynamic_modifier: " ++ show stmt) adm
         pp_adm adm = do
             let days = maybe "" formatDays (adm_days adm)
+            -- Nothing but a bare @add_dynamic_modifier@ says the country running
+            -- the effect gets it, and that goes without saying.
+            who <- case adm_scope adm of
+                Nothing -> return ""
+                Just admscope -> do
+                    thescope <- getCurrentScope
+                    dynflag <- case thescope of
+                        Just HOI4Country -> eflag (Just HOI4Country) admscope
+                        Just HOI4ScopeState -> eGetState admscope
+                        Just HOI4From -> return $ Just "FROM"
+                        _ -> return $ Just "<!-- check script -->"
+                    return $ fromMaybe "<!-- check script -->" dynflag
             mmod <- HM.lookup (adm_modifier adm) <$> getDynamicModifiers
-            thescope <- getCurrentScope
-            dynflag <- case thescope of
-                Just HOI4Country -> eflag (Just HOI4Country) $ adm_scope adm
-                Just HOI4ScopeState -> eGetState $ adm_scope adm
-                Just HOI4From -> return $ Just "FROM"
-                _ -> return $ Just "<!-- check script -->"
-            let dynflagd = fromMaybe "<!-- check script -->" dynflag
             case mmod of
-                Just mod -> withCurrentIndent $ \i -> do
-                    effect <- fold <$> indentUp (traverse (modifierMSG False "") (dmodEffects mod))
-                    trigger <- indentUp $ ppMany (dmodEnable mod)
-                    let name = dmodLocName mod
-                        locName = maybe ("<tt>" <> adm_modifier adm <> "</tt>") (Doc.doc2text . iquotes) name
-                    return $ ((i, MsgAddDynamicModifier locName dynflagd days) : effect) ++ (if null trigger then [] else (i+1, MsgLimit) : trigger)
+                Just dmod -> do
+                    effects <- resolveDynModEffects (dmodEffects dmod)
+                    -- The @enable@ trigger says when the modifier counts for
+                    -- anything, but nearly every one is written @always = yes@,
+                    -- which is a placeholder standing in for no condition at all.
+                    trigger <- if all isAlways (dmodEnable dmod)
+                        then return []
+                        else indentUp $ ppMany (dmodEnable dmod)
+                    limit <- withCurrentIndent $ \i ->
+                        return $ if null trigger then [] else (i+1, MsgLimit) : trigger
+                    body <- if null effects
+                        -- Every value it grants is zero at this point, so an
+                        -- effect box would come out empty. Name it and leave it.
+                        then do
+                            icon <- dynModIcon dmod
+                            let locName = fromMaybe (dmodName dmod) (dmodLocName dmod)
+                            msgToPP $ MsgAddDynamicModifierNamed who days icon (dmodName dmod) locName
+                        else do
+                            header <- msgToPP $ MsgAddDynamicModifier who days
+                            box <- ppDynModBox dmod effects
+                            return (header ++ box)
+                    return (body ++ limit)
                 Nothing -> trace ("add_dynamic_modifier: Modifier " ++ T.unpack (adm_modifier adm) ++ " not found") $ preStatement stmt
+        isAlways [pdx| always = yes |] = True
+        isAlways _ = False
 addDynamicModifier stmt = trace ("Not handled in addDynamicModifier: " ++ show stmt) $ preStatement stmt
+
+-- | Fill in the numbers a dynamic modifier's entries name instead of writing
+-- out. Script keeps such a modifier's values in variables so that it can raise
+-- and lower what the modifier grants as the game goes on, and what a reader
+-- wants where it is handed out is what it grants then, which is what those
+-- variables start the game holding.
+--
+-- An entry whose value comes to zero is dropped, as the game drops it from the
+-- tooltip: a modifier of zero grants nothing. A variable no script ever writes
+-- to holds zero as well, so a name that resolves to nothing goes the same way.
+resolveDynModEffects :: (HOI4Info g, Monad m) => GenericScript -> PPT g m GenericScript
+resolveDynModEffects effects = do
+    vars <- getInitialVariables
+    constants <- getScriptConstants
+    let value var = HM.lookup var vars <|> HM.lookup var constants
+    return $ mapMaybe (resolve value) effects
+    where
+        resolve value stmt@[pdx| $key = $var |]
+            -- A handful of modifiers are switches rather than amounts, and are
+            -- written out as they stand.
+            | var `notElem` ["yes", "no"] = case value var of
+                Just val | val /= 0 -> Just (Statement (GenericLhs key []) OpEq (FloatRhs val))
+                _ -> Nothing
+        resolve _ stmt = Just stmt
+
+-- | The image a dynamic modifier is shown by, or the empty text if it has none.
+dynModIcon :: (HOI4Info g, Monad m) => HOI4DynamicModifier -> PPT g m Text
+dynModIcon dmod = maybe (return "") (getGameInterface "idea_unknown") (dmodIcon dmod)
+
+-- | Present a dynamic modifier as an effect box: its name and image as the
+-- heading, and what it grants listed under that.
+ppDynModBox :: (HOI4Info g, Monad m) =>
+    HOI4DynamicModifier -> GenericScript -> PPT g m IndentedMessages
+ppDynModBox dmod effects = do
+    curind <- getCurrentIndent
+    let curindent = fromMaybe 1 curind
+        name = fromMaybe (dmodName dmod) (dmodLocName dmod)
+    modicon <- dynModIcon dmod
+    modmsg <- withCurrentIndentCustom 1 $ \_ ->
+        fold <$> traverse (modifierMSG False "") effects
+    return $ ((0, MsgEffectBox name (dmodName dmod) modicon "") : modmsg)
+        ++ [(0, MsgEffectBoxEnd curindent)]
 
 removeDynamicModifier :: (HOI4Info g, Monad m) => StatementHandler g m
 removeDynamicModifier stmt@[pdx| %_ = $txt |] = withLocAtom MsgRemoveDynamicMod stmt
@@ -1666,16 +1732,9 @@ dynModVarOp _ = Nothing
 ppDynModChunk :: forall g m. (HOI4Info g, Monad m) =>
     HOI4DynamicModifier -> Bool -> [(Text, Double)] -> PPT g m IndentedMessages
 ppDynModChunk dmod isSet mods = do
-    curind <- getCurrentIndent
-    let curindent = fromMaybe 1 curind
-        name = fromMaybe (dmodName dmod) (dmodLocName dmod)
     headmsg <- msgToPP $ if isSet then MsgSetDynamicModifier else MsgModifyDynamicModifier
-    modicon <- maybe (return "") (getGameInterface "idea_unknown") (dmodIcon dmod)
-    modmsg <- withCurrentIndentCustom 1 $ \_ ->
-        fold <$> traverse (modifierMSG False "" . modStmt) mods
-    return $ headmsg
-        ++ ((0, MsgEffectBox name (dmodName dmod) modicon "") : modmsg)
-        ++ [(0, MsgEffectBoxEnd curindent)]
+    box <- ppDynModBox dmod (map modStmt mods)
+    return (headmsg ++ box)
     where
         modStmt (key, val) = Statement (GenericLhs key []) OpEq (FloatRhs val)
 

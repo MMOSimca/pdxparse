@@ -62,6 +62,7 @@ data HOI4Data = HOI4Data {
     ,   hoi4nationalfocusScripts :: HashMap FilePath GenericScript
     ,   hoi4nationalfocus :: HashMap Text HOI4NationalFocus
     ,   hoi4countryHistory :: HashMap Text HOI4CountryHistory
+    ,   hoi4initialvariables :: HashMap Text Double -- ^ variable -> value it starts the game with
     ,   hoi4eventScripts :: HashMap FilePath GenericScript
     ,   hoi4decisioncatScripts :: HashMap FilePath GenericScript
     ,   hoi4decisionScripts :: HashMap FilePath GenericScript
@@ -184,6 +185,9 @@ class (IsGame g,
     getCountryHistoryScripts :: Monad m => PPT g m (HashMap FilePath GenericScript)
     -- | Get the country history parsed
     getCountryHistory :: Monad m => PPT g m (HashMap Text HOI4CountryHistory)
+    -- | Get the value each variable holds when the game starts, keyed on the
+    -- variable's name
+    getInitialVariables :: Monad m => PPT g m (HashMap Text Double)
     -- | Get character script
     getCharacterScripts :: Monad m => PPT g m (HashMap FilePath GenericScript)
     -- | Get the characters parsed
