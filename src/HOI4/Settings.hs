@@ -164,6 +164,7 @@ instance IsGame HOI4 where
                 ,   hoi4currentIndent = Nothing
                 ,   hoi4scopeStack = []
                 ,   hoi4IsInEffect = False
+                ,   hoi4expandedBlocks = []
                 }))
     type Scope HOI4 = HOI4Scope
     scope s = local $ \(HOI4S st) -> HOI4S $
@@ -175,6 +176,9 @@ instance IsGame HOI4 where
     getScopeStack = asks $ hoi4scopeStack . hoi4s
     getIsInEffect = asks $ hoi4IsInEffect . hoi4s
     setIsInEffect b = local $ \(HOI4S st) -> HOI4S $ st { hoi4IsInEffect = b }
+    getExpandedBlocks = asks $ hoi4expandedBlocks . hoi4s
+    withExpandedBlock name = local $ \(HOI4S st) -> HOI4S $
+        st { hoi4expandedBlocks = name : hoi4expandedBlocks st }
 
 instance HOI4Info HOI4 where
     getEventTitle eid = do

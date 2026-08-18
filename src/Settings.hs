@@ -51,6 +51,8 @@ data SettingsInput = SettingsInput {
     ,   gameVersionI :: String
     ,   modNameI     :: Maybe String
     ,   modDirI      :: Maybe FilePath
+    ,   inlineScriptLimitI :: Maybe Int
+    ,   collapseLargeScriptsI :: Maybe Bool
     } deriving (Show)
 -- Settings is defined in SettingsTypes
 
@@ -67,6 +69,8 @@ instance FromJSON SettingsInput where
                             <*> fmap T.unpack (o' .: "version")
                             <*> fmap (fmap T.unpack) (o' .:? "mod_name")
                             <*> fmap (fmap T.unpack) (o' .:? "mod_path")
+                            <*> (o' .:? "inline_script_limit")
+                            <*> (o' .:? "collapse_large_scripts")
             _ -> fail "bad settings file"
     parseJSON _ = fail "bad settings file"
 
@@ -206,7 +210,9 @@ readSettings = do
                             , langs = ["en"]
                             , settingsFile = settingsFilePath
                             , clargs = opts
-                            , filesToProcess = nonopts }
+                            , filesToProcess = nonopts
+                            , inlineScriptLimit = fromMaybe 10 (inlineScriptLimitI settingsIn)
+                            , collapseLargeScripts = fromMaybe False (collapseLargeScriptsI settingsIn) }
 
             (game_l10n, ordered) <- readL10n provisionalSettings
             interface <- readInterface provisionalSettings

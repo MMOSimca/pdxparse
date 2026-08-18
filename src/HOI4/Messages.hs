@@ -5312,38 +5312,27 @@ imsg2doc msgs = PP.vsep <$>
 -- groups.
 imsg2doc_html :: forall g m. (IsGameData (GameData g), Monad m) => IndentedMessages -> PPT g m Doc
 imsg2doc_html [] = return mempty
-imsg2doc_html msgs@((i,_):_)
-    | i > 0     = PP.enclose "<ul>" "</ul>" . fst <$> imsg2doc' msgs
-    | otherwise = fst <$> imsg2doc' msgs
+imsg2doc_html msgs
+    | base > 0  = PP.enclose "<ul>" "</ul>" <$> items base msgs
+    | otherwise = items base msgs
     where
-        -- Format all (remaining) messages at the current indent level.
-        imsg2doc' :: IndentedMessages -> PPT g m (Doc, IndentedMessages)
-        imsg2doc' [] = return (mempty, [])
-        imsg2doc' [(_, rm)] = do -- Last message.
-            m <- message rm
-            return (PP.enclose "<li>" "</li>" m, [])
-        imsg2doc' ((i, rm):msgs@((i',_):_))
-            | i < i' = do
-                -- New indent.
-                m <- message rm
-                -- Format the indented stuff.
-                (indented, moremsgs) <- imsg2doc' msgs
-                -- Format stuff after the indent.
-                (postdoc, restmsgs) <- imsg2doc' moremsgs
-                -- Put it all together.
-                return (PP.vsep
-                            [PP.enclose "<li>" "</li>"
-                                (PP.vsep
-                                    [m
-                                    ,PP.enclose "<ul>" "</ul>" indented])
-                            ,postdoc]
-                       , restmsgs)
-            | i > i' = do
-                -- Last message at this level.
-                m <- PP.enclose "<li>" "</li>" <$> message rm
-                return (m, msgs)
+        -- Start from the shallowest message there is, so that 'items' never
+        -- meets one shallower than the level it was asked for and drops it.
+        base = minimum (map fst msgs)
+        -- Format every message at the given level, each with the deeper ones
+        -- following it nested underneath, and stop at the first one shallower
+        -- than the level, which belongs to whoever asked.
+        items :: Int -> IndentedMessages -> PPT g m Doc
+        items _ [] = return mempty
+        items lvl ((i, rm):msgs)
+            | i < lvl = return mempty
             | otherwise = do
-                -- Carry on with this indent level.
-                m <- PP.enclose "<li>" "</li>" <$> message rm
-                (postdoc, restmsgs) <- imsg2doc' msgs
-                return (m <> PP.line <> postdoc, restmsgs)
+                m <- message rm
+                -- Everything deeper than this message, up to the next one at
+                -- this level or shallower, is what goes under it.
+                let (deeper, rest) = span ((> lvl) . fst) msgs
+                nested <- case deeper of
+                    [] -> return mempty
+                    ((i',_):_) -> PP.enclose "<ul>" "</ul>" <$> items i' deeper
+                post <- items lvl rest
+                return (PP.enclose "<li>" "</li>" (m <> nested) <> post)

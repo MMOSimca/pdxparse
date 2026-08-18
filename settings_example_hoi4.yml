@@ -47,3 +47,17 @@ settings:
     # The name of the mod you're trying to parse eg. "Kaiserreich"
     # currently only supported for HOI4
     #mod_name:
+
+    # How large the body of a scripted effect or trigger may be, counted in
+    # statements, for it to be written out where it is invoked instead of being
+    # left as the name script calls it by. Nested statements count too, so a
+    # body wrapped in a single if is as large as what is inside it.
+    # Optional, defaults to 10. Currently only used for HOI4.
+    #inline_script_limit: 10
+
+    # Whether a scripted effect or trigger too large to be written out in place
+    # is put into a block the reader can unfold, its name being the line they
+    # see until they do. Set this to false to leave such a call as its name
+    # alone, with no unfolding block anywhere on the page.
+    # Optional, defaults to false. Currently only used for HOI4.
+    #collapse_large_scripts: false

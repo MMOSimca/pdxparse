@@ -184,6 +184,15 @@ class IsGame g where
     -- | Get wheter in effect or trigger scope
     getIsInEffect :: Monad m => PPT g m Bool
     getIsInEffect = undefined
+    -- | Note that a named block of script is being written out where it is
+    -- invoked, for the length of the given action. A block can invoke another
+    -- one, and so in the end itself, which would go on forever; whoever writes
+    -- one out consults 'getExpandedBlocks' first to cut that short.
+    withExpandedBlock :: Monad m => Text -> PPT g m a -> PPT g m a
+    withExpandedBlock _ = id
+    -- | The named blocks currently being written out, innermost first.
+    getExpandedBlocks :: Monad m => PPT g m [Text]
+    getExpandedBlocks = return []
 -- Example game. Define your game and its 'IsGame' instance in your game's
 -- 'Settings' module. Do NOT define it in Types. Instead, have game-specific
 -- code be polymorphic over Game.
@@ -283,6 +292,14 @@ data Settings = Settings {
     ,   settingsFile :: FilePath -- ^ Path to @settings.yaml@.
     ,   clargs      :: [CLArgs] -- ^ Command line arguments.
     ,   filesToProcess :: [FilePath] -- ^ List of files being processed.
+    ,   inlineScriptLimit :: Int -- ^ How large the body of a named block of
+                                 --   script -- a scripted effect or trigger --
+                                 --   may be, counted in statements, for it to be
+                                 --   written out where it is invoked.
+    ,   collapseLargeScripts :: Bool -- ^ Whether a body over that size is put
+                                 --   into a block the reader can unfold. When
+                                 --   it is not, such a block is left as the
+                                 --   name it is invoked by.
     }
 
 -- | Set the game localization table. Used by "Settings".

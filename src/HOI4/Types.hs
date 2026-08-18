@@ -122,6 +122,10 @@ data HOI4State = HOI4State {
     ,   hoi4currentFile :: Maybe FilePath
     ,   hoi4currentIndent :: Maybe Int
     ,   hoi4IsInEffect :: Bool
+    -- | Scripted effects and triggers whose bodies are being written out around
+    -- the statement in hand, innermost first, so that one that comes round to
+    -- invoking itself can be cut off.
+    ,   hoi4expandedBlocks :: [Text]
     } deriving (Show)
 
 -- | Interface for HOI4 feature handlers. Most of the methods just get data

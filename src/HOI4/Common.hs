@@ -16,6 +16,8 @@ module HOI4.Common (
 
 
 
+import Control.Monad.State (gets)
+
 import Data.Char (isDigit)
 import Data.List (foldl')
 import Data.Maybe (fromMaybe)
@@ -35,6 +37,7 @@ import qualified Data.Trie as Tr
 import Text.PrettyPrint.Leijen.Text (Doc)
 
 import Abstract -- everything
+import qualified Doc -- everything
 import HOI4.Messages -- everything
 import QQ (pdx)
 import SettingsTypes -- everything
@@ -71,6 +74,68 @@ ppChunk :: (HOI4Info g, Monad m) => ScriptChunk -> PPT g m IndentedMessages
 ppChunk (PlainStmt stmt) = ppOne stmt
 ppChunk (DynModChunk dmod isSet mods) = ppDynModChunk dmod isSet mods
 ppChunk (IdeaSlotChunk tt ideas) = ppIdeaSlotChunk tt ideas
+
+-- | The number of statements in a script, counting the ones nested inside
+-- compound statements as well.
+scriptSize :: GenericScript -> Int
+scriptSize = sum . map stmtSize
+    where
+        stmtSize [pdx| %_ = @scr |] = 1 + scriptSize scr
+        stmtSize _ = 1
+
+-- | Write out the body of a scripted effect or trigger in place of the name it
+-- is invoked by. Script names a block once and calls it wherever it is wanted,
+-- which keeps the script tidy, but it leaves a reader of the wiki holding a
+-- name and nowhere to find out what it stands for.
+ppScriptedBlock :: (HOI4Info g, Monad m) =>
+    Text -> Text -> GenericStatement -> GenericStatement -> PPT g m IndentedMessages
+ppScriptedBlock what name [pdx| %_ = @scr |] stmt | not (null scr) = do
+    expanding <- getExpandedBlocks
+    if name `elem` expanding then
+        -- The block has come round to invoking itself, whether directly or by
+        -- way of another one. Its body is already written out further up the
+        -- page, so name it and leave it there.
+        plainStatement (what <> "(written out above) ") stmt
+    else do
+        -- How large a body may be for it to be written out where it is invoked,
+        -- and whether a larger one is folded away behind its name rather than
+        -- left as the name alone. The script around the call is what the page is
+        -- about, and a hundred lines of a helper that fifty other pages call as
+        -- well would bury it, so the reader is offered the choice of unfolding
+        -- it instead.
+        limit <- gets (inlineScriptLimit . getSettings)
+        collapse <- gets (collapseLargeScripts . getSettings)
+        if scriptSize scr <= limit then
+            -- Small enough to read as part of the script around it. 'ppMany'
+            -- indents what it writes, and there is nothing here for it to be
+            -- indented under, so take that step back off.
+            withExpandedBlock name (indentDown (ppMany scr))
+        else if not collapse then
+            -- Too long, and unfolding blocks are not wanted on this wiki.
+            plainStatement what stmt
+        else do
+            -- Too long to read in passing. The name stays as the line the reader
+            -- sees, with the body folded away behind it. It has to be written as
+            -- html on the one line: a wiki list broken across the lines of a
+            -- block element stops being a list.
+            body <- withExpandedBlock name (ppMany scr)
+            case body of
+                [] -> plainStatement what stmt
+                _ -> do
+                    -- The body starts at whatever level the call happened to be
+                    -- written at, and 'imsg2doc_html' writes a list only for
+                    -- messages above level zero, so stand it on a level of its
+                    -- own.
+                    let base = minimum (map fst body)
+                    bodyDoc <- imsg2doc_html [(i - base + 1, msg) | (i, msg) <- body]
+                    plainMsg $ mconcat
+                        [ what, "<tt>", Doc.doc2text (genericStatement2doc stmt), "</tt> "
+                        , "<div class=\"mw-collapsible mw-collapsed\""
+                        , " data-expandtext=\"show\" data-collapsetext=\"hide\">"
+                        , Doc.oneLine (Doc.doc2text bodyDoc)
+                        , "</div>"
+                        ]
+ppScriptedBlock what _ _ stmt = plainStatement what stmt
 
 -- | Table of handlers for statements. Dispatch on strings is /much/ quicker
 -- using a lookup table than a huge @case@ expression, which uses @('==')@ on
@@ -886,9 +951,9 @@ ppOne' stmt lhs rhs = case lhs of
                         scripteffect <- getScriptedEffects
                         scripttrigger <- getScriptedTriggers
                         case HM.lookup label scripteffect of
-                            Just _effect -> plainStatement "Scripted Effect: " stmt
+                            Just effect -> ppScriptedBlock "Scripted Effect: " label effect stmt
                             _ -> case HM.lookup label scripttrigger of
-                                Just _trigger -> plainStatement "Scripted Trigger: " stmt
+                                Just trigger -> ppScriptedBlock "Scripted Trigger: " label trigger stmt
                                 _ -> preStatement stmt
                 _ -> preStatement stmt
     AtLhs _ -> return [] -- don't know how to handle these
