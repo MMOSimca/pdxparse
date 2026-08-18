@@ -75,6 +75,28 @@ ppChunk (PlainStmt stmt) = ppOne stmt
 ppChunk (DynModChunk dmod isSet mods) = ppDynModChunk dmod isSet mods
 ppChunk (IdeaSlotChunk tt ideas) = ppIdeaSlotChunk tt ideas
 
+-- | Write out what a block in a character's scope comes to. Script says who it
+-- is about once and then everything it does to them, and where that comes to a
+-- single line the two read as one sentence about the person rather than as a
+-- heading with a lone item under it.
+--
+-- Anything longer keeps the heading, and so does a line that is not a statement
+-- about the person: a @<pre>@ has to keep a line of its own to be seen, and a
+-- heading of its own would be left hanging.
+foldCharacter :: (HOI4Info g, Monad m) => Text -> IndentedMessages -> PPT g m IndentedMessages
+foldCharacter name msgs@[(_, msg)] = do
+    text <- T.strip <$> messageText msg
+    -- The line stands where the heading would have, not where the message it is
+    -- made from stood, which was a level further in.
+    if isClause text && isThirdPerson text
+        then plainMsg ("'''" <> name <> "''' " <> lowerFirst text)
+        else heading name msgs
+foldCharacter name msgs = heading name msgs
+
+-- | The character's name as a heading, with what happens to them under it.
+heading :: (HOI4Info g, Monad m) => Text -> IndentedMessages -> PPT g m IndentedMessages
+heading name msgs = (: msgs) <$> plainMsg' (name <> ":")
+
 -- | The number of statements in a script, counting the ones nested inside
 -- compound statements as well.
 scriptSize :: GenericScript -> Int
@@ -442,8 +464,8 @@ handlersCompound = Tr.fromList
         ,("custom_trigger_tooltip"  ,                      compoundMessage MsgCustomTriggerTooltip)
         ,("hidden_effect"           ,                      compoundMessage MsgHiddenEffect)
         ,("else"                    ,                      compoundMessage MsgElse)
-        ,("else_if"                 ,                      compoundMessage MsgElseIf)
-        ,("if"                      ,                      compoundMessage MsgIf) -- always needs editing
+        ,("else_if"                 ,                      compoundMessageCondition MsgElseIf)
+        ,("if"                      ,                      compoundMessageCondition MsgIf)
         ,("limit"                   , setIsInEffect False . compoundMessage MsgLimit) -- always needs editing
         ,("prioritize"              ,                       prioritize) -- always needs editing
         ,("while_loop_effect"       ,                       compoundMessage MsgWhile) -- always needs editing
@@ -720,6 +742,7 @@ handlersSpecialComplex = Tr.fromList
         ,("has_relation_modifier"        , relationModifier MsgHasRelationModifier False)
         ,("amount_taken_ideas"           , amountTakenIdeas)
         ,("add_scientist_xp"             , addScientistXp)
+        ,("gain_xp"                      , gainXp)
         ,("has_resources_in_country"     , hasResourcesInCountry)
         ,("add_tech_bonus"               , addTechBonus)
         ,("add_breakthrough_progress"    , addBreakthrough MsgAddBreakthroughProgress MsgBreakthroughProgress)
@@ -946,9 +969,8 @@ ppOne' stmt lhs rhs = case lhs of
                     characters <- getCharacters
                     case HM.lookup label characters of
                         Just charid -> withCurrentIndent $ \_ -> do  -- force indent level at least 1
-                            lchar <- plainMsg' (cha_loc_name charid <> ":")
                             scriptMsgs <- scope HOI4ScopeCharacter $ ppMany scr
-                            return (lchar : scriptMsgs)
+                            foldCharacter (cha_loc_name charid) scriptMsgs
                         _
                             | any (`T.isSuffixOf` label) [".owner",".OWNER",".Owner"] -> withCurrentIndent $ \_ -> do -- force indent level at least 1
                                     let labelstrip

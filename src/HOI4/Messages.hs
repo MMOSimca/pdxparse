@@ -41,7 +41,7 @@ import Data.Monoid ((<>))
 
 import Control.Monad.State (gets)
 
-import Data.Char (isAlphaNum, isSpace)
+import Data.Char (isAlphaNum, isSpace, toUpper)
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
 import Data.HashSet (HashSet)
@@ -492,6 +492,7 @@ data ScriptMessage
     | MsgHasRelationModifier {scriptMessageWhat :: Text, scriptMessageWhom :: Text}
     | MsgAmountTakenIdeas {scriptMessageComp :: Text, scriptMessageAmt :: Double, scriptMessageWhat :: Text}
     | MsgAddScientistXp {scriptMessageAmt :: Double, scriptMessageWhat :: Text}
+    | MsgGainXp {scriptMessageAmt :: Double}
     | MsgHasResourcesInCountry {scriptMessageWhat :: Text, scriptMessageComp :: Text, scriptMessageAmt :: Double, scriptMessageIcon :: Text}
     | MsgHasPowerBalance {scriptMessageWhat :: Text}
     | MsgRemoveOpinionMod {scriptMessageModid :: Text, scriptMessageWhat :: Text, scriptMessageWhom :: Text}
@@ -1579,14 +1580,14 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgHasFlag {scriptMessageFlagType = _flagType, scriptMessageName = _name, scriptMessageLoc = _loc}
             -> mconcat $ ifThenElse (T.null _loc)
-                [ toMessage (T.toTitle _flagType)
+                [ toMessage (capitalise _flagType)
                 , " flag "
                 , typewriterText _name
                 , " is set"
                 ]
 
                 [ _loc , " ({{hover|"
-                , toMessage (T.toTitle _flagType)
+                , toMessage (capitalise _flagType)
                 , " flag "
                 ,  _name --typewriterText
                 , " is set"
@@ -1594,7 +1595,7 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgHasFlagFor {scriptMessageFlagType = _flagType, scriptMessageName = _name, scriptMessageAmtText = _amtT, scriptMessageTime = _time, scriptMessageDate = _date, scriptMessageLoc = _loc}
             -> mconcat $ ifThenElse (T.null _loc)
-                [ toMessage (T.toTitle _flagType)
+                [ toMessage (capitalise _flagType)
                 , " flag "
                 , typewriterText _name
                 , " is set"
@@ -1606,7 +1607,7 @@ instance RenderMessage Script ScriptMessage where
                 , _amtT
                 , _time
                 , _date, " ({{hover|"
-                , toMessage (T.toTitle _flagType)
+                , toMessage (capitalise _flagType)
                 , " flag "
                 , _name
                 , " is set"
@@ -2733,6 +2734,12 @@ instance RenderMessage Script ScriptMessage where
                 , " with "
                 , _whom
                 ]
+        MsgGainXp {scriptMessageAmt = _amt}
+            -> mconcat
+                [ "Gains "
+                , toMessage (bold (plainNumMin _amt))
+                , " experience"
+                ]
         MsgAddScientistXp {scriptMessageAmt = _amt, scriptMessageWhat = _what}
             -> mconcat
                 [ "Gains "
@@ -2812,9 +2819,13 @@ instance RenderMessage Script ScriptMessage where
                 , _modid
                 , "|0}}"
                 ]
+        -- A balance of power is a named mechanic, and its name may be a single
+        -- word or run "X of Y", neither of which reads as a name from the shape
+        -- of the words alone. Setting it in bold says what it is wherever the
+        -- sentence is used.
         MsgHasPowerBalance {scriptMessageWhat = _what}
             -> mconcat
-                [ _what
+                [ toMessage (bold (Doc.strictText _what))
                 , " is active"
                 ]
         MsgRemoveOpinionMod {scriptMessageModid = _modid, scriptMessageWhat = _what, scriptMessageWhom = _whom}
@@ -3251,9 +3262,12 @@ instance RenderMessage Script ScriptMessage where
                 , "'s name to "
                 , _what
                 ]
+        -- The name is set in bold so that it reads as a name wherever the
+        -- sentence is used, including where a condition is read on from a
+        -- heading and everything else about it is lowered to suit.
         MsgHasCharacter {scriptMessageWho = _who}
             -> mconcat
-                [ _who
+                [ toMessage (bold (Doc.strictText _who))
                 , " is active in this country"
                 ]
         MsgRetireCharacter {scriptMessageWho = _who}
@@ -5478,6 +5492,16 @@ templateColor' td = rr
 -- | Convert a list of messages zipped with their indentation levels to a Doc.
 -- Each message is prepended with a number of asterisks (levels of bullet
 -- list) equal to its indentation level.
+
+-- | Capitalize a label for the front of a sentence without touching the rest of
+-- it. A flag type is a common noun -- "unit leader" -- and title-casing every
+-- word of it leaves a capital stranded mid-sentence wherever the label is read
+-- on from a heading and its first letter lowered again.
+capitalise :: Text -> Text
+capitalise t = case T.uncons t of
+    Just (c, rest) -> T.cons (toUpper c) rest
+    Nothing -> t
+
 imsg2doc :: (IsGameData (GameData g), Monad m) => IndentedMessages -> PPT g m Doc
 imsg2doc msgs = PP.vsep <$>
                 mapM (\(i,rm) -> do

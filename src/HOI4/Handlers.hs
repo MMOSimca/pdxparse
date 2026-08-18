@@ -15,6 +15,7 @@ module HOI4.Handlers (
     ,   compound
     ,   compoundMessage
     ,   compoundMessageScope
+    ,   compoundMessageCondition
     ,   compoundMessageExtractTag
     ,   compoundMessageExtract
     ,   compoundMessageExtractNum
@@ -70,6 +71,7 @@ module HOI4.Handlers (
     ,   ppAiMod
     ,   amountTakenIdeas
     ,   addScientistXp
+    ,   gainXp
     ,   hasResourcesInCountry
     ,   opinion
     ,   hasOpinion
@@ -80,6 +82,9 @@ module HOI4.Handlers (
     ,   withFlagOrState
     ,   customTriggerTooltip
     ,   limitClause
+    ,   isClause
+    ,   isThirdPerson
+    ,   lowerFirst
     ,   handleFocus
     ,   focusUncomplete
     ,   focusProgress
@@ -687,6 +692,30 @@ compoundMessageScope header stmt@[pdx| %_ = @scr |]
                 return ((i, MsgUnprocessed heading) : script_pp'd)
 compoundMessageScope _ stmt = preStatement stmt
 
+-- | Generic handler for a compound statement whose @limit@ block is the
+-- condition the rest of it runs under rather than a narrowing of something it
+-- picks out: @if@ and @else_if@. The conditions read on from the header word
+-- itself, so that "If:" with "Limited to:" under it and the condition under that
+-- comes out as one line saying what the branch is for.
+compoundMessageCondition :: (HOI4Info g, Monad m) =>
+    ScriptMessage -- ^ Message to use as the block header
+    -> StatementHandler g m
+compoundMessageCondition header stmt@[pdx| %_ = @scr |]
+    = withCurrentIndent $ \i -> do
+        let (mlimit, rest) = extractStmt (matchLhsText "limit") scr
+        mclause <- maybe (return Nothing) limitClause mlimit
+        case mclause of
+            Nothing -> do
+                script_pp'd <- ppMany scr
+                return ((i, header) : script_pp'd)
+            Just clause -> do
+                headtext <- messageText header
+                script_pp'd <- ppMany rest
+                let heading = T.dropWhileEnd (== ':') (T.stripEnd headtext)
+                        <> " " <> clause <> ":"
+                return ((i, MsgUnprocessed heading) : script_pp'd)
+compoundMessageCondition _ stmt = preStatement stmt
+
 -- | The most conditions that will be joined onto a header line rather than
 -- listed under it. Past a handful the line is harder to read than the list.
 limitClauseMax :: Int
@@ -719,6 +748,25 @@ isClause t = not (T.null t) && not ("<pre>" `T.isInfixOf` t) && not labelled
             (before, rest) -> not (T.null rest) && T.length before <= 30
                                 && T.all (\c -> isAlpha c || c == ' ') before
 
+-- | Whether a line reads as something the scope's subject does or is, rather than
+-- as an order given to the reader. Effects are worded as orders, since they stand
+-- under a heading that has already named who they are about -- "Set nationality to
+-- our country" -- and putting a subject in front of one of those gives a sentence
+-- that does not agree with itself.
+--
+-- English tells the two apart by the @-s@ of the third person, with the modal verbs
+-- as the standing exception. The few orders that end in @-s@ of their own have to
+-- be named. Anything unrecognised is taken for an order, which costs no more than
+-- the heading it would have had anyway.
+isThirdPerson :: Text -> Bool
+isThirdPerson line = case T.toLower (T.takeWhile isAlpha line) of
+    "" -> False
+    word -> word `notElem` imperativesInS
+            && ("s" `T.isSuffixOf` word || word `elem` modals)
+    where
+        modals = ["will", "would", "can", "could", "may", "might", "shall", "must"]
+        imperativesInS = ["dismiss", "address", "press", "pass"]
+
 -- | Join clauses into a list the way it would be written out: a serial comma
 -- between all but the last two, which take an "and".
 joinClauses :: [Text] -> Text
@@ -729,13 +777,30 @@ joinClauses ts = case unsnoc ts of
 -- | Lower the first letter of a clause so that it reads on from whatever it is
 -- being joined to. A first word in capitals is a tag or an abbreviation and is
 -- left as it is.
+--
+-- Some clauses open with the name of a thing rather than with a verb: a mechanic
+-- the game has named, like "Army Readiness", or a sentence the game itself wrote.
+-- Lowering one of those spells the name wrong. A name is told from a verb by what
+-- comes after it, since the second word of a name is capitalized as well; the
+-- handful of words that open a clause of ours often, and are never the first word
+-- of a name, are lowered whatever follows them.
 lowerFirst :: Text -> Text
 lowerFirst t
     | T.length firstWord > 1, T.all isUpper firstWord = t
+    | opensAName = t
     | otherwise = case T.uncons t of
         Just (c, rest) -> T.cons (toLower c) rest
         Nothing -> t
-    where firstWord = T.takeWhile isAlpha t
+    where
+        firstWord = T.takeWhile isAlpha t
+        secondWord = T.takeWhile isAlpha (T.dropWhile (not . isAlpha) (T.dropWhile isAlpha t))
+        opensAName = not (T.null secondWord)
+            && isUpper (T.head secondWord)
+            && T.toLower firstWord `notElem` alwaysLower
+        alwaysLower =
+            [ "is", "are", "was", "were", "has", "have", "had"
+            , "does", "do", "did", "can", "could", "will", "would"
+            , "may", "might", "must", "shall", "after", "before", "a", "an" ]
 
 -- | Generic handler for a simple compound statement with extra info.
 compoundMessageExtractTag :: (HOI4Info g, Monad m) =>
@@ -2962,6 +3027,13 @@ constantOrNumber :: (HOI4Info g, Monad m) => GenericStatement -> PPT g m (Maybe 
 constantOrNumber [pdx| %_ = !num |] = return (Just num)
 constantOrNumber [pdx| %_ = ?name |] = constantValue name
 constantOrNumber _ = return Nothing
+
+-- | Handler for @gain_xp@, which hands experience to whoever the surrounding
+-- scope is about. The trigger of the same name, which asks about a combat, is a
+-- block and is left to fall through.
+gainXp :: (HOI4Info g, Monad m) => StatementHandler g m
+gainXp [pdx| %_ = !amt |] = msgToPP $ MsgGainXp amt
+gainXp stmt = preStatement stmt
 
 -- | Handler for @add_scientist_xp@, which is written in the scope of the
 -- scientist it is about, so the line above it is what names them. The amount is
