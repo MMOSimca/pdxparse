@@ -20,6 +20,7 @@ module HOI4.SpecialHandlers (
     ,   ppDynModChunk
     ,   ppIdeaSlotChunk
     ,   addPowerBalanceModifier
+    ,   relationModifier
     ,   addFieldMarshalRole
     ,   addAdvisorRole
     ,   removeAdvisorRole
@@ -1789,6 +1790,42 @@ addPowerBalanceModifier stmt@[pdx| %_ = @scr |] =
                     _ -> trace ("add_power_balance_modifier: Modifier " ++ T.unpack modi ++ " not found") $ preStatement stmt
             _-> preStatement stmt
 addPowerBalanceModifier stmt = trace ("Not handled in addPowerBalanceModifier: " ++ show stmt) $ preStatement stmt
+
+
+-----------------------------------------
+-- Handler for the relation modifiers  --
+-----------------------------------------
+
+-- | Handler for @add_relation_modifier@ and the two statements that go with it.
+-- An opinion modifier is only a number moving two countries towards or away from
+-- each other; a relation modifier is one of the static modifiers, and what it
+-- grants holds for as long as the relation between the two does, so that is
+-- written out under it.
+relationModifier :: forall g m. (HOI4Info g, Monad m) =>
+    (Text -> Text -> ScriptMessage) -> Bool -> StatementHandler g m
+relationModifier msg witheffects stmt@[pdx| %_ = @scr |] =
+    case foldl' addLine (Nothing, Nothing) scr of
+        (Just ewhom, Just modid) -> do
+            mwhomflag <- eflag (Just HOI4Country) ewhom
+            let whomflag = fromMaybe "<!-- check script -->" mwhomflag
+            mmod <- HM.lookup modid <$> getModifiers
+            case mmod of
+                Just mod -> withCurrentIndent $ \i -> do
+                    -- Taking the modifier away, or asking whether it is there,
+                    -- says nothing new about what it grants.
+                    effect <- if witheffects
+                        then fold <$> indentUp (traverse (modifierMSG False "") (modEffects mod))
+                        else return []
+                    let locName = maybe ("<tt>" <> modid <> "</tt>") (Doc.doc2text . iquotes) (modLocName mod)
+                    return ((i, msg locName whomflag) : effect)
+                Nothing -> trace ("relation modifier not found: " ++ T.unpack modid) $ preStatement stmt
+        _ -> trace ("relation modifier: target or modifier missing: " ++ show stmt) $ preStatement stmt
+    where
+        addLine (whom, modid) [pdx| target = $tag |] = (Just (Left tag), modid)
+        addLine (whom, modid) [pdx| target = $vartag:$var |] = (Just (Right (vartag, var)), modid)
+        addLine (whom, modid) [pdx| modifier = ?label |] = (whom, Just label)
+        addLine acc _ = acc
+relationModifier _ _ stmt = preStatement stmt
 
 
 ----------------

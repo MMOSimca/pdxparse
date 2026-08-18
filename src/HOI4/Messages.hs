@@ -474,6 +474,10 @@ data ScriptMessage
     | MsgHasDynamicMod {scriptMessageModid :: Text}
     | MsgHasDynamicModFlag {scriptMessage_icon :: Text, scriptMessageWho :: Text, scriptMessageModid :: Text}
     | MsgHasOpinionMod {scriptMessageModid :: Text}
+    | MsgAddRelationModifier {scriptMessageWhat :: Text, scriptMessageWhom :: Text}
+    | MsgRemoveRelationModifier {scriptMessageWhat :: Text, scriptMessageWhom :: Text}
+    | MsgHasRelationModifier {scriptMessageWhat :: Text, scriptMessageWhom :: Text}
+    | MsgAmountTakenIdeas {scriptMessageComp :: Text, scriptMessageAmt :: Double, scriptMessageWhat :: Text}
     | MsgHasPowerBalance {scriptMessageWhat :: Text}
     | MsgRemoveOpinionMod {scriptMessageModid :: Text, scriptMessageWhat :: Text, scriptMessageWhom :: Text}
     | MsgCountryEvent
@@ -2600,6 +2604,42 @@ instance RenderMessage Script ScriptMessage where
             -> mconcat
                 [ "Has autonomy level of "
                 , _icon
+                ]
+        -- A relation modifier is not an opinion modifier: rather than moving a
+        -- number between the two countries, it is one of the static modifiers,
+        -- and it grants what it says for as long as the relation holds.
+        MsgAddRelationModifier {scriptMessageWhat = _what, scriptMessageWhom = _whom}
+            -> mconcat
+                [ "Gets the relation modifier "
+                , _what
+                , " with "
+                , _whom
+                ]
+        MsgRemoveRelationModifier {scriptMessageWhat = _what, scriptMessageWhom = _whom}
+            -> mconcat
+                [ "Loses the relation modifier "
+                , _what
+                , " with "
+                , _whom
+                ]
+        MsgHasRelationModifier {scriptMessageWhat = _what, scriptMessageWhom = _whom}
+            -> mconcat
+                [ "Has the relation modifier "
+                , _what
+                , " with "
+                , _whom
+                ]
+        -- What script calls a taken idea is what the player calls an advisor, a
+        -- theorist or the like: they occupy an idea slot, and this counts them.
+        MsgAmountTakenIdeas {scriptMessageComp = _comp, scriptMessageAmt = _amt, scriptMessageWhat = _what}
+            -> mconcat
+                [ "Has "
+                , _comp
+                , " "
+                , toMessage (bold (plainNumMin _amt))
+                , " "
+                , _what
+                , " ideas"
                 ]
         MsgAddOpinion {scriptMessageModid = _modid, scriptMessageWhat = _what, scriptMessageWhom = _whom}
             -> mconcat

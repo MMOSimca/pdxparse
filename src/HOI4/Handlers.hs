@@ -68,6 +68,7 @@ module HOI4.Handlers (
     ,   simpleEffectAtom
     ,   ppAiWillDo
     ,   ppAiMod
+    ,   amountTakenIdeas
     ,   opinion
     ,   hasOpinion
     ,   triggerEvent
@@ -1856,6 +1857,29 @@ opinion msgIndef msgDur stmt@[pdx| %_ = @scr |]
                     _ -> return (preMessage stmt)
             _ -> trace ("opinion: who or modifier missing: " ++ show stmt) $ return (preMessage stmt)
 opinion _ _ stmt = preStatement stmt
+
+-- | Handler for @amount_taken_ideas@, which counts how many of a country's idea
+-- slots of a kind are filled. An advisor, a theorist and the rest are all ideas
+-- as far as script is concerned, so this is how it asks how many of them a
+-- country has taken on.
+amountTakenIdeas :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+amountTakenIdeas stmt@[pdx| %_ = @scr |] = case foldl' addLine (Nothing, []) scr of
+    (Just (comp, amt), slots@(_:_)) -> do
+        slotlocs <- traverse getGameL10n slots
+        msgToPP $ MsgAmountTakenIdeas comp amt (joinClauses slotlocs)
+    _ -> preStatement stmt
+    where
+        addLine (amt, slots) [pdx| amount > !n |] = (Just ("more than", n), slots)
+        addLine (amt, slots) [pdx| amount < !n |] = (Just ("fewer than", n), slots)
+        addLine (amt, slots) [pdx| amount = !n |] = (Just ("exactly", n), slots)
+        -- The slots are named one after another with nothing between them, or
+        -- written out bare where there is only the one to name.
+        addLine (amt, slots) [pdx| slots = @scr |] = (amt, slots ++ mapMaybe slotName scr)
+        addLine (amt, slots) [pdx| slots = $slot |] = (amt, slots ++ [slot])
+        addLine acc stmt = trace ("unknown section in amount_taken_ideas: " ++ show stmt) acc
+        slotName (StatementBare (GenericLhs slot [])) = Just slot
+        slotName _ = Nothing
+amountTakenIdeas stmt = preStatement stmt
 
 data HasOpinion = HasOpinion
         {   hop_target :: Maybe Text
