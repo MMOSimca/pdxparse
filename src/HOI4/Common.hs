@@ -719,6 +719,8 @@ handlersSpecialComplex = Tr.fromList
         ,("remove_relation_modifier"     , relationModifier MsgRemoveRelationModifier False)
         ,("has_relation_modifier"        , relationModifier MsgHasRelationModifier False)
         ,("amount_taken_ideas"           , amountTakenIdeas)
+        ,("add_scientist_xp"             , addScientistXp)
+        ,("has_resources_in_country"     , hasResourcesInCountry)
         ,("add_tech_bonus"               , addTechBonus)
         ,("add_breakthrough_progress"    , addBreakthrough MsgAddBreakthroughProgress MsgBreakthroughProgress)
         ,("add_breakthrough_points"      , addBreakthrough MsgAddBreakthroughPoints MsgBreakthroughPoints)

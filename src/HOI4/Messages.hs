@@ -491,6 +491,8 @@ data ScriptMessage
     | MsgRemoveRelationModifier {scriptMessageWhat :: Text, scriptMessageWhom :: Text}
     | MsgHasRelationModifier {scriptMessageWhat :: Text, scriptMessageWhom :: Text}
     | MsgAmountTakenIdeas {scriptMessageComp :: Text, scriptMessageAmt :: Double, scriptMessageWhat :: Text}
+    | MsgAddScientistXp {scriptMessageAmt :: Double, scriptMessageWhat :: Text}
+    | MsgHasResourcesInCountry {scriptMessageWhat :: Text, scriptMessageComp :: Text, scriptMessageAmt :: Double, scriptMessageIcon :: Text}
     | MsgHasPowerBalance {scriptMessageWhat :: Text}
     | MsgRemoveOpinionMod {scriptMessageModid :: Text, scriptMessageWhat :: Text, scriptMessageWhom :: Text}
     | MsgCountryEvent
@@ -2730,6 +2732,23 @@ instance RenderMessage Script ScriptMessage where
                 , _what
                 , " with "
                 , _whom
+                ]
+        MsgAddScientistXp {scriptMessageAmt = _amt, scriptMessageWhat = _what}
+            -> mconcat
+                [ "Gains "
+                , toMessage (bold (plainNumMin _amt))
+                , " experience in "
+                , _what
+                ]
+        MsgHasResourcesInCountry {scriptMessageWhat = _what, scriptMessageComp = _comp, scriptMessageAmt = _amt, scriptMessageIcon = _icon}
+            -> mconcat
+                [ "Has "
+                , _what
+                , _comp
+                , " "
+                , toMessage (bold (plainNumMin _amt))
+                , " "
+                , _icon
                 ]
         -- What script calls a taken idea is what the player calls an advisor, a
         -- theorist or the like: they occupy an idea slot, and this counts them.

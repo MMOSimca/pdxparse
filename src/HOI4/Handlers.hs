@@ -69,6 +69,8 @@ module HOI4.Handlers (
     ,   ppAiWillDo
     ,   ppAiMod
     ,   amountTakenIdeas
+    ,   addScientistXp
+    ,   hasResourcesInCountry
     ,   opinion
     ,   hasOpinion
     ,   triggerEvent
@@ -1858,6 +1860,33 @@ opinion msgIndef msgDur stmt@[pdx| %_ = @scr |]
             _ -> trace ("opinion: who or modifier missing: " ++ show stmt) $ return (preMessage stmt)
 opinion _ _ stmt = preStatement stmt
 
+-- | Handler for @has_resources_in_country@, which asks how much of a resource a
+-- country has to hand.
+--
+-- Resources come in whole units, so a test for more than forty-nine of something
+-- is a test for fifty, and reads better written that way.
+hasResourcesInCountry :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+hasResourcesInCountry stmt@[pdx| %_ = @scr |] =
+    case foldl' addLine (Nothing, Nothing, "") scr of
+        (Just res, Just (comp, amt), qualifier) ->
+            msgToPP $ MsgHasResourcesInCountry qualifier comp amt (iconText res)
+        _ -> preStatement stmt
+    where
+        addLine (res, cmp, q) [pdx| resource = ?r |] = (Just r, cmp, q)
+        addLine (res, cmp, q) [pdx| amount > !n |] = (res, Just ("at least", n + 1), q)
+        addLine (res, cmp, q) [pdx| amount < !n |] = (res, Just ("less than", n), q)
+        addLine (res, cmp, q) [pdx| amount = !n |] = (res, Just ("exactly", n), q)
+        -- Whether what the country digs up itself counts, or only what it buys.
+        addLine (res, cmp, q) [pdx| extracted = yes |] = (res, cmp, "extracted ")
+        addLine (res, cmp, q) [pdx| only_imported = yes |] = (res, cmp, "imported ")
+        addLine acc [pdx| extracted = no |] = acc
+        addLine acc [pdx| only_imported = no |] = acc
+        -- Counts what the country's buildings take rather than what it holds.
+        -- Nothing in the wording tells the two apart as yet.
+        addLine acc [pdx| buildings = %_ |] = acc
+        addLine acc stmt = trace ("unknown section in has_resources_in_country: " ++ show stmt) acc
+hasResourcesInCountry stmt = preStatement stmt
+
 -- | Handler for @amount_taken_ideas@, which counts how many of a country's idea
 -- slots of a kind are filled. An advisor, a theorist and the rest are all ideas
 -- as far as script is concerned, so this is how it asks how many of them a
@@ -2933,6 +2962,19 @@ constantOrNumber :: (HOI4Info g, Monad m) => GenericStatement -> PPT g m (Maybe 
 constantOrNumber [pdx| %_ = !num |] = return (Just num)
 constantOrNumber [pdx| %_ = ?name |] = constantValue name
 constantOrNumber _ = return Nothing
+
+-- | Handler for @add_scientist_xp@, which is written in the scope of the
+-- scientist it is about, so the line above it is what names them. The amount is
+-- most often a script constant rather than a number written out.
+addScientistXp :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+addScientistXp stmt@[pdx| %_ = @scr |] = do
+    xp <- maybe (return Nothing) constantOrNumber (fst (extractStmt (matchLhsText "experience") scr))
+    case (xp, fst (extractStmt (matchLhsText "specialization") scr)) of
+        (Just amt, Just [pdx| %_ = $field |]) -> do
+            fieldloc <- getGameL10n field
+            msgToPP $ MsgAddScientistXp amt fieldloc
+        _ -> preStatement stmt
+addScientistXp stmt = preStatement stmt
 
 ------------------------------------------
 -- handlers for various flag statements --
