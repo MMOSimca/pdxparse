@@ -381,8 +381,7 @@ modifierMSG hidden targ stmt@[pdx| $mod = !num |] = let lmod = T.toLower mod in 
             ("experience_gain_" `T.isPrefixOf` lmod && "_combat_factor" `T.isSuffixOf` lmod) ||
             ("trait_" `T.isPrefixOf` lmod && "_xp_gain_factor" `T.isSuffixOf` lmod) ||
             ("repair_speed" `T.isPrefixOf` lmod && "_factor" `T.isSuffixOf` lmod) ||
-            ("state_repair_speed" `T.isPrefixOf` lmod && "_factor" `T.isSuffixOf` lmod) ||
-            ("sp_tag_" `T.isPrefixOf` lmod && "_speed_factor" `T.isSuffixOf` lmod) -> do --precision 2
+            ("state_repair_speed" `T.isPrefixOf` lmod && "_factor" `T.isSuffixOf` lmod) -> do --precision 2
             mloc <- getGameL10nIfPresent ("modifier_" <> lmod)
             case mloc of
                 Just loc ->
@@ -398,6 +397,10 @@ modifierMSG hidden targ stmt@[pdx| $mod = !num |] = let lmod = T.toLower mod in 
                 Nothing -> preStatement stmt
         | "modifier_army_sub_" `T.isPrefixOf` lmod ||
             (("operation_" `T.isPrefixOf` lmod && "_outcome" `T.isSuffixOf` lmod ) ||
+            -- Every special project speed, whether it is the one project's own
+            -- (@sp_land_stronghold_network_speed_factor@) or a whole category's
+            -- (@sp_tag_radar_speed_factor@), is named by the modifier itself.
+            ("sp_" `T.isPrefixOf` lmod && "_speed_factor" `T.isSuffixOf` lmod) ||
             "sp_tag_" `T.isPrefixOf` lmod ||
             "_preferred_weight_factor"` T.isSuffixOf` lmod ||
             ("specialization_" `T.isPrefixOf` lmod && "_speed_factor" `T.isSuffixOf` lmod)) -> do
@@ -419,6 +422,15 @@ modifierMSG hidden targ stmt@[pdx| $mod = !num |] = let lmod = T.toLower mod in 
             ("country_resource_" `T.isPrefixOf` lmod && not ("country_resource_cost_" `T.isPrefixOf` lmod)) || --precision 0
             "temporary_state_resource_" `T.isPrefixOf` lmod -> do --precision 0
             mloc <- getGameL10nIfPresent lmod
+            case mloc of
+                Just loc ->
+                    let loc' = locprep hidden targ loc in
+                    numericLocPrec loc' (familyPrecision lmod) MsgModifierColourPos stmt
+                Nothing -> preStatement stmt
+        -- A flat number of levels rather than a share of anything, and more of
+        -- them is better.
+        |  "_max_level_terrain_limit" `T.isSuffixOf` lmod -> do --precision 0
+            mloc <- getGameL10nIfPresent ("modifier_" <> lmod)
             case mloc of
                 Just loc ->
                     let loc' = locprep hidden targ loc in
@@ -481,6 +493,7 @@ modifierMSG hidden targ stmt@[pdx| $mod = $var|] =  let lmod = T.toLower mod in 
             ("experience_gain_" `T.isPrefixOf` lmod && "_combat_factor" `T.isSuffixOf` lmod) ||
             ("trait_" `T.isPrefixOf` lmod && "_xp_gain_factor" `T.isSuffixOf` lmod) ||
             ("repair_speed" `T.isPrefixOf` lmod && "_factor" `T.isSuffixOf` lmod) ||
+            "_max_level_terrain_limit" `T.isSuffixOf` lmod ||
             ("state_repair_speed" `T.isPrefixOf` lmod && "_factor" `T.isSuffixOf` lmod) -> do
             mloc <- getGameL10nIfPresent ("modifier_" <> lmod)
             case mloc of
@@ -490,6 +503,8 @@ modifierMSG hidden targ stmt@[pdx| $mod = $var|] =  let lmod = T.toLower mod in 
                 Nothing -> preStatement stmt
         | "modifier_army_sub_" `T.isPrefixOf` lmod ||
             ("operation_" `T.isPrefixOf` lmod && "_outcome" `T.isSuffixOf` lmod) ||
+            ("sp_" `T.isPrefixOf` lmod && "_speed_factor" `T.isSuffixOf` lmod) ||
+            "sp_tag_" `T.isPrefixOf` lmod ||
             ("country_resource_" `T.isPrefixOf` lmod && not ("country_resource_cost_" `T.isPrefixOf` lmod)) ||
             "_design_cost_factor" `T.isSuffixOf` lmod ||
             "state_resource_" `T.isPrefixOf` lmod ||
@@ -531,13 +546,15 @@ familyPrecision :: Text -> Maybe Int
 familyPrecision lmod = Just $
     if any (`T.isPrefixOf` lmod)
             [ "experience_gain_"          -- experience_gain_<Unit>_combat_factor
-            , "sp_tag_", "specialization_" -- <SpecialProject>_speed_factor
+            , "sp_", "specialization_"    -- <SpecialProject>_speed_factor
             , "operation_"               -- <Operation>_cost, _outcome and _risk
             , "state_resource_", "country_resource_", "temporary_state_resource_"
             , "production_cost_max_"     -- production_cost_max_<NavalEquipment>
             , "cat_"                     -- <IdeaCategory>_category_type_cost_factor
             , "modifier_army_sub_" ]
-        || "_intel_decryption_bonus" `T.isSuffixOf` lmod
+        || any (`T.isSuffixOf` lmod)
+            [ "_intel_decryption_bonus"
+            , "_max_level_terrain_limit" ] -- <Building>[_<Terrain>]_max_level_terrain_limit
         then 0
         -- The speed, repair, design cost, trait experience and preferred weight
         -- families are all written to two places.

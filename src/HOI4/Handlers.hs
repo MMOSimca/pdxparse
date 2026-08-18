@@ -2561,7 +2561,11 @@ addBuildingConstruction stmt@[pdx| %_ = @scr |] =
             case (addbc_level abc, addbc_levelvar abc) of
                 (Just val, _)-> return $ MsgAddBuildingConstruction (addbc_instant_build abc) buildicon buildloc val prov
                 (_, Just var)-> return $ MsgAddBuildingConstructionVar (addbc_instant_build abc) buildicon buildloc var prov
-                _-> return $ preMessage stmt
+                -- Script may leave out how many levels to build, in which case
+                -- the game builds the one. A @level@ written with a comparison
+                -- rather than an @=@ is not that number: it is a condition on
+                -- what is already standing there, and has gone into 'prov'.
+                _-> return $ MsgAddBuildingConstruction (addbc_instant_build abc) buildicon buildloc 1 prov
 addBuildingConstruction stmt = trace ("Not handled in addBuildingConstruction: " ++ show stmt) $ preStatement stmt
 
 data HOI4SetBL = HOI4SetBL{
