@@ -2131,7 +2131,7 @@ hasDlc [pdx| %_ = ?dlc |]
             ,("By Blood Alone", "bba")
             ,("Arms Against Tyranny", "aat")
             ,("Trial of Allegiance", "toa")
-            ,("Gotterdamnerung", "gtd")
+            ,("Gotterdammerung", "gtd")
             ,("Graveyard of Empires", "goe")
             ,("No Compromise, No Surrender", "ncns")
             ,("Peace for Our Time", "pfot")
