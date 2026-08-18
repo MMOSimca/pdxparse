@@ -475,6 +475,16 @@ data ScriptMessage
     | MsgHasDynamicModFlag {scriptMessage_icon :: Text, scriptMessageWho :: Text, scriptMessageModid :: Text}
     | MsgHasOpinionMod {scriptMessageModid :: Text}
     | MsgAddRelationModifier {scriptMessageWhat :: Text, scriptMessageWhom :: Text}
+    | MsgRelationRuleVolunteers {scriptMessageYn :: Bool, scriptMessageWhom :: Text}
+    | MsgRelationRuleMarket {scriptMessageYn :: Bool, scriptMessageWhom :: Text}
+    | MsgRelationRuleOther {scriptMessageWhat :: Text, scriptMessageYn :: Bool, scriptMessageWhom :: Text}
+    | MsgRelationRuleOverrideDesc {scriptMessageWhat :: Text}
+    | MsgActivateAdvisor {scriptMessageWho :: Text}
+    | MsgDeactivateAdvisor {scriptMessageWho :: Text}
+    | MsgIsHiredAsAdvisor {scriptMessageYn :: Bool}
+    | MsgIsAdvisor {scriptMessageYn :: Bool}
+    | MsgAdvisorCanBeFired {scriptMessageYn :: Bool}
+    | MsgSetCanBeFiredInAdvisorRole {scriptMessageWho :: Text, scriptMessageWhat :: Text, scriptMessageYn :: Bool}
     | MsgRemoveRelationModifier {scriptMessageWhat :: Text, scriptMessageWhom :: Text}
     | MsgHasRelationModifier {scriptMessageWhat :: Text, scriptMessageWhom :: Text}
     | MsgAmountTakenIdeas {scriptMessageComp :: Text, scriptMessageAmt :: Double, scriptMessageWhat :: Text}
@@ -2604,6 +2614,70 @@ instance RenderMessage Script ScriptMessage where
             -> mconcat
                 [ "Has autonomy level of "
                 , _icon
+                ]
+        -- What a country may do with another is settled by the relation rules,
+        -- and script can lift or impose one of them for a single pair.
+        MsgRelationRuleVolunteers {scriptMessageYn = _yn, scriptMessageWhom = _whom}
+            -> mconcat
+                [ "Volunteers may"
+                , toMessage (ifThenElseT _yn "" " ''not''")
+                , " be sent to "
+                , _whom
+                ]
+        MsgRelationRuleMarket {scriptMessageYn = _yn, scriptMessageWhom = _whom}
+            -> mconcat
+                [ "May"
+                , toMessage (ifThenElseT _yn "" " ''not''")
+                , " trade on the market of "
+                , _whom
+                ]
+        MsgRelationRuleOther {scriptMessageWhat = _what, scriptMessageYn = _yn, scriptMessageWhom = _whom}
+            -> mconcat
+                [ "Relation rule <tt>"
+                , _what
+                , "</tt> is"
+                , toMessage (ifThenElseT _yn "" " ''not''")
+                , " allowed with "
+                , _whom
+                ]
+        MsgRelationRuleOverrideDesc {scriptMessageWhat = _what}
+            -> _what
+        MsgActivateAdvisor {scriptMessageWho = _who}
+            -> mconcat
+                [ "Hire "
+                , _who
+                , " as an advisor"
+                ]
+        MsgDeactivateAdvisor {scriptMessageWho = _who}
+            -> mconcat
+                [ "Dismiss "
+                , _who
+                , " from their advisor post"
+                ]
+        MsgIsHiredAsAdvisor {scriptMessageYn = _yn}
+            -> mconcat
+                [ "Is"
+                , toMessage (ifThenElseT _yn "" " ''not''")
+                , " hired as an advisor"
+                ]
+        MsgIsAdvisor {scriptMessageYn = _yn}
+            -> mconcat
+                [ "Is"
+                , toMessage (ifThenElseT _yn "" " ''not''")
+                , " an advisor"
+                ]
+        MsgAdvisorCanBeFired {scriptMessageYn = _yn}
+            -> mconcat
+                [ "May"
+                , toMessage (ifThenElseT _yn "" " ''not''")
+                , " be dismissed from their advisor post"
+                ]
+        MsgSetCanBeFiredInAdvisorRole {scriptMessageWho = _who, scriptMessageWhat = _what, scriptMessageYn = _yn}
+            -> mconcat
+                [ ifThenElseT (T.null _who) "May" (_who <> " may")
+                , toMessage (ifThenElseT _yn "" " ''not''")
+                , " be dismissed"
+                , ifThenElseT (T.null _what) " from their advisor post" (" from the " <> _what <> " post")
                 ]
         -- A relation modifier is not an opinion modifier: rather than moving a
         -- number between the two countries, it is one of the static modifiers,

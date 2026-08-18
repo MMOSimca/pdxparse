@@ -21,6 +21,9 @@ module HOI4.SpecialHandlers (
     ,   ppIdeaSlotChunk
     ,   addPowerBalanceModifier
     ,   relationModifier
+    ,   advisorPost
+    ,   setCanBeFiredInAdvisorRole
+    ,   addRelationRuleOverride
     ,   addFieldMarshalRole
     ,   addAdvisorRole
     ,   removeAdvisorRole
@@ -2043,6 +2046,83 @@ getCharacterName idn = do
     case HM.lookup idn characters of
         Just charid -> return $ cha_loc_name charid
         _ -> getGameL10n idn
+
+-------------------------------
+-- Handlers for advisor posts --
+-------------------------------
+
+-- | The name behind whatever an advisor statement is pointed at. Script names an
+-- advisor either by the token their post is known by or by the character's own
+-- id, and either way it is the person's name a reader wants.
+advisorName :: (HOI4Info g, Monad m) => Text -> PPT g m Text
+advisorName token = do
+    charto <- getCharToken
+    case HM.lookup token charto of
+        Just adv -> getCharacterName (adv_cha_id adv)
+        Nothing -> getCharacterName token
+
+-- | Handler for @activate_advisor@ and @deactivate_advisor@, which put someone
+-- into one of the country's advisor posts and take them out of it again.
+advisorPost :: (HOI4Info g, Monad m) => (Text -> ScriptMessage) -> StatementHandler g m
+advisorPost msg [pdx| %_ = $token |] = msgToPP . msg =<< advisorName token
+advisorPost _ stmt = preStatement stmt
+
+-- | Handler for @set_can_be_fired_in_advisor_role@, which decides whether the
+-- player may dismiss someone from a post they hold. Script may leave the
+-- character out, meaning whoever the surrounding scope is about, and may leave
+-- the slot out, meaning every post they hold.
+setCanBeFiredInAdvisorRole :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+setCanBeFiredInAdvisorRole stmt@[pdx| %_ = @scr |] =
+    case foldl' addLine (Nothing, Nothing, Nothing) scr of
+        (mchar, mslot, Just value) -> do
+            who <- maybe (return "") advisorName mchar
+            slot <- maybe (return "") getGameL10n mslot
+            msgToPP $ MsgSetCanBeFiredInAdvisorRole who slot value
+        _ -> preStatement stmt
+    where
+        addLine (mchar, mslot, value) [pdx| character = $char |] = (Just char, mslot, value)
+        addLine (mchar, mslot, value) [pdx| slot = $slot |] = (mchar, Just slot, value)
+        addLine (mchar, mslot, value) [pdx| value = yes |] = (mchar, mslot, Just True)
+        addLine (mchar, mslot, value) [pdx| value = no |] = (mchar, mslot, Just False)
+        addLine acc stmt = trace ("unknown section in set_can_be_fired_in_advisor_role: " ++ show stmt) acc
+setCanBeFiredInAdvisorRole stmt = preStatement stmt
+
+----------------------------------------
+-- Handler for add_relation_rule_override --
+----------------------------------------
+
+-- | Handler for @add_relation_rule_override@, which lifts or imposes one of the
+-- rules that would otherwise settle what two countries may do with each other.
+--
+-- Script may hang the override on a trigger rather than on one named country, and
+-- where it does it writes out a line of its own saying when the rule applies;
+-- that says it better than anything assembled from the rule names would.
+addRelationRuleOverride :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+addRelationRuleOverride stmt@[pdx| %_ = @scr |] =
+    case (mdesc, rules) of
+        (Just desc, _) -> tooltipText MsgRelationRuleOverrideDesc =<< locKeyText HM.empty desc
+        (_, rules@(_:_)) -> do
+            mwhomflag <- maybe (return Nothing) (eflag (Just HOI4Country)) mtarget
+            let whomflag = fromMaybe "<!-- check script -->" mwhomflag
+            fold <$> traverse (msgToPP . ($ whomflag) . uncurry rule) rules
+        _ -> preStatement stmt
+    where
+        (mtarget, mdesc, rules) = foldl' addLine (Nothing, Nothing, []) scr
+        addLine (target, desc, rs) [pdx| target = $tag |] = (Just (Left tag), desc, rs)
+        addLine (target, desc, rs) [pdx| target = $vartag:$var |] = (Just (Right (vartag, var)), desc, rs)
+        addLine (target, desc, rs) [pdx| usage_desc = ?key |] = (target, Just key, rs)
+        -- The trigger deciding when the override holds is a named block of
+        -- script, and the line under @usage_desc@ is the game's own reading of it.
+        addLine acc [pdx| trigger = %_ |] = acc
+        addLine (target, desc, rs) [pdx| $what = %rhs |]
+            | GenericRhs "yes" [] <- rhs = (target, desc, rs ++ [(what, True)])
+            | GenericRhs "no" [] <- rhs = (target, desc, rs ++ [(what, False)])
+        addLine acc stmt = trace ("unknown section in add_relation_rule_override: " ++ show stmt) acc
+
+        rule "can_send_volunteers" yn = MsgRelationRuleVolunteers yn
+        rule "can_access_market" yn = MsgRelationRuleMarket yn
+        rule what yn = MsgRelationRuleOther what yn
+addRelationRuleOverride stmt = preStatement stmt
 
 -- operatives
 
