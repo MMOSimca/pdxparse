@@ -475,6 +475,9 @@ data ScriptMessage
     | MsgHasDynamicModFlag {scriptMessage_icon :: Text, scriptMessageWho :: Text, scriptMessageModid :: Text}
     | MsgHasOpinionMod {scriptMessageModid :: Text}
     | MsgAddRelationModifier {scriptMessageWhat :: Text, scriptMessageWhom :: Text}
+    | MsgAddMastery {scriptMessageAmt :: Double, scriptMessageWhat :: Text}
+    | MsgAddDailyMastery {scriptMessageAmt :: Double, scriptMessageDays :: Double, scriptMessageWhat :: Text}
+    | MsgAddMasteryBonus {scriptMessageAmt :: Double, scriptMessageDays :: Double, scriptMessageWhat :: Text}
     | MsgRelationRuleVolunteers {scriptMessageYn :: Bool, scriptMessageWhom :: Text}
     | MsgRelationRuleMarket {scriptMessageYn :: Bool, scriptMessageWhom :: Text}
     | MsgRelationRuleOther {scriptMessageWhat :: Text, scriptMessageYn :: Bool, scriptMessageWhom :: Text}
@@ -2614,6 +2617,31 @@ instance RenderMessage Script ScriptMessage where
             -> mconcat
                 [ "Has autonomy level of "
                 , _icon
+                ]
+        MsgAddMastery {scriptMessageAmt = _amt, scriptMessageWhat = _what}
+            -> mconcat
+                [ "Add "
+                , toMessage (bold (plainNumMin _amt))
+                , " {{Icon|mastery|1}} to "
+                , _what
+                ]
+        MsgAddDailyMastery {scriptMessageAmt = _amt, scriptMessageDays = _days, scriptMessageWhat = _what}
+            -> mconcat
+                [ "Add "
+                , toMessage (bold (plainNumMin _amt))
+                , " {{Icon|mastery|1}} per day for "
+                , toMessage (bold (plainNumMin _days))
+                , " days to "
+                , _what
+                ]
+        MsgAddMasteryBonus {scriptMessageAmt = _amt, scriptMessageDays = _days, scriptMessageWhat = _what}
+            -> mconcat
+                [ "Add a "
+                , toMessage (bold (reducedNum (colourPcSignPrec (Just 0) True) _amt))
+                , " {{Icon|mastery|1}} bonus for "
+                , toMessage (bold (plainNumMin _days))
+                , " days to "
+                , _what
                 ]
         -- What a country may do with another is settled by the relation rules,
         -- and script can lift or impose one of them for a single pair.

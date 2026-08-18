@@ -21,6 +21,8 @@ module HOI4.SpecialHandlers (
     ,   ppIdeaSlotChunk
     ,   addPowerBalanceModifier
     ,   relationModifier
+    ,   addMastery
+    ,   addMasteryBonus
     ,   advisorPost
     ,   setCanBeFiredInAdvisorRole
     ,   addRelationRuleOverride
@@ -59,7 +61,7 @@ import qualified Data.HashMap.Strict as HM
 --import Data.Set (Set)
 
 
-import Data.Char (isDigit)
+import Data.Char (isDigit, toUpper)
 import Data.List (foldl', sortOn, elemIndex, find)
 import Data.Maybe
 
@@ -431,6 +433,17 @@ modifierMSG hidden targ stmt@[pdx| $mod = !num |] = let lmod = T.toLower mod in 
                     let loc' = locprep hidden targ loc in
                     numericLocPrec loc' (familyPrecision lmod) MsgModifierColourPos stmt
                 Nothing -> preStatement stmt
+        -- Mastery towards part of the doctrine tree, which the game words by
+        -- filling the part's name into a sentence of its own for each kind of
+        -- part there is.
+        | "_mastery_gain_factor" `T.isSuffixOf` lmod -> do --precision 0
+            mpart <- masteryGainModifier lmod
+            case mpart of
+                Just (wrapper, name) -> do
+                    loc <- getGameL10nArgs (HM.singleton "ARG" (LocText name)) wrapper
+                    let loc' = locprep hidden targ loc in
+                        numericLocPrec loc' (Just 0) MsgModifierPcPosReduced stmt
+                Nothing -> preStatement stmt
         -- A flat number of levels rather than a share of anything, and more of
         -- them is better.
         |  "_max_level_terrain_limit" `T.isSuffixOf` lmod -> do --precision 0
@@ -519,6 +532,14 @@ modifierMSG hidden targ stmt@[pdx| $mod = $var|] =  let lmod = T.toLower mod in 
                 Just loc ->
                     let loc' = locprep hidden targ loc in
                     msgToPP $ MsgModifierVar loc' var
+                Nothing -> preStatement stmt
+        | "_mastery_gain_factor" `T.isSuffixOf` lmod -> do
+            mpart <- masteryGainModifier lmod
+            case mpart of
+                Just (wrapper, name) -> do
+                    loc <- getGameL10nArgs (HM.singleton "ARG" (LocText name)) wrapper
+                    let loc' = locprep hidden targ loc in
+                        msgToPP $ MsgModifierVar loc' var
                 Nothing -> preStatement stmt
         | otherwise -> do
             moddef <- getModifierDefinitions
@@ -2046,6 +2067,286 @@ getCharacterName idn = do
     case HM.lookup idn characters of
         Just charid -> return $ cha_loc_name charid
         _ -> getGameL10n idn
+
+----------------------------------------
+-- Handlers for the doctrine mastery  --
+----------------------------------------
+
+-- | The name a part of the doctrine tree is written under. Script names a folder,
+-- a track, a subdoctrine or a grand doctrine by its id, and the game localizes
+-- each of them under a key built from that id in a settled way. Two of those ways
+-- have exceptions to them often enough to be worth following: the grand doctrines
+-- reworked for the doctrine tree keep a @new_@ on the id that the key does not,
+-- and the air subdoctrines say @air_subdoctrine_@ in the id where the key just
+-- says which one it is. The naval subdoctrines take the name of their track on
+-- the front of the key instead of the id, so those are tried as well.
+--
+-- Nothing here reads the doctrine files: one localization key is cheaper to keep
+-- up with than another set of game files, and a part whose key is simply
+-- misnamed comes out under its id, which says plainly enough what to fix.
+doctrineLocName :: (HOI4Info g, Monad m) => Text -> Text -> PPT g m Text
+doctrineLocName kind theid =
+    fromMaybe ("<tt>" <> theid <> "</tt>") <$> doctrineLocLookup kind theid
+
+-- | As 'doctrineLocName', saying so when nothing is found rather than falling
+-- back on the id. What kind of part an id names is not always written down, and
+-- this is how each kind in turn is tried.
+doctrineLocLookup :: (HOI4Info g, Monad m) => Text -> Text -> PPT g m (Maybe Text)
+doctrineLocLookup kind theid = go (candidates kind (T.toLower theid))
+    where
+        go [] = return Nothing
+        go (key:rest) = do
+            mloc <- getGameL10nIfPresent key
+            case mloc of
+                Just loc | not (T.null loc) -> Just . stripLocKeys <$> getGameL10n key
+                _ -> go rest
+        candidates "folder" i = [i <> "_doctrine_folder"]
+        candidates "track" i = ["DOCTRINE_TRACK_" <> T.toUpper i]
+        candidates "grand_doctrine" i =
+            ["GRAND_DOCTRINE_" <> T.toUpper (fromMaybe i (T.stripPrefix "new_" i))
+            ,"GRAND_DOCTRINE_" <> T.toUpper i]
+        candidates _ i =
+            let bare = fromMaybe i (T.stripPrefix "air_subdoctrine_" i)
+                stem = fromMaybe bare (T.stripSuffix "_no_lar" bare)
+            in ["SUBDOCTRINE_" <> T.toUpper stem]
+               ++ [ "SUBDOCTRINE_" <> t <> T.toUpper stem
+                  | t <- ["SCREEN_", "SUBMARINE_", "CARRIER_"] ]
+        -- What a name is worked out from is noted in the text as a comment, and
+        -- neither a heading a link jumps to nor the words on the link can carry
+        -- one.
+        stripLocKeys t = case T.breakOn "<!--Localisation key:" t of
+            (before, rest)
+                | T.null rest -> before
+                | otherwise -> before <> stripLocKeys (T.drop 3 (snd (T.breakOn "-->" rest)))
+
+-- | A link to the part of the doctrine tree script has named, on the wiki page
+-- for the folder it belongs to. A folder is the page itself; anything under one
+-- is a heading on it.
+doctrineLink :: (HOI4Info g, Monad m) => Text -> Text -> PPT g m Text
+doctrineLink "folder" theid = return ("[[" <> doctrinePage theid <> "]]")
+doctrineLink kind theid = do
+    mname <- doctrineLocLookup kind theid
+    case (mname, HM.lookup (T.toLower theid) doctrineFolders) of
+        -- The heading a link jumps to is written with underscores where the
+        -- name has spaces; a percent escape is not followed here.
+        (Just name, Just folder) -> return $ mconcat
+            [ "[[", doctrinePage folder, "#", T.replace " " "_" name, "|", name, "]]" ]
+        -- A part we know the page of but not the name, or the name but not the
+        -- page, has nothing to make a heading out of, so it is left as the id
+        -- script called it by. That is also what says which key to go and fix.
+        (Just name, Nothing) -> return name
+        _ -> return ("<tt>" <> theid <> "</tt>")
+
+-- | The wiki page a doctrine folder is written about on.
+doctrinePage :: Text -> Text
+doctrinePage folder = case T.uncons (T.replace "_" " " folder) of
+    Just (c, rest) -> T.cons (toUpper c) rest <> " doctrine"
+    Nothing -> "Doctrine"
+
+-- | The doctrine folder each track, subdoctrine and grand doctrine sits under,
+-- and so the page each is written about on. Script names one of these without
+-- saying where in the tree it is, and the tree is spread over a set of files
+-- which say little else we want; there are a hundred or so parts and they change
+-- about once a game version, so they are listed here instead.
+doctrineFolders :: HashMap Text Text
+doctrineFolders = HM.fromList
+    [   ("air_cavalry", "land")
+    ,   ("air_subdoctrine_aerial_reconnaissance", "air")
+    ,   ("air_subdoctrine_bomber_interception", "air")
+    ,   ("air_subdoctrine_carpet_bombing", "air")
+    ,   ("air_subdoctrine_carrier_strikes", "air")
+    ,   ("air_subdoctrine_coastal_air_patrol", "air")
+    ,   ("air_subdoctrine_deep_air_raids", "air")
+    ,   ("air_subdoctrine_dive_bombers", "air")
+    ,   ("air_subdoctrine_dogfighting_mastery", "air")
+    ,   ("air_subdoctrine_escort_fighter", "air")
+    ,   ("air_subdoctrine_fighter_bombers", "air")
+    ,   ("air_subdoctrine_fighter_central_field", "air")
+    ,   ("air_subdoctrine_fighter_homeland_defense", "air")
+    ,   ("air_subdoctrine_flexible_fire_support", "air")
+    ,   ("air_subdoctrine_flying_artillery", "air")
+    ,   ("air_subdoctrine_flying_fortresses", "air")
+    ,   ("air_subdoctrine_heavy_aircraft_focus", "air")
+    ,   ("air_subdoctrine_long_range_escort", "air")
+    ,   ("air_subdoctrine_naval_strike_tactics", "air")
+    ,   ("air_subdoctrine_naval_torpedo_tactics", "air")
+    ,   ("air_subdoctrine_night_bombing", "air")
+    ,   ("air_subdoctrine_open_ocean_air_patrol", "air")
+    ,   ("air_subdoctrine_operational_air_support", "air")
+    ,   ("air_subdoctrine_tactical_battlefield_support", "air")
+    ,   ("air_subdoctrine_tactical_flexibility", "air")
+    ,   ("air_subdoctrine_theater_interdiction", "air")
+    ,   ("anti_aircraft_cruisers", "naval")
+    ,   ("anti_tank_frontline", "land")
+    ,   ("armor", "land")
+    ,   ("armored_cavalry", "land")
+    ,   ("armored_cavalry_no_lar", "land")
+    ,   ("armored_infantry_support", "land")
+    ,   ("armored_raiders", "naval")
+    ,   ("armored_spearhead", "land")
+    ,   ("armored_spearhead_no_lar", "land")
+    ,   ("assault_infantry", "land")
+    ,   ("battlecruiser_supremacy", "naval")
+    ,   ("battleship_antiair_screen", "naval")
+    ,   ("broad_naval_support", "naval")
+    ,   ("capital_hunters", "naval")
+    ,   ("capital_ships", "naval")
+    ,   ("carrier_battlegroups", "naval")
+    ,   ("carriers", "naval")
+    ,   ("coastal_defence_fleet", "naval")
+    ,   ("coastal_minelaying", "naval")
+    ,   ("combat_support", "land")
+    ,   ("commandos", "land")
+    ,   ("convoy_escort", "naval")
+    ,   ("deep_battle", "land")
+    ,   ("deep_battle_no_lar", "land")
+    ,   ("defensive_postures", "land")
+    ,   ("dispersed_operations", "land")
+    ,   ("escort_carrier_support", "naval")
+    ,   ("expeditionary_warfare", "land")
+    ,   ("field_engineering", "land")
+    ,   ("fighter_aircraft", "air")
+    ,   ("fire_concentration", "land")
+    ,   ("floating_airfields", "naval")
+    ,   ("flying_batteries", "land")
+    ,   ("grand_assault", "land")
+    ,   ("grand_battleplan", "land")
+    ,   ("great_war_infantry", "land")
+    ,   ("guerilla_war", "land")
+    ,   ("heavy_aircraft", "air")
+    ,   ("hunter_killers", "naval")
+    ,   ("infantry", "land")
+    ,   ("infiltration_tactics", "land")
+    ,   ("irregulars", "land")
+    ,   ("jeune_ecole", "naval")
+    ,   ("large_unit_tactics", "land")
+    ,   ("last_stand", "land")
+    ,   ("light_task_forces", "naval")
+    ,   ("line_of_battle", "naval")
+    ,   ("long_range_submarines", "naval")
+    ,   ("marines_1", "special_forces")
+    ,   ("marines_2", "special_forces")
+    ,   ("mass_assault", "land")
+    ,   ("massed_carrier_fleet", "naval")
+    ,   ("medium_aircraft", "air")
+    ,   ("mission_type_tactics", "land")
+    ,   ("mobile_defense", "land")
+    ,   ("mobile_infantry", "land")
+    ,   ("mobile_recon_and_assault", "land")
+    ,   ("mobile_recon_and_assault_no_lar", "land")
+    ,   ("mountaineers_1", "special_forces")
+    ,   ("mountaineers_2", "special_forces")
+    ,   ("mounted_infantry", "land")
+    ,   ("naval_gunfire_support", "naval")
+    ,   ("new_base_strike", "naval")
+    ,   ("new_battlefield_support", "air")
+    ,   ("new_convoy_raiding", "naval")
+    ,   ("new_fleet_in_being", "naval")
+    ,   ("new_mobile_warfare", "land")
+    ,   ("new_operational_integrity", "air")
+    ,   ("new_strategic_destruction", "air")
+    ,   ("operations", "land")
+    ,   ("paratroopers_1", "special_forces")
+    ,   ("paratroopers_2", "special_forces")
+    ,   ("patrol_boats", "naval")
+    ,   ("peoples_war", "land")
+    ,   ("rangers_1", "special_forces")
+    ,   ("rangers_2", "special_forces")
+    ,   ("rapid_domination", "land")
+    ,   ("screen_support_focus", "naval")
+    ,   ("screens", "naval")
+    ,   ("self_propelled_support", "land")
+    ,   ("siege_artillery", "land")
+    ,   ("special_forces_first", "special_forces")
+    ,   ("special_forces_quality", "special_forces")
+    ,   ("special_forces_quantity", "special_forces")
+    ,   ("special_forces_second", "special_forces")
+    ,   ("streamlined_deployment", "land")
+    ,   ("strike_aircraft", "air")
+    ,   ("submarine_coastal_defense", "naval")
+    ,   ("submarine_fleet_operations", "naval")
+    ,   ("submarines", "naval")
+    ,   ("superior_firepower", "land")
+    ,   ("support_integrated_operations", "naval")
+    ,   ("tank_destroyer_force", "land")
+    ,   ("torpedo_primacy", "naval")
+    ,   ("wolfpacks", "naval")
+    ]
+
+-- | The part of the doctrine tree a @..._mastery_gain_factor@ modifier is about,
+-- together with the sentence the game words that modifier with. The modifier is
+-- named after the part with nothing to say which kind of part it is, beyond a
+-- @_track@ that the tracks carry, so the other kinds are tried in turn.
+masteryGainModifier :: (HOI4Info g, Monad m) => Text -> PPT g m (Maybe (Text, Text))
+masteryGainModifier lmod = case T.stripSuffix "_mastery_gain_factor" lmod of
+    Nothing -> return Nothing
+    Just stem -> case T.stripSuffix "_track" stem of
+        Just track -> named "mod_track_mastery_gain_factor" "track" track
+        Nothing -> go
+            [ ("mod_folder_mastery_gain_factor", "folder")
+            , ("mod_grand_doctrine_mastery_gain_factor", "grand_doctrine")
+            , ("mod_subdoctrine_mastery_gain_factor", "sub_doctrine") ]
+            stem
+    where
+        go [] _ = return Nothing
+        go ((wrapper, kind):rest) stem = do
+            found <- named wrapper kind stem
+            maybe (go rest stem) (return . Just) found
+        named wrapper kind theid = fmap ((,) wrapper) <$> doctrineLocLookup kind theid
+
+-- | Handler for @add_mastery@ and @add_daily_mastery@, which hand a country
+-- mastery towards part of its doctrine tree, in one go or so much a day for a
+-- while.
+addMastery :: forall g m. (HOI4Info g, Monad m) => Bool -> StatementHandler g m
+addMastery daily stmt@[pdx| %_ = @scr |] =
+    case (amount, target) of
+        (Just amt, _) | not daily -> do
+            what <- masteryTarget target
+            msgToPP $ MsgAddMastery amt what
+        (Just amt, _) | Just d <- days -> do
+            what <- masteryTarget target
+            msgToPP $ MsgAddDailyMastery amt d what
+        _ -> preStatement stmt
+    where
+        (amount, days, target) = foldl' addLine (Nothing, Nothing, Nothing) scr
+        addLine (amt, d, t) [pdx| amount = !n |] = (Just n, d, t)
+        addLine (amt, d, t) [pdx| days = !n |] = (amt, Just n, t)
+        -- The name is what a later effect takes the mastery away by, and says
+        -- nothing to a reader.
+        addLine acc [pdx| name = %_ |] = acc
+        addLine (amt, d, t) [pdx| $kind = $theid |]
+            | kind `elem` ["track", "sub_doctrine", "folder", "grand_doctrine"] = (amt, d, Just (kind, theid))
+        addLine acc stmt = trace ("unknown section in add_mastery: " ++ show stmt) acc
+addMastery _ stmt = preStatement stmt
+
+-- | Handler for @add_mastery_bonus@, which raises how fast mastery comes in for
+-- part of the doctrine tree, for a while.
+addMasteryBonus :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+addMasteryBonus stmt@[pdx| %_ = @scr |] =
+    case (bonus, days) of
+        (Just b, Just d) -> do
+            what <- masteryTarget target
+            msgToPP $ MsgAddMasteryBonus b d what
+        _ -> preStatement stmt
+    where
+        (bonus, days, target) = foldl' addLine (Nothing, Nothing, Nothing) scr
+        addLine (b, d, t) [pdx| bonus = !n |] = (Just n, d, t)
+        addLine (b, d, t) [pdx| days = !n |] = (b, Just n, t)
+        addLine acc [pdx| name = %_ |] = acc
+        addLine (b, d, t) [pdx| $kind = $theid |]
+            | kind `elem` ["track", "sub_doctrine", "folder", "grand_doctrine"] = (b, d, Just (kind, theid))
+        addLine acc stmt = trace ("unknown section in add_mastery_bonus: " ++ show stmt) acc
+addMasteryBonus stmt = preStatement stmt
+
+-- | How the part of the doctrine tree the mastery goes to is written out. A
+-- track holds a run of subdoctrines rather than being one thing, so it is spoken
+-- of in the plural; with nothing named at all the mastery goes to the whole tree.
+masteryTarget :: (HOI4Info g, Monad m) => Maybe (Text, Text) -> PPT g m Text
+masteryTarget Nothing = return "every doctrine"
+masteryTarget (Just ("track", theid)) = do
+    link <- doctrineLink "track" theid
+    return ("all " <> link <> " tracks")
+masteryTarget (Just (kind, theid)) = doctrineLink kind theid
 
 -------------------------------
 -- Handlers for advisor posts --
