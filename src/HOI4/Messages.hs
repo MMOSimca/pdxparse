@@ -462,9 +462,9 @@ data ScriptMessage
     | MsgAddOpinionDur {scriptMessageModid :: Text, scriptMessageWhat :: Text, scriptMessageWhom :: Text, scriptMessageYears :: Double}
     | MsgReverseAddOpinionDur {scriptMessageModid :: Text, scriptMessageWhat :: Text, scriptMessageWho :: Text, scriptMessageYears :: Double}
     | MsgAddNamedThreat {scriptMessageIcon :: Text, scriptMessageAmt :: Double, scriptMessageWhom :: Text}
-    | MsgAddTechBonus {scriptMessageAmt :: Double, scriptMessageName :: Text, scriptMessageUses :: Double}
-    | MsgAddTechBonusAhead {scriptMessageAmt :: Double, scriptMessageName :: Text, scriptMessageUses :: Double}
-    | MsgAddTechBonusAheadBoth {scriptMessageBonus :: Double, scriptMessageYearahead :: Double, scriptMessageName :: Text, scriptMessageUses :: Double}
+    | MsgAddTechBonus {scriptMessageAmt :: Double, scriptMessageWhat :: Text, scriptMessageUses :: Double}
+    | MsgAddTechBonusAhead {scriptMessageAmt :: Double, scriptMessageWhat :: Text, scriptMessageUses :: Double}
+    | MsgAddTechBonusAheadBoth {scriptMessageBonus :: Double, scriptMessageYearahead :: Double, scriptMessageWhat :: Text, scriptMessageUses :: Double}
     | MsgAddToWar {scriptMessageWho :: Text, scriptMessageWhom :: Text, scriptMessageWhy :: Text}
     | MsgCreateEquipmentVariant {scriptMessageWhat :: Text, scriptMessageWhat2 :: Text}
     | MsgCreateWG {scriptMessageWhat :: Text, scriptMessageWhom :: Text, scriptMessageStates :: Text}
@@ -651,6 +651,12 @@ data ScriptMessage
     | MsgActivateMissionTooltip { scriptMessageLoc :: Text}
     | MsgHasDefensiveWar { scriptMessageYn :: Bool }
     | MsgHasIntelligenceAgency { scriptMessageYn :: Bool }
+    | MsgCreateIntelligenceAgency {scriptMessageWhat :: Text}
+    | MsgCreateIntelligenceAgencyPlain
+    | MsgUpgradeIntelligenceAgency {scriptMessageWhat :: Text}
+    | MsgHasDoneAgencyUpgrade {scriptMessageWhat :: Text}
+    | MsgAgencyUpgrades {scriptMessageAmt :: Double, scriptMessageCompare :: Text}
+    | MsgAgencyUpgradesVar {scriptMessageAmtText :: Text, scriptMessageCompare :: Text}
     | MsgLoadFocusTree { scriptMessageWhat :: Text }
     | MsgLoadFocusTreeKeep {scriptMessage_icon :: Text, scriptMessageWhat :: Text, scriptMessageYesNo :: Text }
     | MsgModifyBuildingResources {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmt :: Double }
@@ -2886,7 +2892,7 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgHasDLC {scriptMessageIcon = _icon, scriptMessageDlc = _dlc}
             -> mconcat
-                [ "DLC "
+                [ "The DLC "
                 , if T.null _icon then _dlc else _icon
                 , " is enabled"
                 ]
@@ -3503,45 +3509,33 @@ instance RenderMessage Script ScriptMessage where
                 , toMessage (italicText _whom)
                 , ")"
                 ]
-        MsgAddTechBonus {scriptMessageAmt = _amt, scriptMessageName = _name, scriptMessageUses = _uses}
+        MsgAddTechBonus {scriptMessageAmt = _amt, scriptMessageWhat = _what, scriptMessageUses = _uses}
             -> mconcat
-                [ "Gain "
-                , toMessage $ templateColor (reducedNum (colourPcSign True) _amt)
-                , " research bonus "
-                , if T.null _name then "" else _name
-                , "("
-                , toMessage $ templateColor (colourNum True _uses)
+                [ toMessage (bold (plainNumMin _uses <> "x"))
                 , " "
-                , plural _uses "use" "uses"
-                , ") towards:"
+                , toMessage $ templateColor (reducedNum (colourPc True) _amt)
+                , " research bonus towards: "
+                , _what
                 ]
-        MsgAddTechBonusAhead {scriptMessageAmt = _amt, scriptMessageName = _name, scriptMessageUses = _uses}
+        MsgAddTechBonusAhead {scriptMessageAmt = _amt, scriptMessageWhat = _what, scriptMessageUses = _uses}
             -> mconcat
-                [ "Gain "
+                [ toMessage (bold (plainNumMin _uses <> "x"))
+                , " "
                 , toMessage $ templateColor (colourNum True _amt)
                 , plural _amt " year" " years"
-                , " ahead of time penalty reduction "
-                , if T.null _name then "" else toMessage (italicText _name)
-                , "("
-                , toMessage $ templateColor (colourNum True  _uses)
-                , " "
-                , plural _uses "use" "uses"
-                , ") towards:"
+                , " ahead of time penalty reduction towards: "
+                , _what
                 ]
-        MsgAddTechBonusAheadBoth {scriptMessageBonus = _bonus, scriptMessageYearahead = _year, scriptMessageName = _name, scriptMessageUses = _uses}
+        MsgAddTechBonusAheadBoth {scriptMessageBonus = _bonus, scriptMessageYearahead = _year, scriptMessageWhat = _what, scriptMessageUses = _uses}
             -> mconcat
-                [ "Gain "
-                , toMessage $ templateColor (reducedNum (colourPcSign True) _bonus)
+                [ toMessage (bold (plainNumMin _uses <> "x"))
+                , " "
+                , toMessage $ templateColor (reducedNum (colourPc True) _bonus)
                 , " research bonus or "
                 , toMessage $ templateColor (colourNum True _year)
                 , plural _year " year" " years"
-                , " ahead of time penalty reduction "
-                , if T.null _name then "" else toMessage  _name
-                , "("
-                , toMessage $ templateColor (colourNum True  _uses)
-                , " "
-                , plural _uses "use" "uses"
-                , ") towards:"
+                , " ahead of time penalty reduction towards: "
+                , _what
                 ]
         MsgAddToWar {scriptMessageWho = _who, scriptMessageWhom = _whom, scriptMessageWhy = _why}
             -> mconcat
@@ -4069,6 +4063,42 @@ instance RenderMessage Script ScriptMessage where
                 [ "Has "
                 , toMessage (ifThenElseT _yn "" "''not'' ")
                 , "created an Intelligence Agency"
+                ]
+        MsgCreateIntelligenceAgency {scriptMessageWhat = _what}
+            -> mconcat
+                [ "Create Intelligence Agency ("
+                , _what
+                , ")"
+                ]
+        MsgCreateIntelligenceAgencyPlain
+            -> "Create an Intelligence Agency"
+        MsgUpgradeIntelligenceAgency {scriptMessageWhat = _what}
+            -> mconcat
+                [ "Apply the Upgrade "
+                , _what
+                , " to your Intelligence Agency"
+                ]
+        MsgHasDoneAgencyUpgrade {scriptMessageWhat = _what}
+            -> mconcat
+                [ "Has applied the Upgrade "
+                , _what
+                , " to the Intelligence Agency"
+                ]
+        MsgAgencyUpgrades {scriptMessageAmt = _amt, scriptMessageCompare = _comp}
+            -> mconcat
+                [ "Has "
+                , _comp
+                , " "
+                , toMessage (bold (plainNumMin _amt))
+                , " Intelligence Agency upgrades"
+                ]
+        MsgAgencyUpgradesVar {scriptMessageAmtText = _amtT, scriptMessageCompare = _comp}
+            -> mconcat
+                [ "Has "
+                , _comp
+                , " "
+                , typewriterText _amtT
+                , " Intelligence Agency upgrades"
                 ]
         MsgLoadFocusTree { scriptMessageWhat = _what }
             -> mconcat

@@ -26,6 +26,9 @@ module HOI4.SpecialHandlers (
     ,   advisorPost
     ,   setCanBeFiredInAdvisorRole
     ,   addRelationRuleOverride
+    ,   createIntelligenceAgency
+    ,   upgradeIntelligenceAgency
+    ,   hasDoneAgencyUpgrade
     ,   addFieldMarshalRole
     ,   addAdvisorRole
     ,   removeAdvisorRole
@@ -2946,3 +2949,85 @@ characterListTooltip stmt@[pdx| %_ = @scr |] = do
             script_pp'd <- indentUp (ppMany scr)
             return $ basemsg ++ script_pp'd
 characterListTooltip stmt = preStatement stmt
+
+------------------------------------------
+-- Handlers for the intelligence agency --
+------------------------------------------
+
+-- | Handler for @create_intelligence_agency@, whose block gives the agency a
+-- name and picks a logo for it. The logo is a graphics id and says nothing to a
+-- reader, so only the name is written out. A name is sometimes spelled out in
+-- the block and sometimes given as a key to look up.
+createIntelligenceAgency :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+createIntelligenceAgency [pdx| %_ = @scr |] = case foldl' addLine Nothing scr of
+    Nothing -> msgToPP MsgCreateIntelligenceAgencyPlain
+    Just name -> do
+        nameloc <- getGameL10nIfPresent name
+        msgToPP (MsgCreateIntelligenceAgency (fromMaybe name nameloc))
+    where
+        addLine :: Maybe Text -> GenericStatement -> Maybe Text
+        addLine _ [pdx| name = ?name |] = Just name
+        addLine acc _ = acc
+createIntelligenceAgency stmt = preStatement stmt
+
+-- | Handler for @upgrade_intelligence_agency@, which puts one upgrade of the
+-- agency into effect.
+upgradeIntelligenceAgency :: (HOI4Info g, Monad m) => StatementHandler g m
+upgradeIntelligenceAgency [pdx| %_ = $upgrade |] =
+    msgToPP . MsgUpgradeIntelligenceAgency =<< agencyUpgradeLink upgrade
+upgradeIntelligenceAgency stmt = preStatement stmt
+
+-- | Handler for @has_done_agency_upgrade@, which asks whether an upgrade is
+-- already in effect.
+hasDoneAgencyUpgrade :: (HOI4Info g, Monad m) => StatementHandler g m
+hasDoneAgencyUpgrade [pdx| %_ = $upgrade |] =
+    msgToPP . MsgHasDoneAgencyUpgrade =<< agencyUpgradeLink upgrade
+hasDoneAgencyUpgrade stmt = preStatement stmt
+
+-- | A link to an agency upgrade, on the wiki page the agency is written about
+-- on, where the branch of upgrades it belongs to is a heading. Script names an
+-- upgrade without saying which branch holds it, and the branches live in a file
+-- that says little else we want, so which branch each upgrade sits in is listed
+-- here instead.
+agencyUpgradeLink :: (HOI4Info g, Monad m) => Text -> PPT g m Text
+agencyUpgradeLink theid = do
+    mname <- getGameL10nIfPresent theid
+    case (mname, HM.lookup (T.toLower theid) agencyUpgradeBranches) of
+        -- The heading a link jumps to is written with underscores where the
+        -- name has spaces, as the doctrine links are.
+        (Just name, Just branch) -> do
+            branchloc <- getGameL10n branch
+            return $ mconcat
+                [ "[[Intelligence agency#"
+                , T.replace " " "_" (branchloc <> " Branch")
+                , "|", name, "]]" ]
+        -- An upgrade we know the name of but not the branch has no heading to
+        -- jump to; one we do not even have a name for is left as the id script
+        -- called it by, which is also what says the key needs fixing.
+        (Just name, Nothing) -> return name
+        _ -> return ("<tt>" <> theid <> "</tt>")
+
+-- | The branch of the agency each upgrade belongs to, and so the heading each
+-- is written under.
+agencyUpgradeBranches :: HashMap Text Text
+agencyUpgradeBranches = HM.fromList
+    [ ("upgrade_economy_civilian"       , "branch_intelligence")
+    , ("upgrade_army_department"        , "branch_intelligence")
+    , ("upgrade_naval_department"       , "branch_intelligence")
+    , ("upgrade_airforce_department"    , "branch_intelligence")
+    , ("upgrade_passive_defense"        , "branch_defense")
+    , ("upgrade_anti_partisan"          , "branch_defense")
+    , ("upgrade_blueprint_stealing"     , "branch_operation")
+    , ("upgrade_portable_radios"        , "branch_operation")
+    , ("upgrade_invisible_ink"          , "branch_operation")
+    , ("upgrade_plastic_explosives"     , "branch_operation")
+    , ("upgrade_suicide_pills"          , "branch_operation")
+    , ("upgrade_training_centers"       , "branch_operative")
+    , ("upgrade_commando_training"      , "branch_operative")
+    , ("upgrade_interrogation_techniques", "branch_operative")
+    , ("upgrade_diplo_training"         , "branch_operative")
+    , ("upgrade_psycho_warfare"         , "branch_operative")
+    , ("upgrade_form_department"        , "branch_crypto")
+    , ("upgrade_decryption_boost"       , "branch_crypto")
+    , ("upgrade_crypto_strength"        , "branch_crypto")
+    ]

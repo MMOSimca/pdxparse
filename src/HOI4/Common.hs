@@ -457,7 +457,7 @@ handlersCompound = Tr.fromList
         ,("random_scope_in_array"       , scope HOI4Misc . compoundMessageExtract "array" MsgRandomScopeInArray)
         -- flow control
         ,("and"                         , compoundMessage MsgAnd) --AND
-        ,("not"                         , compoundMessage MsgNot) --NOT
+        ,("not"                         , compoundMessageNot) --NOT
         ,("or"                          , compoundMessage MsgOr) --OR
         ,("count_triggers"          ,   compoundMessageExtractNum "amount" MsgCountTriggers)
         ,("hidden_trigger"          ,                      compoundMessage MsgHiddenTriggers)
@@ -644,6 +644,10 @@ handlersYesNo = Tr.fromList
         ,("has_civil_war"               , withBool MsgHasCivilWar)
         ,("has_defensive_war"           , withBool MsgHasDefensiveWar)
         ,("has_intelligence_agency"     , withBool MsgHasIntelligenceAgency)
+        ,("has_done_agency_upgrade"     , hasDoneAgencyUpgrade)
+        ,("agency_upgrade_number"       , numericCompare "more than" "fewer than" MsgAgencyUpgrades MsgAgencyUpgradesVar)
+        ,("create_intelligence_agency"  , createIntelligenceAgency)
+        ,("upgrade_intelligence_agency" , upgradeIntelligenceAgency)
         ,("has_offensive_war"           , withBool MsgHasOffensiveWar)
         ,("has_war"                     , withBool MsgHasWar)
         ,("has_war_with_major"          , withBool MsgHasWarWithMajor)

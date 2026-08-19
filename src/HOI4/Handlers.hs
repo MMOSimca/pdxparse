@@ -14,6 +14,7 @@ module HOI4.Handlers (
     ,   ppMtth
     ,   compound
     ,   compoundMessage
+    ,   compoundMessageNot
     ,   compoundMessageScope
     ,   compoundMessageCondition
     ,   compoundMessageExtractTag
@@ -202,7 +203,7 @@ import SettingsTypes ( PPT, IsGameData (..), GameData (..), IsGameState (..), Ga
                      , getGameInterface, getGameInterfaceIfPresent, unsnoc
                      , LocArg (..) )
 import HOI4.Templates
-import {-# SOURCE #-} HOI4.Common (ppScript, ppMany, extractStmt, matchLhsText)
+import {-# SOURCE #-} HOI4.Common (ppScript, ppMany, ppOne, extractStmt, matchLhsText)
 import HOI4.Types -- everything
 
 import Debug.Trace
@@ -767,6 +768,86 @@ isThirdPerson line = case T.toLower (T.takeWhile isAlpha line) of
         modals = ["will", "would", "can", "could", "may", "might", "shall", "must"]
         imperativesInS = ["dismiss", "address", "press", "pass"]
 
+-- | A condition said the other way about, if English will take a "not" into it
+-- without the verb having to be rebuilt. That holds when the clause opens with a
+-- verb that carries one -- "Is at war" becomes "Is ''not'' at war" -- and not
+-- when it opens with a plain verb, which would have to be put back into the
+-- infinitive behind a "does not".
+--
+-- "Has" is either of those depending on what comes after it, so it is looked at
+-- more closely: standing in front of a participle it is an auxiliary and takes
+-- the "not", and anywhere else it is the verb itself and is rebuilt.
+--
+-- A condition that already says "not" is left alone rather than given a second
+-- one to read past.
+negateClause :: Text -> Maybe Text
+negateClause t
+    | T.null rest = Nothing
+    | "not" `elem` T.words (T.map (\c -> if isAlpha c then toLower c else ' ') t) = Nothing
+    | lower `elem` ["has", "have", "had"] =
+        Just $ if isParticiple rest
+            then word <> " ''not''" <> rest
+            else doForm <> " ''not'' have" <> rest
+    | lower `elem` negatable = Just (word <> " ''not''" <> rest)
+    | otherwise = Nothing
+    where
+        word = T.takeWhile isAlpha t
+        rest = T.dropWhile isAlpha t
+        lower = T.toLower word
+        capsLike = if maybe False (isUpper . fst) (T.uncons word) then id else T.toLower
+        doForm = capsLike (case lower of
+            "have" -> "Do"
+            "had" -> "Did"
+            _ -> "Does")
+        negatable =
+            [ "is", "are", "was", "were"
+            , "does", "do", "did", "can", "could", "will", "would"
+            , "may", "might", "must", "shall" ]
+
+-- | Whether a clause goes on with a past participle, an adverb in front of one
+-- not counting. Regular participles are told by their @-ed@; the irregular ones
+-- that turn up in a condition of ours are listed.
+isParticiple :: Text -> Bool
+isParticiple line = case T.toLower firstWord of
+    "" -> False
+    word
+        | word `elem` adverbs || "ly" `T.isSuffixOf` word -> isParticiple after
+        | otherwise -> (T.length word > 3 && "ed" `T.isSuffixOf` word)
+                       || word `elem` irregulars
+    where
+        firstWord = T.takeWhile isAlpha (T.dropWhile (not . isAlpha) line)
+        after = T.dropWhile isAlpha (T.dropWhile (not . isAlpha) line)
+        adverbs = ["already", "ever", "still", "just", "yet", "also", "again", "now"]
+        irregulars =
+            [ "been", "become", "begun", "broken", "built", "cast", "chosen"
+            , "come", "cut", "dealt", "done", "drawn", "driven", "fallen"
+            , "felt", "fought", "found", "given", "gone", "grown", "held"
+            , "hidden", "hit", "kept", "known", "laid", "left", "lent", "let"
+            , "lost", "made", "meant", "met", "paid", "put", "read", "risen"
+            , "run", "said", "seen", "sent", "set", "shown", "shut", "sold"
+            , "spent", "split", "spoken", "spread", "stood", "sworn", "taken"
+            , "taught", "thrown", "told", "torn", "understood", "won", "worn"
+            , "written" ]
+
+-- | Handler for @NOT@, which is otherwise written as a heading with the
+-- conditions it rules out standing under it. A block holding a single condition
+-- reads better said in one line, and a single line is also the form a header can
+-- fold in, so it is written that way whenever English will negate the condition
+-- inside without rebuilding it.
+compoundMessageNot :: (HOI4Info g, Monad m) => StatementHandler g m
+compoundMessageNot stmt@[pdx| %_ = @scr |] = case scr of
+    [inner] -> do
+        msgs <- ppOne inner
+        case msgs of
+            [(_, msg)] -> do
+                text <- T.strip <$> messageText msg
+                case negateClause text of
+                    Just negated | isClause text -> msgToPP (MsgUnprocessed negated)
+                    _ -> compoundMessage MsgNot stmt
+            _ -> compoundMessage MsgNot stmt
+    _ -> compoundMessage MsgNot stmt
+compoundMessageNot stmt = compoundMessage MsgNot stmt
+
 -- | Join clauses into a list the way it would be written out: a serial comma
 -- between all but the last two, which take an "and".
 joinClauses :: [Text] -> Text
@@ -796,7 +877,11 @@ lowerFirst t
         secondWord = T.takeWhile isAlpha (T.dropWhile (not . isAlpha) (T.dropWhile isAlpha t))
         opensAName = not (T.null secondWord)
             && isUpper (T.head secondWord)
+            && not isAbbreviation
             && T.toLower firstWord `notElem` alwaysLower
+        -- A word in capitals throughout is an abbreviation -- "the DLC ...",
+        -- "the USSR ..." -- and says nothing about the word in front of it.
+        isAbbreviation = T.length secondWord > 1 && T.all isUpper secondWord
         alwaysLower =
             [ "is", "are", "was", "were", "has", "have", "had"
             , "does", "do", "did", "can", "could", "will", "would"
@@ -2978,22 +3063,21 @@ addTechBonus stmt@[pdx| %_ = @scr |]
         addLine atb _ = return atb
         pp_atb :: AddTechBonus -> PPT g m IndentedMessages
         pp_atb atb = do
-            let techcat = tb_category atb ++ tb_technology atb
-                ifname = case tb_name atb of
-                    Just name -> "(" <> italicText name <> ") "
-                    _ -> ""
+            -- What the bonus goes towards has a page of the wiki to itself,
+            -- whether script named a whole category of research or a single
+            -- technology out of one.
+            let techcat = joinClauses
+                    [ "[[" <> tc <> "]]" | tc <- tb_category atb ++ tb_technology atb ]
                 uses = tb_uses atb
                 tbmsg = case (tb_bonus atb, tb_ahead_reduction atb) of
                     (Just bonus, Just ahead) ->
-                        MsgAddTechBonusAheadBoth bonus ahead ifname uses
+                        MsgAddTechBonusAheadBoth bonus ahead techcat uses
                     (Just bonus, _) ->
-                        MsgAddTechBonus bonus ifname uses
+                        MsgAddTechBonus bonus techcat uses
                     (_, Just ahead) ->
-                        MsgAddTechBonusAhead ahead ifname uses
+                        MsgAddTechBonusAhead ahead techcat uses
                     _ -> trace ("issues in add_technology_bonus: " ++ show stmt ) $ preMessage stmt
-            techcatmsg <- mapM (\tc ->withCurrentIndent $ \i -> return [(i+1, MsgUnprocessed tc)]) techcat
-            tbmsg_pp <- msgToPP tbmsg
-            return $ tbmsg_pp ++ concat techcatmsg
+            msgToPP tbmsg
 addTechBonus stmt = preStatement stmt
 
 -- | Handler for @add_breakthrough_progress@ and @add_breakthrough_points@, which
