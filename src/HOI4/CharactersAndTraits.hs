@@ -31,6 +31,7 @@ import SettingsTypes ( PPT
                      , setCurrentFile, withCurrentFile
                      , hoistErrors, hoistExceptions)
 import HOI4.Common -- everything
+import HOI4.Messages (wikifyLocColours)
 ----------------
 -- Characters --
 ----------------
@@ -87,7 +88,7 @@ character [pdx| %left = %right |] = case right of
         IntLhs _ -> throwError "int lhs at top level"
         AtLhs _ -> return (Right Nothing)
         GenericLhs id [] -> withCurrentFile $ \file -> do
-            locname <- getGameL10n id
+            locname <- wikifyLocColours <$> getGameL10n id
             cchar <- hoistErrors $ foldM characterAddSection
                                         (Just (newHOI4Character id locname file))
                                         parts
@@ -109,10 +110,10 @@ characterAddSection hChar stmt
     where
         characterAddSection' hChar [pdx| name = %name |] = case name of
             StringRhs name -> do
-                nameLoc <- getGameL10n name
+                nameLoc <- wikifyLocColours <$> getGameL10n name
                 return hChar {cha_loc_name = nameLoc, cha_name = name}
             GenericRhs name [] -> do
-                nameLoc <- getGameL10n name
+                nameLoc <- wikifyLocColours <$> getGameL10n name
                 return hChar {cha_loc_name  = nameLoc, cha_name = name}
             _ -> trace "Bad name in characters" $ return hChar
         characterAddSection' hChar [pdx| advisor = @adv |] = do
@@ -283,7 +284,7 @@ parseHOI4CountryLeaderTrait :: (IsGameData (GameData g), IsGameState (GameState 
     GenericStatement -> PPT g m (Either Text (Maybe HOI4CountryLeaderTrait))
 parseHOI4CountryLeaderTrait [pdx| $id = @effects |]
     = withCurrentFile $ \file -> do
-        mlocid <- getGameL10nIfPresent id
+        mlocid <- fmap wikifyLocColours <$> getGameL10nIfPresent id
         let cclt = foldl' addSection (HOI4CountryLeaderTrait {
                 clt_id = id
             ,   clt_name = id
@@ -350,7 +351,7 @@ parseHOI4UnitLeaderTrait :: (IsGameData (GameData g), IsGameState (GameState g),
     GenericStatement -> PPT g m (Either Text (Maybe HOI4UnitLeaderTrait))
 parseHOI4UnitLeaderTrait [pdx| $id = @effects |]
     = withCurrentFile $ \file -> do
-        mlocid <- getGameL10nIfPresent id
+        mlocid <- fmap wikifyLocColours <$> getGameL10nIfPresent id
         let cult = foldl' addSection (HOI4UnitLeaderTrait {
                 ult_id = id
             ,   ult_loc_name = mlocid

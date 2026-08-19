@@ -155,7 +155,7 @@ writeHOI4DecisionCats = do
 ppdecisioncat :: forall g m. (HOI4Info g, MonadError Text m) => HOI4Decisioncat -> PPT g m Doc
 ppdecisioncat decc = setCurrentFile (decc_path decc) $ do
     version <- gets (gameVersion . getSettings)
-    decc_text_loc <- getGameL10nIfPresent (decc_name decc <> "_desc")
+    decc_text_loc <- fmap wikifyLocColours <$> getGameL10nIfPresent (decc_name decc <> "_desc")
     let deccArg :: Text -> (HOI4Decisioncat -> Maybe a) -> (a -> PPT g m Doc) -> PPT g m [Doc]
         deccArg fieldname field fmt
             = maybe (return [])
@@ -172,7 +172,7 @@ ppdecisioncat decc = setCurrentFile (decc_path decc) $ do
     available_pp'd  <- deccArg "available" decc_available ppScript
     let name = decc_name decc
         nameD = Doc.strictText name
-    name_loc <- getGameL10n name
+    name_loc <- wikifyLocColours <$> getGameL10n name
     let icon = decc_icon decc
         deccpicture = decc_picture decc
     icon_pp <- do
@@ -247,7 +247,7 @@ parseHOI4Decision :: (IsGameData (GameData g), IsGameState (GameState g), Monad 
     GenericStatement -> Text -> PPT g (ExceptT Text m) (Maybe HOI4Decision)
 parseHOI4Decision [pdx| $decName = %rhs |] category = case rhs of
     CompoundRhs parts -> do
-        decName_loc <- getGameL10n decName
+        decName_loc <- wikifyLocColours <$> getGameL10n decName
         decDesc <- getGameL10nIfPresent (decName <> "_desc")
         withCurrentFile $ \sourcePath ->
             foldM decisionAddSection
@@ -444,7 +444,7 @@ writeHOI4Decisions = do
 ppdecision :: forall g m. (HOI4Info g, MonadError Text m) => HOI4Decision -> PPT g m Doc
 ppdecision dec = setCurrentFile (dec_path dec) $ do
     version <- gets (gameVersion . getSettings)
-    dec_text_loc <- getGameL10nIfPresent (dec_name dec <> "_desc")
+    dec_text_loc <- fmap wikifyLocColours <$> getGameL10nIfPresent (dec_name dec <> "_desc")
     let decArg :: Text -> (HOI4Decision -> Maybe a) -> (a -> PPT g m Doc) -> PPT g m [Doc]
         decArg fieldname field fmt
             = maybe (return [])
@@ -512,14 +512,14 @@ ppdecision dec = setCurrentFile (dec_path dec) $ do
         targetsDynamic = dec_targets_dynamic dec
     custom_cost_loc_pp'd <- case dec_custom_cost_text dec of
             Just custom_cost_text -> do
-                custom_cost_text_loc <- getGameL10n custom_cost_text
+                custom_cost_text_loc <- wikifyLocColours <$> getGameL10n custom_cost_text
                 return ["| cost = ", Doc.strictText custom_cost_text_loc, "<!-- custom cost -->" ,PP.line]
             _ -> return []
     custom_cost_trigger_pp'd  <- decArg "custom_cost_trigger" dec_custom_cost_trigger ppScript
     activation_pp'd <- decNoArg dec_activation ppScript "<!-- activation -->"
     modifier_pp'd <- setIsInEffect True (decNoArg dec_modifier ppStatement "")
     targetedModifier_pp'd <- setIsInEffect True (decNoArg dec_targeted_modifier ppScript "")
-    name_loc <- getGameL10n name
+    name_loc <- wikifyLocColours <$> getGameL10n name
     icon_pp'd <- case dec_icon dec of
         Just (HOI4DecisionIconSimple txt) -> do
             let icond = if not $ "GFX_decision_" `T.isPrefixOf` txt then "GFX_decision_" <> txt else txt

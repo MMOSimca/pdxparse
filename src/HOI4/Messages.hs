@@ -3444,16 +3444,14 @@ instance RenderMessage Script ScriptMessage where
         MsgModifierYellow {scriptMessageWhat = _what, scriptMessageDec = _dec, scriptMessageAmt = _amt}
             -> mconcat
                 [ _what
-                , ": {{color|yellow|"
+                , ": "
                 , toMessage (bold (plainNumMinPrec _dec _amt))
-                , "}}"
                 ]
         MsgModifierSign {scriptMessageWhat = _what, scriptMessageDec = _dec, scriptMessageAmt = _amt}
             -> mconcat
                 [ _what
-                , ": {{color|yellow|"
-                , toMessage (plainNumSignPrec _dec _amt)
-                , "}}"
+                , ": "
+                , toMessage (bold (plainNumSignPrec _dec _amt))
                 ]
         MsgModifierColourPos {scriptMessageWhat = _what, scriptMessageDec = _dec, scriptMessageAmt = _amt}
             -> mconcat
@@ -3476,9 +3474,8 @@ instance RenderMessage Script ScriptMessage where
         MsgModifierPcSign {scriptMessageWhat = _what, scriptMessageDec = _dec, scriptMessageAmt = _amt}
             -> mconcat
                 [ _what
-                , ": {{color|yellow|"
+                , ": "
                 , toMessage (bold (plainPcSignPrec _dec _amt))
-                , "}}"
                 ]
         MsgModifierPcReduced {scriptMessageWhat = _what, scriptMessageAmt = _amt}
             -> mconcat
@@ -3489,16 +3486,14 @@ instance RenderMessage Script ScriptMessage where
         MsgModifierPcReducedSign {scriptMessageWhat = _what, scriptMessageDec = _dec, scriptMessageAmt = _amt}
             -> mconcat
                 [ _what
-                , ": {{color|yellow|"
-                , toMessage (reducedNum (plainPcSignPrec _dec) _amt)
-                , "}}"
+                , ": "
+                , toMessage (bold (reducedNum (plainPcSignPrec _dec) _amt))
                 ]
         MsgModifierPcReducedSignMin {scriptMessageWhat = _what, scriptMessageDec = _dec, scriptMessageAmt = _amt}
             -> mconcat
                 [ _what
-                , ": {{color|yellow|"
-                , toMessage (reducedNum (plainPcMinPrec _dec) _amt)
-                , "}}"
+                , ": "
+                , toMessage (bold (reducedNum (plainPcMinPrec _dec) _amt))
                 ]
         MsgModifierPcPos {scriptMessageWhat = _what, scriptMessageDec = _dec, scriptMessageAmt = _amt}
             -> mconcat

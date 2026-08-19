@@ -40,6 +40,7 @@ import SettingsTypes ( PPT, Settings (..)
                      , indentUp
                      , getGameInterface, getGameInterfaceIfPresent)
 import HOI4.Common -- everything
+import HOI4.Messages (wikifyLocColours)
 
 -- | Empty national focus. Starts off Nothing/empty everywhere, except id and name
 -- (which should get filled in immediately).
@@ -104,8 +105,8 @@ parseHOI4NationalFocus vars ordinal [pdx| %left = %right |] = case right of
                 return (Right Nothing)
             else
                 withCurrentFile $ \file -> do
-                    nfNameLoc <- getGameL10n $ fromMaybe (getNFId parts) (getNFTxt parts)
-                    nfNameDesc <- getGameL10nIfPresent $ fromMaybe (getNFId parts) (getNFTxt parts) <> "_desc"
+                    nfNameLoc <- wikifyLocColours <$> getGameL10n (fromMaybe (getNFId parts) (getNFTxt parts))
+                    nfNameDesc <- fmap wikifyLocColours <$> getGameL10nIfPresent (fromMaybe (getNFId parts) (getNFTxt parts) <> "_desc")
                     nnf <- hoistErrors $ foldM (nationalFocusAddSection vars)
                                                 (Just newHOI4NationalFocus {nf_path = file
                                                                             ,nf_name_loc = nfNameLoc

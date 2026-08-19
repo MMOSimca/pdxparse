@@ -38,7 +38,7 @@ import Abstract -- everything
 import qualified Doc
 import HOI4.Common -- everything
 import FileIO (Feature (..), writeFeatures)
-import HOI4.Messages (imsg2doc)
+import HOI4.Messages (imsg2doc, wikifyLocColours)
 import MessageTools (iquotes)
 import QQ (pdx)
 import SettingsTypes ( PPT, Settings (..)
@@ -329,8 +329,8 @@ iquotes't = Doc.doc2text . iquotes
 ppTitles :: (HOI4Info g, Monad m) => Bool {- ^ Is this a hidden event? -}
                                 -> [HOI4EvtTitle] -> Text -> PPT g m Doc
 ppTitles _ [] eid = return $ "| event_name = " <> Doc.strictText eid
-ppTitles False [HOI4EvtTitleSimple key] eid = ("| event_name = " <>) . Doc.strictText . Doc.nl2br <$> getGameL10n key
-ppTitles True [HOI4EvtTitleSimple key]eid  = ("| event_name = (Hidden) " <>) . Doc.strictText . Doc.nl2br <$> getGameL10n key
+ppTitles False [HOI4EvtTitleSimple key] eid = ("| event_name = " <>) . Doc.strictText . Doc.nl2br . wikifyLocColours <$> getGameL10n key
+ppTitles True [HOI4EvtTitleSimple key]eid  = ("| event_name = (Hidden) " <>) . Doc.strictText . Doc.nl2br . wikifyLocColours <$> getGameL10n key
 ppTitles True _ eid = return "| event_name = (This event is hidden and has no title.)"
 ppTitles _ titles eid = (("| event_name = " <> Doc.strictText eid <> PP.line <>"| cond_event_name = yes" <> PP.line <> "| cond_name = ") <>) . PP.vsep <$> mapM ppTitle titles where
     ppTitle (HOI4EvtTitleSimple key) = ("Otherwise:<br>:" <>) <$> fmtTitle key
@@ -343,14 +343,14 @@ ppTitles _ titles eid = (("| event_name = " <> Doc.strictText eid <> PP.line <>"
         imsg2doc =<< ppMany scr
     fmtTitle key = flip fmap (getGameL10nIfPresent key) $ \case
         Nothing -> Doc.strictText key
-        Just txt -> "''" <> Doc.strictText (Doc.nl2br txt) <> "''"
+        Just txt -> "''" <> Doc.strictText (Doc.nl2br (wikifyLocColours txt)) <> "''"
 
 -- | Present an event's description block.
 ppDescs :: (HOI4Info g, Monad m) => Bool {- ^ Is this a hidden event? -}
                                 -> [HOI4EvtDesc] -> PPT g m Doc
 ppDescs True _ = return "| cond_event_text = (This event is hidden and has no description.)"
 ppDescs _ [] = return "| event_text = (No description)"
-ppDescs _ [HOI4EvtDescSimple key] = ("| event_text = " <>) . Doc.strictText . Doc.nl2br <$> getGameL10n key
+ppDescs _ [HOI4EvtDescSimple key] = ("| event_text = " <>) . Doc.strictText . Doc.nl2br . wikifyLocColours <$> getGameL10n key
 ppDescs _ descs = (("| cond_event_text = yes" <> PP.line <> "| event_text = ") <>) . PP.vsep <$> mapM ppDesc descs where
     ppDesc (HOI4EvtDescSimple key) = ("Otherwise:<br>:" <>) <$> fmtDesc key
     ppDesc (HOI4EvtDescConditional scr key) = mconcat <$> sequenceA
@@ -362,7 +362,7 @@ ppDescs _ descs = (("| cond_event_text = yes" <> PP.line <> "| event_text = ") <
         imsg2doc =<< ppMany scr
     fmtDesc key = flip fmap (getGameL10nIfPresent key) $ \case
         Nothing -> Doc.strictText key
-        Just txt -> "''" <> Doc.strictText (Doc.nl2br txt) <> "''"
+        Just txt -> "''" <> Doc.strictText (Doc.nl2br (wikifyLocColours txt)) <> "''"
 
 ppEventLoc :: (HOI4Info g, Monad m) => Text -> PPT g m Text
 ppEventLoc id = do
@@ -496,7 +496,7 @@ ppoptions hidden evtid opts = do
 ppoption :: (HOI4Info g, MonadError Text m) =>
     Text -> Bool -> Bool -> HOI4Option -> PPT g m Doc
 ppoption evtid hidden triggered opt = do
-    optNameLoc <- getGameL10n `mapM` hoi4opt_name opt
+    optNameLoc <- fmap wikifyLocColours <$> (getGameL10n `mapM` hoi4opt_name opt)
     case optNameLoc of
         -- NB: some options have no effect, e.g. start of Peasants' War.
         Just name_loc -> ok name_loc
@@ -536,7 +536,7 @@ formatWeight (Just (n, d)) = T.pack (" (Base weight: " ++ show n ++ "/" ++ show 
 ppEventSource :: (HOI4Info g, Monad m) => HOI4EventSource -> PPT g m Doc
 ppEventSource (HOI4EvtSrcOption eventId optionId) = do
     eventLoc <- ppEventLoc eventId
-    optLoc <- getGameL10n optionId
+    optLoc <- wikifyLocColours <$> getGameL10n optionId
     return $ Doc.strictText $ mconcat [ "The event "
         , eventLoc
         , " option "

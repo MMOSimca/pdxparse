@@ -32,6 +32,7 @@ import SettingsTypes ( PPT
                      , setCurrentFile, withCurrentFile
                      , hoistExceptions)
 import HOI4.Common -- everything
+import HOI4.Messages (wikifyLocColours)
 
 -- | Take the idea group scripts from game data and parse them into idea group
 -- data structures.
@@ -83,9 +84,9 @@ parseHOI4Idea :: (IsGameData (GameData g), IsGameState (GameState g), Monad m) =
     GenericStatement -> Text -> PPT g (ExceptT Text m) (Maybe HOI4Idea)
 parseHOI4Idea [pdx| $ideaName = %rhs |] category = case rhs of
     CompoundRhs parts -> do
-        idName_loc <- getGameL10n ideaName
+        idName_loc <- wikifyLocColours <$> getGameL10n ideaName
         let idPicture = "GFX_idea_" <> ideaName
-        idDesc <- getGameL10nIfPresent $ ideaName <> "_desc"
+        idDesc <- fmap wikifyLocColours <$> getGameL10nIfPresent (ideaName <> "_desc")
         withCurrentFile $ \sourcePath ->
             foldM ideaAddSection
                   (Just (newIdea { id_id = ideaName

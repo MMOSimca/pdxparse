@@ -210,7 +210,7 @@ ppOpinionModifiers modifiers = do
 
 ppOpinionModifier :: (HOI4Info g, Monad m) => HOI4OpinionModifier -> PPT g m Doc
 ppOpinionModifier mod = do
-    locName <- getGameL10n (omodName mod)
+    locName <- wikifyLocColours <$> getGameL10n (omodName mod)
     return . mconcat $
         [ "| "
         , Doc.strictText $ T.toLower (omodName mod)
@@ -287,7 +287,7 @@ parseHOI4DynamicModifier :: (IsGameData (GameData g), IsGameState (GameState g),
     GenericStatement -> PPT g m (Either Text (Maybe HOI4DynamicModifier))
 parseHOI4DynamicModifier [pdx| $modid = @effects |]
     = withCurrentFile $ \file -> do
-        mlocid <- getGameL10nIfPresent modid
+        mlocid <- fmap wikifyLocColours <$> getGameL10nIfPresent modid
         let dmd = foldl' addSection (HOI4DynamicModifier {
                 dmodName = modid
             ,   dmodLocName = mlocid
@@ -348,7 +348,7 @@ writeHOI4DynamicModifiers = do
                 icond <- getGameInterface "idea_unknown" i
                 return $ "[[File:" <> icond <> ".png|22px]]") (dmodIcon mod)
             loc <- do
-                mloc <- getGameL10nIfPresent (dmodName mod <> "_desc")
+                mloc <- fmap wikifyLocColours <$> getGameL10nIfPresent (dmodName mod <> "_desc")
                 case mloc of
                     Just locd -> do
                         let docloc = Doc.strictText locd
@@ -396,7 +396,7 @@ parseHOI4Modifier :: (IsGameData (GameData g), IsGameState (GameState g), MonadE
     GenericStatement -> PPT g m (Either Text (Maybe HOI4Modifier))
 parseHOI4Modifier [pdx| $modid = @effects |]
     = withCurrentFile $ \file -> do
-        mlocid <- getGameL10nIfPresent modid
+        mlocid <- fmap wikifyLocColours <$> getGameL10nIfPresent modid
         let modi = foldl' addSection (HOI4Modifier {
                 modName = modid
             ,   modLocName = mlocid

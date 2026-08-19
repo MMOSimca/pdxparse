@@ -318,20 +318,20 @@ ppTechnology tech = setCurrentFile (tech_filepath tech) $ do
             (field tech)
         unitdesc = case tech_units tech of
             Just unit ->
-                getGameL10nDefault "" (head unit <> "_desc")
+                wikifyLocColours <$> getGameL10nDefault "" (head unit <> "_desc")
             Nothing -> return ""
 
     if tech_doctrine tech then return . mconcat $ [] else do
         desc <- case tech_desc tech of
-            Just spec -> getGameL10n spec
+            Just spec -> wikifyLocColours <$> getGameL10n spec
             Nothing -> do
-                mdesc <- getGameL10nIfPresent (tech_id tech <> "_desc")
+                mdesc <- fmap wikifyLocColours <$> getGameL10nIfPresent (tech_id tech <> "_desc")
                 case mdesc of
                     Just desc -> return desc
                     Nothing -> do
                         case tech_equipment tech of
                             Just equ -> do
-                                mdesc <- getGameL10nIfPresent (head equ <> "_desc")
+                                mdesc <- fmap wikifyLocColours <$> getGameL10nIfPresent (head equ <> "_desc")
                                 maybe unitdesc return mdesc
                             Nothing -> unitdesc
 

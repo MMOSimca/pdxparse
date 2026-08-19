@@ -369,7 +369,7 @@ modifierMSG _ targ stmt@[pdx| $specmod = @scr|]
         if specmod `elem` terrain || specmod `elem` ["fort", "river", "night"]
         then do
             ter <- getGameL10n specmod
-            termsg <- plainMsg' ("{{color|Yellow|" <> ter <> "}}:")
+            termsg <- plainMsg' ("'''" <> ter <> "''':")
             modmsg <- fold <$> indentUp (traverse (modifierMSG False targ) scr)
             return $ termsg : modmsg
         else trace ("unknown modifier type: " ++ show specmod ++ " IN: " ++ show stmt) $ preStatement stmt
