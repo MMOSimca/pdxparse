@@ -837,6 +837,89 @@ data ScriptMessage
     | MsgLimitToBorderCountry {scriptMessageWho :: Text}
     | MsgProvinceLevel {scriptMessageComp :: Text, scriptMessageAmt :: Double}
     | MsgLimitToVictoryPoint {scriptMessageYn :: Bool,scriptMessageComp :: Text, scriptMessageAmt :: Double}
+    | MsgHasUnitLeaderId {scriptMessageAmt :: Double}
+    | MsgIsResearchingTechnology {scriptMessageWhat :: Text}
+    | MsgAddCivilWarTarget {scriptMessageWho :: Text, scriptMessageWhat :: Text}
+    | MsgSetStateOwnerTo {scriptMessageWho :: Text, scriptMessageWhat :: Text}
+    | MsgRemoveUnitLeaderRole
+    | MsgActivateShineOnFocus {scriptMessageIcon :: Text, scriptMessageKey :: Text, scriptMessageLoc :: Text}
+    | MsgAddLegitimacy {scriptMessageAmt :: Double}
+    | MsgSetPoliticalParty {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmt :: Double}
+    | MsgSetPoliticalPartyVar {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmtText :: Text}
+    | MsgSetFactionName {scriptMessageWhat :: Text}
+    | MsgRemoveFromArray {scriptMessageVar1 :: Text, scriptMessageVar2 :: Text}
+    | MsgAddResistanceTarget {scriptMessageAmt :: Double, scriptMessageDays :: Double, scriptMessageWhy :: Text}
+    | MsgCompleteMioTrait {scriptMessageWhat :: Text, scriptMessageKey :: Text}
+    | MsgHasAnyPowerBalance {scriptMessageYn :: Bool}
+    | MsgRetireIdeologyLeader {scriptMessageWhat :: Text}
+    | MsgEveryMio
+    | MsgAllMio
+    | MsgRandomMio
+    | MsgTransferUnitsFraction {scriptMessageWho :: Text, scriptMessageYn :: Bool}
+    | MsgTransferUnitsShare {scriptMessageWhat :: Text, scriptMessageAmt :: Double}
+    | MsgIsImpassable {scriptMessageYn :: Bool}
+    | MsgCanBeCountryLeader {scriptMessageYn :: Bool}
+    | MsgCanBeCountryLeaderChar {scriptMessageWho :: Text}
+    | MsgAverageStats {scriptMessageAmt :: Double, scriptMessageCompare :: Text}
+    | MsgAverageStatsVar {scriptMessageAmtText :: Text, scriptMessageCompare :: Text}
+    | MsgDistanceTo {scriptMessageIcon :: Text, scriptMessageWho :: Text, scriptMessageCompare :: Text, scriptMessageAmt :: Double}
+    | MsgDistanceToVar {scriptMessageIcon :: Text, scriptMessageWho :: Text, scriptMessageCompare :: Text, scriptMessageAmtText :: Text}
+    | MsgPoliticalPowerGrowth {scriptMessageAmt :: Double, scriptMessageCompare :: Text}
+    | MsgPoliticalPowerGrowthVar {scriptMessageAmtText :: Text, scriptMessageCompare :: Text}
+    | MsgHasIdeaWithTrait {scriptMessageWhat :: Text}
+    | MsgHasStateCategory {scriptMessageWhat :: Text}
+    | MsgHasDoctrine {scriptMessageWhat :: Text}
+    | MsgHasCountryLeaderIdeology {scriptMessageWhat :: Text}
+    | MsgHasElections {scriptMessageYn :: Bool}
+    | MsgHasCountryRule {scriptMessageWhat :: Text}
+    | MsgHasFactionTemplate {scriptMessageWhat :: Text}
+    | MsgHasShineEffectOnFocus {scriptMessageIcon :: Text, scriptMessageKey :: Text, scriptMessageLoc :: Text}
+    | MsgControlsProvince {scriptMessageAmt :: Double}
+    | MsgHasResistance {scriptMessageYn :: Bool}
+    | MsgHasEventTarget {scriptMessageWhat :: Text}
+    | MsgIsDebug {scriptMessageYn :: Bool}
+    | MsgFactionInfluenceRatio {scriptMessageAmt :: Double, scriptMessageCompare :: Text}
+    | MsgFactionInfluenceRatioVar {scriptMessageAmtText :: Text, scriptMessageCompare :: Text}
+    | MsgFightingArmyStrengthRatio {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageCompare :: Text, scriptMessageAmt :: Double}
+    | MsgFightingArmyStrengthRatioVar {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageCompare :: Text, scriptMessageAmtText :: Text}
+    | MsgHasResourcesAmount {scriptMessageYn :: Bool, scriptMessageCompare :: Text, scriptMessageAmt :: Double, scriptMessageIcon :: Text, scriptMessageWhere :: Text}
+    | MsgAnyProvinceBuildingLevel {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageCompare :: Text, scriptMessageAmt :: Double, scriptMessageWhere :: Text}
+    | MsgCompareAutonomyState {scriptMessageCompare :: Text, scriptMessageWhat :: Text}
+    | MsgIsInArray {scriptMessageVar1 :: Text, scriptMessageVar2 :: Text}
+    | MsgAddToArray {scriptMessageVar1 :: Text, scriptMessageVar2 :: Text}
+    | MsgClearArray {scriptMessageWhat :: Text}
+    | MsgLoadOob {scriptMessageWhat :: Text}
+    | MsgReleaseOnControlled {scriptMessageWho :: Text, scriptMessageWhat :: Text}
+    | MsgEndPuppet {scriptMessageWho :: Text, scriptMessageWhat :: Text}
+    | MsgSendEmbargo {scriptMessageWho :: Text, scriptMessageWhat :: Text}
+    | MsgAddContestedOwner {scriptMessageWho :: Text, scriptMessageWhat :: Text}
+    | MsgAddContestedOwnerState {scriptMessageWhat :: Text}
+    | MsgRemoveResourceRights {scriptMessageWhat :: Text}
+    | MsgClearGlobalEventTarget {scriptMessageWhat :: Text}
+    | MsgAddSkillLevel {scriptMessageAmt :: Double}
+    | MsgAddFactionInitiative {scriptMessageAmt :: Double}
+    | MsgAddFactionInfluenceRatio {scriptMessageAmt :: Double}
+    | MsgAddMioResearchBonus {scriptMessageAmt :: Double}
+    | MsgAddCic {scriptMessageAmt :: Double}
+    | MsgRandomSelectAmount {scriptMessageAmt :: Double}
+    | MsgSetTruce {scriptMessageWho :: Text, scriptMessageDays :: Double}
+    | MsgRemoveCountryLeaderRole {scriptMessageWho :: Text, scriptMessageWhat :: Text}
+    | MsgSetDivisionTemplateCap {scriptMessageWhat :: Text, scriptMessageAmt :: Double}
+    | MsgSetDivisionTemplateCapVar {scriptMessageWhat :: Text, scriptMessageAmtText :: Text}
+    | MsgCreateShip {scriptMessageAmt :: Double, scriptMessageWhat :: Text, scriptMessageWhat2 :: Text, scriptMessageName :: Text, scriptMessageWho :: Text}
+    | MsgTransferShip {scriptMessageWhat :: Text, scriptMessageName :: Text, scriptMessageWho :: Text}
+    | MsgAddEquipmentSubsidy {scriptMessageAmt :: Double, scriptMessageWhat :: Text, scriptMessageWho :: Text, scriptMessageWhy :: Text}
+    | MsgAddEquipmentProduction {scriptMessageAmt :: Double, scriptMessageWhat :: Text, scriptMessageWhat2 :: Text, scriptMessageWho :: Text, scriptMessageName :: Text, scriptMessageAmt2 :: Double, scriptMessageBonus :: Double}
+    | MsgCreateProductionLicense {scriptMessageWho :: Text, scriptMessageWhat :: Text, scriptMessageWhat2 :: Text, scriptMessageBonus :: Double}
+    | MsgCreateFactionFromTemplate {scriptMessageWhat :: Text, scriptMessageKey :: Text}
+    | MsgAddUnitsToDivisionTemplate {scriptMessageWhat :: Text, scriptMessageWhat2 :: Text}
+    | MsgPuppetCountry {scriptMessageWho :: Text, scriptMessageWhat :: Text}
+    | MsgSetPowerBalance {scriptMessageWhat :: Text, scriptMessageKey :: Text}
+    | MsgSetPowerBalanceValue {scriptMessageAmt :: Double}
+    | MsgSetPowerBalanceSides {scriptMessageWhat :: Text, scriptMessageWhat2 :: Text}
+    | MsgSetPowerBalanceDefault
+    | MsgGetHighestScoredCountry {scriptMessageWhat :: Text, scriptMessageVar :: Text}
+    | MsgIsMio {scriptMessageWhat :: Text, scriptMessageKey :: Text}
 
 -- | Whether to default to English localization.
 useEnglish :: [Text] -> Bool
@@ -5365,6 +5448,548 @@ instance RenderMessage Script ScriptMessage where
             -> mconcat
                 [ ", on provinces with {{icon|vp}} Victory Points"
                 , ifThenElseT _yn "" (" " <> _comp <> " " <> toMessage (bold (plainNumMin _amt)))
+                ]
+        MsgHasUnitLeaderId {scriptMessageAmt = _amt}
+            -> mconcat
+                [ "Is the unit leader with id "
+                , toMessage (bold (Doc.strictText (T.pack (show (round _amt :: Int)))))
+                ]
+        MsgIsResearchingTechnology {scriptMessageWhat = _what}
+            -> mconcat
+                [ "Is researching "
+                , toMessage (italic (Doc.strictText _what))
+                ]
+        MsgAddCivilWarTarget {scriptMessageWho = _who, scriptMessageWhat = _what}
+            -> mconcat
+                [ "Add "
+                , _who
+                , " to the sides of the civil war"
+                ]
+        MsgSetStateOwnerTo {scriptMessageWho = _who, scriptMessageWhat = _what}
+            -> mconcat
+                [ "Hand the state over to "
+                , _who
+                ]
+        MsgRemoveUnitLeaderRole
+            -> "Stops serving as a unit leader"
+        MsgActivateShineOnFocus {scriptMessageIcon = _icon, scriptMessageKey = _key, scriptMessageLoc = _loc}
+            -> mconcat
+                [ "Highlight national focus "
+                , "[[File:"
+                , _icon
+                , ".png|28px]]"
+                , " <!-- "
+                , _key
+                , " -->"
+                , toMessage (iquotes _loc)
+                ]
+        MsgAddLegitimacy {scriptMessageAmt = _amt}
+            -> mconcat
+                [ "Gain "
+                , toMessage $ templateColor (colourNumSign True _amt)
+                , " legitimacy"
+                ]
+        MsgSetPoliticalParty {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageAmt = _amt}
+            -> mconcat
+                [ "Set the ruling party to "
+                , _icon
+                , _what
+                , ", with "
+                , toMessage (bold (plainPcMin _amt))
+                , " of the popular support"
+                ]
+        MsgSetPoliticalPartyVar {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageAmtText = _amtT}
+            -> mconcat
+                [ "Set the ruling party to "
+                , _icon
+                , _what
+                , ", with the value of "
+                , typewriterText _amtT
+                , " as its popular support"
+                ]
+        MsgSetFactionName {scriptMessageWhat = _what}
+            -> mconcat
+                [ "Rename the faction to "
+                , toMessage (bold (Doc.strictText _what))
+                ]
+        MsgRemoveFromArray {scriptMessageVar1 = _var1, scriptMessageVar2 = _var2}
+            -> mconcat
+                [ "Take "
+                , ifThenElseT (T.null _var2) "the current scope" (typewriterText _var2)
+                , " out of the array "
+                , typewriterText _var1
+                ]
+        MsgAddResistanceTarget {scriptMessageAmt = _amt, scriptMessageDays = _days, scriptMessageWhy = _why}
+            -> mconcat
+                [ "Resistance target: "
+                , toMessage $ templateColor (colourPcSign False _amt)
+                , ifThenElseT (_days <= 0) "" (" for " <> boldText (formatDays _days))
+                , ifThenElseT (T.null _why) "" (" (" <> _why <> ")")
+                ]
+        MsgCompleteMioTrait {scriptMessageWhat = _what, scriptMessageKey = _key}
+            -> mconcat
+                [ "Complete the trait "
+                , toMessage (bold (Doc.strictText _what))
+                , "<!--", _key, "-->"
+                ]
+        MsgHasAnyPowerBalance {scriptMessageYn = _yn}
+            -> mconcat
+                [ "Has"
+                , toMessage (ifThenElseT _yn "" " ''no''")
+                , " balance of power running"
+                ]
+        MsgRetireIdeologyLeader {scriptMessageWhat = _what}
+            -> mconcat
+                [ "The leader of the "
+                , toMessage (italic (Doc.strictText _what))
+                , " party retires"
+                ]
+        MsgEveryMio
+            -> "Every military industrial organization:"
+        MsgAllMio
+            -> "All military industrial organizations:"
+        MsgRandomMio
+            -> "One random military industrial organization:"
+        MsgTransferUnitsFraction {scriptMessageWho = _who, scriptMessageYn = _yn}
+            -> mconcat
+                [ "Transfer forces to "
+                , _who
+                , ifThenElseT _yn ", their leaders going with them" ""
+                ]
+        MsgTransferUnitsShare {scriptMessageWhat = _what, scriptMessageAmt = _amt}
+            -> mconcat
+                [ toMessage (bold (reducedNum plainPcMin _amt))
+                , " of the "
+                , _what
+                ]
+        MsgIsImpassable {scriptMessageYn = _yn}
+            -> mconcat
+                [ "Is"
+                , toMessage (ifThenElseT _yn "" " ''not''")
+                , " impassable"
+                ]
+        MsgCanBeCountryLeader {scriptMessageYn = _yn}
+            -> mconcat
+                [ "Is"
+                , toMessage (ifThenElseT _yn "" " ''not''")
+                , " fit to lead the country"
+                ]
+        MsgCanBeCountryLeaderChar {scriptMessageWho = _who}
+            -> mconcat
+                [ boldText _who
+                , " is fit to lead the country"
+                ]
+        MsgAverageStats {scriptMessageAmt = _amt, scriptMessageCompare = _comp}
+            -> mconcat
+                [ "Has "
+                , _comp
+                , " "
+                , toMessage (bold (plainNumMin _amt))
+                , " as an average of their skills"
+                ]
+        MsgAverageStatsVar {scriptMessageAmtText = _amtT, scriptMessageCompare = _comp}
+            -> mconcat
+                [ "Has "
+                , _comp
+                , " the value of "
+                , typewriterText _amtT
+                , " as an average of their skills"
+                ]
+        MsgDistanceTo {scriptMessageIcon = _icon, scriptMessageWho = _who, scriptMessageCompare = _comp, scriptMessageAmt = _amt}
+            -> mconcat
+                [ "Is "
+                , _comp
+                , " "
+                , toMessage (bold (plainNumMin _amt))
+                , " away from "
+                , _who
+                ]
+        MsgDistanceToVar {scriptMessageIcon = _icon, scriptMessageWho = _who, scriptMessageCompare = _comp, scriptMessageAmtText = _amtT}
+            -> mconcat
+                [ "Is "
+                , _comp
+                , " the value of "
+                , typewriterText _amtT
+                , " away from "
+                , _who
+                ]
+        MsgPoliticalPowerGrowth {scriptMessageAmt = _amt, scriptMessageCompare = _comp}
+            -> mconcat
+                [ "Gains "
+                , _comp
+                , " "
+                , toMessage (bold (plainNumMin _amt))
+                , " {{icon|political power|1}} a day"
+                ]
+        MsgPoliticalPowerGrowthVar {scriptMessageAmtText = _amtT, scriptMessageCompare = _comp}
+            -> mconcat
+                [ "Gains "
+                , _comp
+                , " the value of "
+                , typewriterText _amtT
+                , " {{icon|political power|1}} a day"
+                ]
+        MsgHasIdeaWithTrait {scriptMessageWhat = _what}
+            -> mconcat
+                [ "Has an idea with the trait "
+                , toMessage (italic (Doc.strictText _what))
+                ]
+        MsgHasStateCategory {scriptMessageWhat = _what}
+            -> mconcat
+                [ "Is a "
+                , toMessage (italic (Doc.strictText _what))
+                ]
+        MsgHasDoctrine {scriptMessageWhat = _what}
+            -> mconcat
+                [ "Has the doctrine "
+                , _what
+                ]
+        MsgHasCountryLeaderIdeology {scriptMessageWhat = _what}
+            -> mconcat
+                [ "Is led by a leader following "
+                , toMessage (italic (Doc.strictText _what))
+                ]
+        MsgHasElections {scriptMessageYn = _yn}
+            -> mconcat
+                [ "Is"
+                , toMessage (ifThenElseT _yn "" " ''not''")
+                , " allowed to hold elections"
+                ]
+        MsgHasCountryRule {scriptMessageWhat = _what}
+            -> _what
+        MsgHasFactionTemplate {scriptMessageWhat = _what}
+            -> mconcat
+                [ "Is in a faction built from the template "
+                , typewriterText _what
+                ]
+        MsgHasShineEffectOnFocus {scriptMessageIcon = _icon, scriptMessageKey = _key, scriptMessageLoc = _loc}
+            -> mconcat
+                [ "Has national focus "
+                , "[[File:"
+                , _icon
+                , ".png|28px]]"
+                , " <!-- "
+                , _key
+                , " -->"
+                , toMessage (iquotes _loc)
+                , " highlighted"
+                ]
+        MsgControlsProvince {scriptMessageAmt = _amt}
+            -> mconcat
+                [ "Controls the province ("
+                , T.pack (show (round _amt :: Int))
+                , ")"
+                ]
+        MsgHasResistance {scriptMessageYn = _yn}
+            -> mconcat
+                [ "Has "
+                , ifThenElseT _yn "a" "no"
+                , " resistance movement"
+                ]
+        MsgHasEventTarget {scriptMessageWhat = _what}
+            -> mconcat
+                [ "Has saved the event target "
+                , typewriterText _what
+                ]
+        MsgIsDebug {scriptMessageYn = _yn}
+            -> ifThenElseT _yn "The game is running in debug mode" "The game is not running in debug mode"
+        MsgFactionInfluenceRatio {scriptMessageAmt = _amt, scriptMessageCompare = _comp}
+            -> mconcat
+                [ "Holds "
+                , _comp
+                , " "
+                , toMessage (bold (reducedNum plainPc _amt))
+                , " of the faction's influence"
+                ]
+        MsgFactionInfluenceRatioVar {scriptMessageAmtText = _amtT, scriptMessageCompare = _comp}
+            -> mconcat
+                [ "Holds "
+                , _comp
+                , " the value of "
+                , typewriterText _amtT
+                , " of the faction's influence"
+                ]
+        MsgFightingArmyStrengthRatio {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageCompare = _comp, scriptMessageAmt = _amt}
+            -> mconcat
+                [ "Has "
+                , _comp
+                , " "
+                , toMessage (bold (reducedNum plainPc _amt))
+                , " of the army fighting strength of "
+                , _what
+                ]
+        MsgFightingArmyStrengthRatioVar {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageCompare = _comp, scriptMessageAmtText = _amtT}
+            -> mconcat
+                [ "Has "
+                , _comp
+                , " the value of "
+                , typewriterText _amtT
+                , " times the army fighting strength of "
+                , _what
+                ]
+        MsgHasResourcesAmount {scriptMessageYn = _yn, scriptMessageCompare = _comp, scriptMessageAmt = _amt, scriptMessageIcon = _icon, scriptMessageWhere = _where}
+            -> mconcat
+                [ ifThenElseT (T.null _where) "" (_where <> " ")
+                , ifThenElseT (T.null _where)
+                    (ifThenElseT _yn "Delivers " "Has ")
+                    (ifThenElseT _yn "delivers " "has ")
+                , _comp
+                , " "
+                , toMessage (bold (plainNumMin _amt))
+                , " "
+                , _icon
+                ]
+        MsgAnyProvinceBuildingLevel {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageCompare = _comp, scriptMessageAmt = _amt, scriptMessageWhere = _where}
+            -> mconcat
+                [ "Any province of the state "
+                , ifThenElseT (T.null _where) "" (_where <> " ")
+                , "has "
+                , _comp
+                , " "
+                , toMessage (bold (plainNumMin _amt))
+                , " "
+                , _icon
+                , " "
+                , _what
+                ]
+        MsgCompareAutonomyState {scriptMessageCompare = _comp, scriptMessageWhat = _what}
+            -> mconcat
+                [ "Is "
+                , _comp
+                , " "
+                , toMessage (italic (Doc.strictText _what))
+                ]
+        MsgIsInArray {scriptMessageVar1 = _var1, scriptMessageVar2 = _var2}
+            -> mconcat
+                [ "The array "
+                , typewriterText _var1
+                , " contains "
+                , typewriterText _var2
+                ]
+        MsgAddToArray {scriptMessageVar1 = _var1, scriptMessageVar2 = _var2}
+            -> mconcat
+                [ "Add "
+                , ifThenElseT (T.null _var2) "the current scope" (typewriterText _var2)
+                , " to the array "
+                , typewriterText _var1
+                ]
+        MsgClearArray {scriptMessageWhat = _what}
+            -> mconcat
+                [ "Empty the array "
+                , typewriterText _what
+                ]
+        MsgLoadOob {scriptMessageWhat = _what}
+            -> mconcat
+                [ "Load the order of battle "
+                , typewriterText _what
+                ]
+        MsgReleaseOnControlled {scriptMessageWho = _who, scriptMessageWhat = _what}
+            -> mconcat
+                [ "Release "
+                , _who
+                , " as a puppet on the states we own or control"
+                ]
+        MsgEndPuppet {scriptMessageWho = _who, scriptMessageWhat = _what}
+            -> mconcat
+                [ _who
+                , " stops being our puppet"
+                ]
+        MsgSendEmbargo {scriptMessageWho = _who, scriptMessageWhat = _what}
+            -> mconcat
+                [ "Place an embargo on "
+                , _who
+                ]
+        MsgAddContestedOwner {scriptMessageWho = _who, scriptMessageWhat = _what}
+            -> mconcat
+                [ _who
+                , " also lays claim to this state"
+                ]
+        MsgAddContestedOwnerState {scriptMessageWhat = _what}
+            -> mconcat
+                [ "Also lay claim to "
+                , _what
+                ]
+        MsgRemoveResourceRights {scriptMessageWhat = _what}
+            -> mconcat
+                [ "Give up the resource rights to "
+                , _what
+                ]
+        MsgClearGlobalEventTarget {scriptMessageWhat = _what}
+            -> mconcat
+                [ "Clear the global event target "
+                , typewriterText _what
+                ]
+        MsgAddSkillLevel {scriptMessageAmt = _amt}
+            -> mconcat
+                [ "Gain "
+                , toMessage (bold (plainNumMin _amt))
+                , " skill level"
+                , plural _amt "" "s"
+                ]
+        MsgAddFactionInitiative {scriptMessageAmt = _amt}
+            -> mconcat
+                [ "The faction gains "
+                , toMessage (bold (plainNumMin _amt))
+                , " Faction Initiative"
+                ]
+        MsgAddFactionInfluenceRatio {scriptMessageAmt = _amt}
+            -> mconcat
+                [ "Gain "
+                , toMessage $ templateColor (reducedNum (colourPcSign True) _amt)
+                , " of the faction's total influence"
+                ]
+        MsgAddMioResearchBonus {scriptMessageAmt = _amt}
+            -> mconcat
+                [ "Research bonus: "
+                , toMessage $ templateColor (reducedNum (colourPcSign True) _amt)
+                ]
+        MsgAddCic {scriptMessageAmt = _amt}
+            -> mconcat
+                [ "Gain "
+                , toMessage $ templateColor (colourNumSign True _amt)
+                , " {{icon|cic|1}} in the CIC bank"
+                ]
+        MsgRandomSelectAmount {scriptMessageAmt = _amt}
+            -> mconcat
+                [ "Only "
+                , toMessage (bold (plainNumMin _amt))
+                , " of them, picked at random"
+                ]
+        MsgSetTruce {scriptMessageWho = _who, scriptMessageDays = _days}
+            -> mconcat
+                [ "Truce with "
+                , _who
+                , ifThenElseT (_days <= 0) "" (" for " <> boldText (formatDays _days))
+                ]
+        MsgRemoveCountryLeaderRole {scriptMessageWho = _who, scriptMessageWhat = _what}
+            -> mconcat
+                [ ifThenElseT (T.null _who) "Stops" (boldText _who <> " stops")
+                , " leading the "
+                , toMessage (italic (Doc.strictText _what))
+                , " party"
+                ]
+        MsgSetDivisionTemplateCap {scriptMessageWhat = _what, scriptMessageAmt = _amt}
+            -> mconcat
+                [ "At most "
+                , toMessage (bold (plainNumMin _amt))
+                , " division"
+                , plural _amt "" "s"
+                , " of the "
+                , boldText _what
+                , " template may be held"
+                ]
+        MsgSetDivisionTemplateCapVar {scriptMessageWhat = _what, scriptMessageAmtText = _amtT}
+            -> mconcat
+                [ "The number of divisions of the "
+                , boldText _what
+                , " template that may be held is set to the value of "
+                , typewriterText _amtT
+                ]
+        MsgCreateShip {scriptMessageAmt = _amt, scriptMessageWhat = _what, scriptMessageWhat2 = _what2, scriptMessageName = _name, scriptMessageWho = _who}
+            -> mconcat
+                [ "Add "
+                , toMessage (bold (plainNumMin _amt))
+                , " "
+                , _what
+                , ifThenElseT (T.null _what2) "" (" (" <> italicText _what2 <> ")")
+                , " to the reserve fleet"
+                , ifThenElseT (T.null _name) "" (", named " <> italicText _name)
+                , ifThenElseT (T.null _who) "" (", built to a design of " <> _who)
+                ]
+        MsgTransferShip {scriptMessageWhat = _what, scriptMessageName = _name, scriptMessageWho = _who}
+            -> mconcat
+                [ "Transfer a "
+                , _what
+                , ifThenElseT (T.null _name) "" (", by preference " <> italicText _name)
+                , ", to "
+                , _who
+                ]
+        MsgAddEquipmentSubsidy {scriptMessageAmt = _amt, scriptMessageWhat = _what, scriptMessageWho = _who, scriptMessageWhy = _why}
+            -> mconcat
+                [ "Set aside "
+                , toMessage (bold (plainNumMin _amt))
+                , " {{icon|cic|1}} to buy "
+                , _what
+                , ifThenElseT (T.null _who) "" (" from " <> _who)
+                , ifThenElseT (T.null _why) "" (" from any seller matching " <> typewriterText _why)
+                ]
+        MsgAddEquipmentProduction {scriptMessageAmt = _amt, scriptMessageWhat = _what, scriptMessageWhat2 = _what2, scriptMessageWho = _who, scriptMessageName = _name, scriptMessageAmt2 = _amt2, scriptMessageBonus = _factor}
+            -> mconcat
+                [ "Open a production line for "
+                , _what
+                , ifThenElseT (T.null _what2) "" (" (" <> italicText _what2 <> ")")
+                , ifThenElseT (T.null _who) "" (", to a design of " <> _who)
+                , ifThenElseT (T.null _name) "" (", named " <> italicText _name)
+                , ", with "
+                , toMessage (bold (plainNumMin _amt))
+                , " factor"
+                , plural _amt "y" "ies"
+                , " on it"
+                , ifThenElseT (_amt2 <= 0) "" (", already " <> boldText (Doc.doc2text (reducedNum plainPc _amt2)) <> " built")
+                , ifThenElseT (_factor <= 0) "" (" and at " <> boldText (Doc.doc2text (reducedNum plainPc _factor)) <> " efficiency")
+                ]
+        MsgCreateProductionLicense {scriptMessageWho = _who, scriptMessageWhat = _what, scriptMessageWhat2 = _what2, scriptMessageBonus = _factor}
+            -> mconcat
+                [ "License "
+                , _who
+                , " to build "
+                , _what
+                , ifThenElseT (T.null _what2) "" (" (" <> italicText _what2 <> ")")
+                , ifThenElseT (_factor == 1) "" (", at " <> boldText (Doc.doc2text (reducedNum plainPc _factor)) <> " of the usual cost")
+                ]
+        MsgCreateFactionFromTemplate {scriptMessageWhat = _what, scriptMessageKey = _key}
+            -> mconcat
+                [ "Create the faction "
+                , ifThenElseT (T.null _what) "" (boldText _what <> " ")
+                , "from the template "
+                , typewriterText _key
+                ]
+        MsgAddUnitsToDivisionTemplate {scriptMessageWhat = _what, scriptMessageWhat2 = _what2}
+            -> mconcat
+                [ "Add "
+                , _what2
+                , " to the "
+                , boldText _what
+                , " division template"
+                ]
+        MsgPuppetCountry {scriptMessageWho = _who, scriptMessageWhat = _what}
+            -> mconcat
+                [ _who
+                , " becomes a puppet of the current scope"
+                , _what
+                ]
+        MsgSetPowerBalance {scriptMessageWhat = _what, scriptMessageKey = _key}
+            -> mconcat
+                [ "The "
+                , toMessage (bold (Doc.strictText _what))
+                , "<!--", _key, "-->"
+                , " becomes active"
+                ]
+        MsgSetPowerBalanceValue {scriptMessageAmt = _amt}
+            -> mconcat
+                [ "Set to "
+                , toMessage (bold (reducedNum plainPc _amt))
+                ]
+        MsgSetPowerBalanceSides {scriptMessageWhat = _what, scriptMessageWhat2 = _what2}
+            -> mconcat
+                [ ifThenElseT (T.null _what) "" ("Left side: " <> boldText _what)
+                , ifThenElseT (T.null _what || T.null _what2) "" ". "
+                , ifThenElseT (T.null _what2) "" ("Right side: " <> boldText _what2)
+                ]
+        MsgSetPowerBalanceDefault
+            -> "Set back to its starting value"
+        MsgGetHighestScoredCountry {scriptMessageWhat = _what, scriptMessageVar = _var}
+            -> mconcat
+                [ "Save the country that scores highest by "
+                , typewriterText _what
+                , " in the variable "
+                , typewriterText _var
+                ]
+        MsgIsMio {scriptMessageWhat = _what, scriptMessageKey = _key}
+            -> mconcat
+                [ "Is "
+                , toMessage (bold (Doc.strictText _what))
+                , "<!--", _key, "-->"
                 ]
     renderMessage _ _ _ = error "Sorry, non-English localisation not yet supported."
 

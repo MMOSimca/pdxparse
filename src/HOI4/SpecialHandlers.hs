@@ -28,6 +28,11 @@ module HOI4.SpecialHandlers (
     ,   addRelationRuleOverride
     ,   reduceFocusCompletionCost
     ,   mioScope
+    ,   isMio
+    ,   hasDoctrine
+    ,   removeCountryLeaderRole
+    ,   canBeCountryLeader
+    ,   completeMioTrait
     ,   createIntelligenceAgency
     ,   upgradeIntelligenceAgency
     ,   hasDoneAgencyUpgrade
@@ -2970,6 +2975,8 @@ createIntelligenceAgency [pdx| %_ = @scr |] = case foldl' addLine Nothing scr of
         addLine :: Maybe Text -> GenericStatement -> Maybe Text
         addLine _ [pdx| name = ?name |] = Just name
         addLine acc _ = acc
+-- Written bare wherever the agency takes the country's own name.
+createIntelligenceAgency [pdx| %_ = yes |] = msgToPP MsgCreateIntelligenceAgencyPlain
 createIntelligenceAgency stmt = preStatement stmt
 
 -- | Handler for @upgrade_intelligence_agency@, which puts one upgrade of the
@@ -3226,3 +3233,56 @@ mioKind token = do
     case HM.lookup token includes of
         Nothing -> return Nothing
         Just archetype -> fmap Doc.oneLine <$> getGameL10nIfPresent archetype
+
+-- | Handler for @is_military_industrial_organization@, which asks whether the
+-- organization in scope is the one named. The scope is usually reached through a
+-- variable, so the name is the only thing that says which one is meant.
+isMio :: (HOI4Info g, Monad m) => StatementHandler g m
+isMio [pdx| %_ = $token |] = do
+    name <- mioName token
+    msgToPP (MsgIsMio name token)
+isMio stmt = preStatement stmt
+
+-- | Handler for @has_doctrine@, which asks whether a grand doctrine or one of
+-- the subdoctrines under it is the one the country is running. The statement
+-- does not say which kind of part it names, so the grand doctrines are tried
+-- first and anything else is taken for a subdoctrine.
+hasDoctrine :: (HOI4Info g, Monad m) => StatementHandler g m
+hasDoctrine [pdx| %_ = $theid |] = do
+    mgrand <- doctrineLocLookup "grand_doctrine" theid
+    link <- doctrineLink (maybe "subdoctrine" (const "grand_doctrine") mgrand) theid
+    msgToPP (MsgHasDoctrine link)
+hasDoctrine stmt = preStatement stmt
+
+--------------------------------------------
+-- Handler for remove_country_leader_role --
+--------------------------------------------
+-- | Handler for @remove_country_leader_role@, which stops a character leading
+-- the country for one ideology. In a character scope the character is the one
+-- in scope and is not named again.
+removeCountryLeaderRole :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+removeCountryLeaderRole stmt@[pdx| %_ = @scr |] =
+    case foldl' addLine (Nothing, Nothing) scr of
+        (mchar, Just ideo) -> do
+            ideoloc <- getGameL10n ideo
+            charloc <- traverse getCharacterName mchar
+            msgToPP (MsgRemoveCountryLeaderRole (fromMaybe "" charloc) ideoloc)
+        _ -> preStatement stmt
+    where
+        addLine (c, i) [pdx| character = $ch |] = (Just ch, i)
+        addLine (c, i) [pdx| character = ?ch |] = (Just ch, i)
+        addLine (c, i) [pdx| ideology = $ideo |] = (c, Just ideo)
+        addLine acc stmt = trace ("unknown section in remove_country_leader_role: " ++ show stmt) acc
+removeCountryLeaderRole stmt = preStatement stmt
+
+-- | Handler for @can_be_country_leader@, which asks whether a character is fit
+-- to lead the country. The character is the one in scope, or named outright.
+canBeCountryLeader :: (HOI4Info g, Monad m) => StatementHandler g m
+canBeCountryLeader stmt@[pdx| %_ = yes |] = withBool MsgCanBeCountryLeader stmt
+canBeCountryLeader stmt@[pdx| %_ = no |] = withBool MsgCanBeCountryLeader stmt
+canBeCountryLeader stmt = withCharacter MsgCanBeCountryLeaderChar stmt
+
+-- | Handler for @complete_mio_trait@, which finishes one of an organization's
+-- traits outright.
+completeMioTrait :: (HOI4Info g, Monad m) => StatementHandler g m
+completeMioTrait = mioTooltip MsgCompleteMioTrait

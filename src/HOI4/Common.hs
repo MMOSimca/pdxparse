@@ -228,6 +228,15 @@ handlersNumeric = Tr.fromList
         ,("add_attack"                       , numeric MsgAddAttack)
         ,("add_coordination"                 , numeric MsgAddCoordination)
         ,("add_maneuver"                     , numeric MsgAddManeuver)
+        ,("add_skill_level"                  , numeric MsgAddSkillLevel)
+        ,("add_faction_initiative"           , numeric MsgAddFactionInitiative)
+        ,("add_faction_influence_ratio"      , numeric MsgAddFactionInfluenceRatio)
+        ,("add_mio_research_bonus"           , numeric MsgAddMioResearchBonus)
+        ,("add_cic"                          , numeric MsgAddCic)
+        ,("controls_province"                , numeric MsgControlsProvince)
+        ,("random_select_amount"             , numeric MsgRandomSelectAmount)
+        ,("add_legitimacy"                   , numeric MsgAddLegitimacy)
+        ,("has_id"                           , numeric MsgHasUnitLeaderId)
         ]
 
 -- | Handlers for numeric statements that compare
@@ -304,6 +313,9 @@ handlersNumericCompare = Tr.fromList
         ,("stronghold_network"               , buildingLevel "stronghold_network")
         ,("supply_node"                      , buildingLevel "supply_node")
         ,("synthetic_refinery"               , buildingLevel "synthetic_refinery")
+        ,("faction_influence_ratio"          , numericCompare "more than" "less than" MsgFactionInfluenceRatio MsgFactionInfluenceRatioVar)
+        ,("average_stats"                    , numericCompare "more than" "less than" MsgAverageStats MsgAverageStatsVar)
+        ,("political_power_growth"           , numericCompare "more than" "less than" MsgPoliticalPowerGrowth MsgPoliticalPowerGrowthVar)
         ]
 
 -- | Handlers for numeric statements with icons
@@ -402,6 +414,10 @@ handlersCompound = Tr.fromList
         ,("every_country_with_original_tag", scope HOI4Country  . compoundMessageExtractTag "original_tag_to_check" MsgEveryCountryWithOriginalTag)
         ,("every_enemy_country"         , scope HOI4Country     . compoundMessageScope MsgEveryEnemyCountry)
         ,("every_navy_leader"           , scope HOI4UnitLeader  . compoundMessageScope MsgEveryNavyLeader)
+        ,("every_military_industrial_organization" , compoundMessageScope MsgEveryMio)
+        ,("all_military_industrial_organization" , compoundMessageScope MsgAllMio)
+        ,("any_military_industrial_organization" , compoundMessageScope MsgAllMio)
+        ,("random_military_industrial_organization" , compoundMessageScope MsgRandomMio)
         ,("every_neighbor_country"      , scope HOI4Country     . compoundMessageScope MsgEveryNeighborCountry)
         ,("every_neighbor_state"        , scope HOI4ScopeState  . compoundMessageScope MsgEveryNeighborState)
         ,("every_occupied_country"      , scope HOI4Country     . compoundMessageScope MsgEveryOccupiedCountry)
@@ -496,6 +512,15 @@ handlersLocRhs = Tr.fromList
         ,("is_in_tech_sharing_group" , withLocAtomName MsgIsInTechSharingGroup)
         ,("add_to_tech_sharing_group" , withLocAtomName MsgAddToTechSharingGroup)
         ,("remove_power_balance"  , withLocAtomCompound MsgRemovePowerBalance)
+        ,("has_idea_with_trait"   , withLocAtom MsgHasIdeaWithTrait)
+        ,("has_state_category"    , withLocAtom MsgHasStateCategory)
+        ,("has_country_leader_ideology" , withLocAtom MsgHasCountryLeaderIdeology)
+        -- The rules are localized under their name in capitals, the same way
+        -- 'HOI4.Handlers.setRule' looks them up.
+        ,("has_rule"              , withLocAtom' MsgHasCountryRule T.toUpper)
+        ,("is_researching_technology" , withLocAtom MsgIsResearchingTechnology)
+        ,("set_faction_name"      , withLocAtom MsgSetFactionName)
+        ,("retire_ideology_leader" , withLocAtom MsgRetireIdeologyLeader)
         ,("tooltip"               , tooltip)
         ]
 
@@ -512,6 +537,7 @@ handlersState = Tr.fromList
         ,("set_state_controller" , withState MsgSetStateController)
         ,("set_state_owner"     , withState MsgSetStateOwner)
         ,("state"               , withState MsgStateId)
+        ,("remove_resource_rights" , withState MsgRemoveResourceRights)
         ,("transfer_state"      , withState MsgTransferState)
         ]
 
@@ -550,6 +576,11 @@ handlersTypewriter = Tr.fromList
         ,("set_cosmetic_tag"    , withNonlocAtom MsgSetCosmeticTag)
         ,("has_cosmetic_tag"    , withNonlocAtom MsgHasCosmeticTag)
 
+        ,("load_oob"            , withNonlocAtom MsgLoadOob)
+        ,("has_event_target"    , withNonlocAtom MsgHasEventTarget)
+        ,("clear_global_event_target" , withNonlocAtom MsgClearGlobalEventTarget)
+        ,("clear_array"         , withNonlocAtom MsgClearArray)
+        ,("has_faction_template" , withNonlocAtom MsgHasFactionTemplate)
         ,("has_opinion_modifier"  , withNonlocAtom MsgHasOpinionMod)
         ]
 
@@ -597,7 +628,6 @@ handlersSimpleFlag = Tr.fromList
         ,("is_core_of"              , withFlag MsgIsStateCore)
         ,("is_subject_of"           , withFlag MsgIsSubjectOf)
         ,("is_owned_by"             , withFlag MsgIsOwnedBy)
-        ,("puppet"                  , withFlag MsgPuppet)
         ,("recall_volunteers_from"  , withFlag MsgRecallVolunteersFrom)
         ,("release"                 , withFlag MsgRelease)
         ,("release_puppet"          , withFlag MsgReleasePuppet)
@@ -609,8 +639,12 @@ handlersSimpleFlag = Tr.fromList
         ,("transfer_state_to"       , withFlag MsgTransferStateTo)
         ,("has_war_with"            , withFlag MsgHasWarWith)
         ,("has_war_together_with"   , withFlag MsgHasWarTogetherWith)
+        ,("release_on_controlled"   , withFlag MsgReleaseOnControlled)
+        ,("end_puppet"              , withFlag MsgEndPuppet)
+        ,("send_embargo"            , withFlag MsgSendEmbargo)
+        ,("add_civil_war_target"    , withFlag MsgAddCivilWarTarget)
+        ,("set_state_owner_to"      , withFlag MsgSetStateOwnerTo)
         ,("original_tag"            , withFlag MsgOriginalTag)
-        ,("white_peace"             , withFlag MsgMakeWhitePeace)
         ]
 
 -- | Handlers for simple generic statements with a flag or "yes"/"no"
@@ -669,6 +703,11 @@ handlersYesNo = Tr.fromList
         ,("is_puppet"                   , withBool MsgIsPuppet)
         ,("is_subject"                  , withBool MsgIsSubject)
         ,("is_unit_leader"              , withBool MsgIsUnitLeader)
+        ,("has_elections"               , withBool MsgHasElections)
+        ,("has_resistance"              , withBool MsgHasResistance)
+        ,("is_debug"                    , withBool MsgIsDebug)
+        ,("impassable"                  , withBool MsgIsImpassable)
+        ,("has_any_power_balance"       , withBool MsgHasAnyPowerBalance)
         ,("set_demilitarized_zone"      , withBool MsgSetDemilitarizedZone)
         ]
 
@@ -712,6 +751,9 @@ handlersTextValue = Tr.fromList
         ,("modify_country_flag"         , withNonlocTextValue "flag" "value" MsgCountryFlag MsgModifyFlag MsgModifyFlagVar) -- Localization/icon ignored
         ,("modify_global_flag"          , withNonlocTextValue "flag" "value" MsgGlobalFlag MsgModifyFlag MsgModifyFlagVar) -- Localization/icon ignored
         ,("modify_state_flag"           , withNonlocTextValue "flag" "value" MsgStateFlag MsgModifyFlag MsgModifyFlagVar) -- Localization/icon ignored
+        ,("fighting_army_strength_ratio" , textValueCompare "tag" "ratio" "more than" "less than" MsgFightingArmyStrengthRatio MsgFightingArmyStrengthRatioVar flagTextMaybe)
+        ,("distance_to"                 , textValueCompare "target" "value" "more than" "less than" MsgDistanceTo MsgDistanceToVar flagTextMaybe)
+        ,("set_political_party"         , textValue "ideology" "popularity" MsgSetPoliticalParty MsgSetPoliticalPartyVar tryLocAndIcon)
         ,("modify_unit_leader_flag"     , withNonlocTextValue "flag" "value" MsgUnitLeaderFlag MsgModifyFlag MsgModifyFlagVar) -- Localization/icon ignored
         ]
 
@@ -789,6 +831,36 @@ handlersSpecialComplex = Tr.fromList
         ,("set_party_name"               , setPartyName)
         ,("start_civil_war"              , startCivilWar)
         ,("start_border_war"             , startBorderWar)
+        ,("has_resources_amount"         , hasResourcesAmount)
+        ,("any_province_building_level"  , anyProvinceBuildingLevel)
+        ,("compare_autonomy_state"       , compareAutonomyState)
+        ,("add_to_array"                 , arrayValue MsgAddToArray)
+        ,("is_in_array"                  , arrayValue MsgIsInArray)
+        ,("create_ship"                  , createShip)
+        ,("transfer_ship"                , transferShip)
+        ,("add_equipment_subsidy"        , addEquipmentSubsidy)
+        ,("add_equipment_production"     , addEquipmentProduction)
+        ,("create_production_license"    , createProductionLicense)
+        ,("create_faction_from_template" , createFactionFromTemplate)
+        ,("add_units_to_division_template" , addUnitsToDivisionTemplate)
+        ,("remove_country_leader_role"   , removeCountryLeaderRole)
+        ,("set_division_template_cap"    , setDivisionTemplateCap)
+        ,("set_truce"                    , setTruce)
+        ,("white_peace"                  , whitePeace)
+        ,("puppet"                       , puppetCountry)
+        ,("set_power_balance"            , setPowerBalance)
+        ,("get_highest_scored_country"   , getHighestScoredCountry)
+        ,("add_contested_owner"          , addContestedOwner)
+        ,("has_shine_effect_on_focus"    , handleFocus MsgHasShineEffectOnFocus)
+        ,("is_military_industrial_organization" , isMio)
+        ,("has_doctrine"                  , hasDoctrine)
+        ,("can_be_country_leader"        , canBeCountryLeader)
+        ,("remove_from_array"            , arrayValue MsgRemoveFromArray)
+        ,("activate_shine_on_focus"      , handleFocus MsgActivateShineOnFocus)
+        ,("remove_unit_leader_role"      , rhsAlwaysYes MsgRemoveUnitLeaderRole)
+        ,("complete_mio_trait"           , completeMioTrait)
+        ,("transfer_units_fraction"      , transferUnitsFraction)
+        ,("add_resistance_target"        , addResistanceTarget)
 
         -- Events
         ,("news_event"                   , triggerEvent MsgNewsEvent)
@@ -948,6 +1020,8 @@ handlersMisc = Tr.fromList
 handlersIgnored :: (HOI4Info g, Monad m) => Trie (StatementHandler g m)
 handlersIgnored = Tr.fromList
         [("custom_tooltip", return $ return [])
+        ,("display_individual_scopes", return $ return [])
+        ,("play_song"     , return $ return [])
         ,("goto"          , return $ return [])
         ,("log"           , return $ return [])
         ,("required_personality", return $ return[]) -- From the 1.30 patch notes: "The required_personality field will now be ignored"

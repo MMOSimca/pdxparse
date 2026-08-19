@@ -17,6 +17,26 @@ module HOI4.Handlers (
     ,   compoundMessageNot
     ,   setDivisionTemplateLock
     ,   clearDivisionTemplateCap
+    ,   hasResourcesAmount
+    ,   anyProvinceBuildingLevel
+    ,   compareAutonomyState
+    ,   arrayValue
+    ,   createShip
+    ,   transferShip
+    ,   addEquipmentSubsidy
+    ,   addEquipmentProduction
+    ,   createProductionLicense
+    ,   createFactionFromTemplate
+    ,   addUnitsToDivisionTemplate
+    ,   setDivisionTemplateCap
+    ,   setTruce
+    ,   whitePeace
+    ,   puppetCountry
+    ,   setPowerBalance
+    ,   getHighestScoredCountry
+    ,   addContestedOwner
+    ,   addResistanceTarget
+    ,   transferUnitsFraction
     ,   compoundMessageScope
     ,   compoundMessageCondition
     ,   compoundMessageExtractTag
@@ -184,7 +204,7 @@ import qualified Text.PrettyPrint.Leijen.Text as PP
 import Data.List (foldl', intersperse, intercalate, findIndex)
 import Data.Maybe
 
-import Control.Applicative (liftA2)
+import Control.Applicative (liftA2, (<|>))
 import Control.Arrow (first)
 import Control.Monad (foldM)
 import Control.Monad.State (gets)
@@ -2391,6 +2411,13 @@ handleFocus msg stmt@[pdx| $lhs = $nf |] = do
                     Just idicon -> return idicon
             nf_loc <- getGameL10n nfKey
             msgToPP (msg nfIcon nfKey nf_loc)
+-- | Some effects take the focus inside a block, along with fields that say how
+-- the game is to tell the player about it. The focus is the only part of that
+-- worth reading on the wiki.
+handleFocus msg stmt@[pdx| %_ = @scr |] =
+    case [inner | inner@[pdx| focus = %_ |] <- scr] of
+        (focstmt : _) -> handleFocus msg focstmt
+        [] -> preStatement stmt
 handleFocus _ stmt = preStatement stmt
 
 
@@ -4617,3 +4644,598 @@ clearDivisionTemplateCap stmt@[pdx| %_ = @scr |] =
         (name : _) -> msgToPP (MsgClearDivisionTemplateCap name)
         [] -> preStatement stmt
 clearDivisionTemplateCap stmt = preStatement stmt
+
+-------------------------------------
+-- Handler for has_resources_amount --
+-------------------------------------
+data HasResAmount = HasResAmount
+        {   hra_resource :: Maybe Text
+        ,   hra_comp :: Text
+        ,   hra_amount :: Double
+        ,   hra_state :: Maybe Int
+        ,   hra_delivered :: Bool
+        }
+
+newHRA :: HasResAmount
+newHRA = HasResAmount Nothing "at least" 0 Nothing False
+
+-- | Handler for @has_resources_amount@, which asks how much of a resource a
+-- state has. @delivered@ asks after what actually reaches the state's
+-- controller, which is what is left once the modifiers on it have applied.
+hasResourcesAmount :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+hasResourcesAmount stmt@[pdx| %_ = @scr |] = case hra_resource hra of
+        Just res -> do
+            stateloc <- traverse getStateLoc (hra_state hra)
+            msgToPP $ MsgHasResourcesAmount (hra_delivered hra) (hra_comp hra)
+                        (hra_amount hra) (iconText res) (fromMaybe "" stateloc)
+        Nothing -> preStatement stmt
+    where
+        hra = foldl' addLine newHRA scr
+        addLine h [pdx| resource = ?r |] = h { hra_resource = Just r }
+        addLine h [pdx| amount > !n |] = h { hra_comp = "more than", hra_amount = n }
+        addLine h [pdx| amount < !n |] = h { hra_comp = "less than", hra_amount = n }
+        addLine h [pdx| amount = !n |] = h { hra_comp = "at least", hra_amount = n }
+        addLine h [pdx| state = !n |] = h { hra_state = Just n }
+        addLine h [pdx| delivered = yes |] = h { hra_delivered = True }
+        addLine h [pdx| delivered = no |] = h { hra_delivered = False }
+        addLine h stmt = trace ("unknown section in has_resources_amount: " ++ show stmt) h
+hasResourcesAmount stmt = preStatement stmt
+
+---------------------------------------------
+-- Handler for any_province_building_level --
+---------------------------------------------
+data AnyProvBuilding = AnyProvBuilding
+        {   apb_building :: Maybe Text
+        ,   apb_comp :: Text
+        ,   apb_level :: Double
+        ,   apb_provinces :: [Double]
+        ,   apb_all :: Bool
+        ,   apb_border :: Bool
+        ,   apb_coastal :: Bool
+        ,   apb_naval :: Bool
+        ,   apb_victory_point :: Bool
+        }
+
+newAPB :: AnyProvBuilding
+newAPB = AnyProvBuilding Nothing "at least" 0 [] False False False False False
+
+-- | Handler for @any_province_building_level@, which asks whether any province
+-- of the state, of those the @province@ block picks out, has a building of the
+-- level given.
+anyProvinceBuildingLevel :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+anyProvinceBuildingLevel stmt@[pdx| %_ = @scr |] = case apb_building apb of
+        Just bld -> do
+            bldloc <- getGameL10n bld
+            msgToPP $ MsgAnyProvinceBuildingLevel (iconText bld) bldloc
+                        (apb_comp apb) (apb_level apb) whichProvinces
+        Nothing -> preStatement stmt
+    where
+        apb = foldl' addLine newAPB scr
+        addLine a [pdx| building = $b |] = a { apb_building = Just b }
+        addLine a [pdx| level > !n |] = a { apb_comp = "more than", apb_level = n }
+        addLine a [pdx| level < !n |] = a { apb_comp = "fewer than", apb_level = n }
+        addLine a [pdx| level = !n |] = a { apb_comp = "at least", apb_level = n }
+        addLine a [pdx| province = !n |] = a { apb_provinces = apb_provinces a ++ [n] }
+        addLine a [pdx| province = @pscr |] = foldl' addProv a pscr
+        addLine a stmt = trace ("unknown section in any_province_building_level: " ++ show stmt) a
+
+        addProv a [pdx| id = !n |] = a { apb_provinces = apb_provinces a ++ [n] }
+        addProv a [pdx| all_provinces = yes |] = a { apb_all = True }
+        addProv a [pdx| limit_to_border = yes |] = a { apb_border = True }
+        addProv a [pdx| limit_to_coastal = yes |] = a { apb_coastal = True }
+        addProv a [pdx| limit_to_naval_base = yes |] = a { apb_naval = True }
+        addProv a [pdx| limit_to_victory_point = yes |] = a { apb_victory_point = True }
+        addProv a [pdx| $_ = no |] = a
+        addProv a stmt = trace ("unknown section in any_province_building_level@province: " ++ show stmt) a
+
+        -- Which provinces of the state count. Nothing said means all of them,
+        -- which is also what @all_provinces@ asks for outright.
+        whichProvinces = T.intercalate ", " (filter (not . T.null) [limits, listed])
+        limits = T.intercalate " and " $ concat
+            [ [ "on the border" | apb_border apb ]
+            , [ "on the coast" | apb_coastal apb ]
+            , [ "with a naval base" | apb_naval apb ]
+            , [ "with victory points" | apb_victory_point apb ]
+            ]
+        listed = case apb_provinces apb of
+            [] -> ""
+            provs -> T.pack (concat ["(", intercalate "), (" (map (show . round) provs), ")"])
+anyProvinceBuildingLevel stmt = preStatement stmt
+
+---------------------------------------
+-- Handler for compare_autonomy_state --
+---------------------------------------
+-- | Handler for @compare_autonomy_state@, which ranks the subject's autonomy
+-- level against a named one. It is written with a @>@ or a @<@ rather than an
+-- @=@, so it reads as a comparison and not as a check for that level itself.
+compareAutonomyState :: (HOI4Info g, Monad m) => StatementHandler g m
+compareAutonomyState stmt = case stmt of
+    [pdx| %_ > $lvl |] -> withLevel "more autonomous than" lvl
+    [pdx| %_ < $lvl |] -> withLevel "less autonomous than" lvl
+    [pdx| %_ = $lvl |] -> withLevel "at least as autonomous as" lvl
+    _ -> preStatement stmt
+    where
+        withLevel comp lvl = do
+            loc <- getGameL10n lvl
+            msgToPP (MsgCompareAutonomyState comp loc)
+
+-------------------------
+-- Handlers for arrays --
+-------------------------
+-- | The array a statement names and the value it carries, written either as
+-- @array = name value = x@ or in the short form that names the array on the
+-- left and the value on the right.
+arrayAndValue :: GenericScript -> Maybe (Text, Maybe Text)
+arrayAndValue scr = case foldl' addLine (Nothing, Nothing, Nothing) scr of
+    (Just arr, val, _) -> Just (arr, val)
+    (Nothing, _, Just short) -> Just short
+    _ -> Nothing
+    where
+        addLine (arr, val, short) [pdx| array = $a |] = (Just a, val, short)
+        addLine (arr, val, short) [pdx| array = ?a |] = (Just a, val, short)
+        addLine (arr, val, short) [pdx| value = ?v |] = (arr, Just v, short)
+        addLine (arr, val, short) [pdx| value = !v |] =
+            (arr, Just (Doc.doc2text (plainNum (v :: Double))), short)
+        addLine acc [pdx| index = %_ |] = acc
+        -- Short form. Only taken if no @array@ line has claimed the slot, so
+        -- that the long form is never read as one of these.
+        addLine (arr, val, short) [pdx| $a = ?v |] = (arr, val, Just (a, Just v))
+        addLine (arr, val, short) [pdx| $a = !v |] =
+            (arr, val, Just (a, Just (Doc.doc2text (plainNum (v :: Double)))))
+        addLine acc _ = acc
+
+-- | Handler for @add_to_array@ and @is_in_array@, which take an array and a
+-- value. A value left out of @add_to_array@ means whatever is in scope.
+arrayValue :: (HOI4Info g, Monad m) =>
+    (Text -> Text -> ScriptMessage) -> StatementHandler g m
+arrayValue msg stmt@[pdx| %_ = @scr |] = case arrayAndValue scr of
+    Just (arr, val) -> msgToPP (msg arr (fromMaybe "" val))
+    Nothing -> preStatement stmt
+arrayValue _ stmt = preStatement stmt
+
+----------------------------
+-- Handler for create_ship --
+----------------------------
+data CreateShip = CreateShip
+        {   cs_type :: Maybe Text
+        ,   cs_variant :: Maybe Text
+        ,   cs_name :: Maybe Text
+        ,   cs_creator :: Maybe (Either Text (Text, Text))
+        ,   cs_amount :: Double
+        }
+
+newCS :: CreateShip
+newCS = CreateShip Nothing Nothing Nothing Nothing 1
+
+-- | Handler for @create_ship@, which puts a ship straight into the reserve
+-- fleet. @creator@ names whose design it is built to, which is what decides
+-- what the ship can do; left out, it is the country's own.
+createShip :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+createShip stmt@[pdx| %_ = @scr |] = case cs_type cs of
+        Just shiptype -> do
+            shiploc <- T.strip <$> getGameL10n shiptype
+            creator <- case cs_creator cs of
+                Just who -> fromMaybe "" <$> eflag (Just HOI4Country) who
+                Nothing -> return ""
+            msgToPP $ MsgCreateShip (cs_amount cs) shiploc
+                        (fromMaybe "" (cs_variant cs)) (fromMaybe "" (cs_name cs)) creator
+        Nothing -> preStatement stmt
+    where
+        cs = foldl' addLine newCS scr
+        addLine c [pdx| type = $t |] = c { cs_type = Just t }
+        addLine c [pdx| equipment_variant = ?v |] = c { cs_variant = Just v }
+        addLine c [pdx| name = ?n |] = c { cs_name = Just n }
+        addLine c [pdx| amount = !n |] = c { cs_amount = n }
+        addLine c [pdx| creator = $vartag:$var |] = c { cs_creator = Just (Right (vartag, var)) }
+        addLine c [pdx| creator = ?t |] = c { cs_creator = Just (Left t) }
+        -- Whether a ship already in for a refit may be picked. Says nothing
+        -- about what is created.
+        addLine c [pdx| exclude_refitting = %_ |] = c
+        addLine c stmt = trace ("unknown section in create_ship: " ++ show stmt) c
+createShip stmt = preStatement stmt
+
+------------------------------
+-- Handler for transfer_ship --
+------------------------------
+-- | Handler for @transfer_ship@, which hands one ship of a kind over to another
+-- country. @prefer_name@ picks which one, where the fleet has a ship by that
+-- name to give.
+transferShip :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+transferShip stmt@[pdx| %_ = @scr |] =
+    case foldl' addLine (Nothing, Nothing, Nothing) scr of
+        (Just shiptype, target, name) -> do
+            shiploc <- T.strip <$> getGameL10n shiptype
+            targetloc <- case target of
+                Just who -> fromMaybe "" <$> eflag (Just HOI4Country) who
+                Nothing -> return ""
+            msgToPP $ MsgTransferShip shiploc (fromMaybe "" name) targetloc
+        _ -> preStatement stmt
+    where
+        addLine (t, tg, n) [pdx| type = $ty |] = (Just ty, tg, n)
+        addLine (t, tg, n) [pdx| target = $vartag:$var |] = (t, Just (Right (vartag, var)), n)
+        addLine (t, tg, n) [pdx| target = ?tgt |] = (t, Just (Left tgt), n)
+        addLine (t, tg, n) [pdx| prefer_name = ?nm |] = (t, tg, Just nm)
+        addLine acc [pdx| exclude_refitting = %_ |] = acc
+        addLine acc stmt = trace ("unknown section in transfer_ship: " ++ show stmt) acc
+transferShip stmt = preStatement stmt
+
+-------------------------------------
+-- Handler for add_equipment_subsidy --
+-------------------------------------
+-- | Handler for @add_equipment_subsidy@, which sets aside industrial capacity to
+-- pay for equipment bought from someone else. The sellers it may be spent with
+-- are named either outright or by a scripted trigger.
+addEquipmentSubsidy :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+addEquipmentSubsidy stmt@[pdx| %_ = @scr |] =
+    case foldl' addLine (Nothing, 0, [], Nothing) scr of
+        (Just eqtype, cic, sellers, mtrigger) -> do
+            eqloc <- T.strip <$> getGameL10n eqtype
+            sellerlocs <- traverse (flagText (Just HOI4Country)) sellers
+            msgToPP $ MsgAddEquipmentSubsidy cic eqloc
+                        (joinClauses sellerlocs) (fromMaybe "" mtrigger)
+        _ -> preStatement stmt
+    where
+        addLine (t, c, s, g) [pdx| equipment_type = $ty |] = (Just ty, c, s, g)
+        addLine (t, c, s, g) [pdx| cic = !n |] = (t, n, s, g)
+        addLine (t, c, s, g) [pdx| seller_tags = @tags |] =
+            (t, c, s ++ [tag | StatementBare (GenericLhs tag []) <- tags], g)
+        addLine (t, c, s, g) [pdx| seller_trigger = $trg |] = (t, c, s, Just trg)
+        addLine acc stmt = trace ("unknown section in add_equipment_subsidy: " ++ show stmt) acc
+addEquipmentSubsidy stmt = preStatement stmt
+
+----------------------------------------
+-- Handler for add_equipment_production --
+----------------------------------------
+data AddEquipProd = AddEquipProd
+        {   aep_type :: Maybe Text
+        ,   aep_creator :: Maybe Text
+        ,   aep_version :: Maybe Text
+        ,   aep_name :: Maybe Text
+        ,   aep_factories :: Maybe Double
+        ,   aep_progress :: Maybe Double
+        ,   aep_efficiency :: Maybe Double
+        }
+
+newAEP :: AddEquipProd
+newAEP = AddEquipProd Nothing Nothing Nothing Nothing Nothing Nothing Nothing
+
+-- | Handler for @add_equipment_production@, which opens a production line ready
+-- built rather than leaving the player to set one up.
+addEquipmentProduction :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+addEquipmentProduction stmt@[pdx| %_ = @scr |] = case aep_type aep of
+        Just eqtype -> do
+            eqloc <- T.strip <$> getGameL10n eqtype
+            creator <- traverse (flagText (Just HOI4Country)) (aep_creator aep)
+            msgToPP $ MsgAddEquipmentProduction
+                        (fromMaybe 1 (aep_factories aep)) eqloc
+                        (fromMaybe "" (aep_version aep)) (fromMaybe "" creator)
+                        (fromMaybe "" (aep_name aep))
+                        (fromMaybe 0 (aep_progress aep))
+                        (fromMaybe 0 (aep_efficiency aep))
+        Nothing -> preStatement stmt
+    where
+        aep = foldl' addLine newAEP scr
+        addLine a [pdx| equipment = @escr |] = foldl' addEquip a escr
+        addLine a [pdx| name = ?n |] = a { aep_name = Just n }
+        addLine a [pdx| requested_factories = !n |] = a { aep_factories = Just n }
+        addLine a [pdx| progress = !n |] = a { aep_progress = Just n }
+        addLine a [pdx| efficiency = !n |] = a { aep_efficiency = Just n }
+        -- How many of the thing to make. The line runs until it is called off
+        -- either way, so it is the factories put on it that are worth reading.
+        addLine a [pdx| amount = %_ |] = a
+        -- Which organization builds it, which the wiki says nothing about yet.
+        addLine a [pdx| industrial_manufacturer = %_ |] = a
+        addLine a stmt = trace ("unknown section in add_equipment_production: " ++ show stmt) a
+
+        addEquip a [pdx| type = $t |] = a { aep_type = Just t }
+        addEquip a [pdx| creator = ?c |] = a { aep_creator = Just c }
+        addEquip a [pdx| version_name = ?v |] = a { aep_version = Just v }
+        addEquip a [pdx| version = %_ |] = a
+        addEquip a stmt = trace ("unknown section in add_equipment_production@equipment: " ++ show stmt) a
+addEquipmentProduction stmt = preStatement stmt
+
+-----------------------------------------
+-- Handler for create_production_license --
+-----------------------------------------
+-- | Handler for @create_production_license@, which lets another country build
+-- one of this country's designs.
+createProductionLicense :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+createProductionLicense stmt@[pdx| %_ = @scr |] =
+    case foldl' addLine (Nothing, Nothing, Nothing, Nothing) scr of
+        (Just eqtype, target, version, cost) -> do
+            eqloc <- T.strip <$> getGameL10n eqtype
+            targetloc <- case target of
+                Just who -> fromMaybe "" <$> eflag (Just HOI4Country) who
+                Nothing -> return ""
+            msgToPP $ MsgCreateProductionLicense targetloc eqloc
+                        (fromMaybe "" version) (fromMaybe 1 cost)
+        _ -> preStatement stmt
+    where
+        addLine (t, tg, v, c) [pdx| equipment = @escr |] = foldl' addEquip (t, tg, v, c) escr
+        addLine (t, tg, v, c) [pdx| target = $vartag:$var |] = (t, Just (Right (vartag, var)), v, c)
+        addLine (t, tg, v, c) [pdx| target = ?tgt |] = (t, Just (Left tgt), v, c)
+        addLine (t, tg, v, c) [pdx| cost_factor = !n |] = (t, tg, v, Just n)
+        addLine acc [pdx| new_prioritised = %_ |] = acc
+        addLine acc stmt = trace ("unknown section in create_production_license: " ++ show stmt) acc
+
+        addEquip (t, tg, v, c) [pdx| type = $ty |] = (Just ty, tg, v, c)
+        addEquip (t, tg, v, c) [pdx| version_name = ?vn |] = (t, tg, Just vn, c)
+        addEquip acc [pdx| version = %_ |] = acc
+        addEquip acc stmt = trace ("unknown section in create_production_license@equipment: " ++ show stmt) acc
+createProductionLicense stmt = preStatement stmt
+
+--------------------------------------------
+-- Handler for create_faction_from_template --
+--------------------------------------------
+-- | Handler for @create_faction_from_template@, which starts a faction already
+-- set up rather than an empty one. The template is named bare, or given inside a
+-- block along with the name the faction is to go by.
+createFactionFromTemplate :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+createFactionFromTemplate stmt@[pdx| %_ = @scr |] =
+    case foldl' addLine (Nothing, Nothing) scr of
+        (Just tmpl, mname) -> do
+            nameloc <- traverse getGameL10n mname
+            msgToPP (MsgCreateFactionFromTemplate (fromMaybe "" nameloc) tmpl)
+        _ -> preStatement stmt
+    where
+        addLine (t, n) [pdx| template = $tm |] = (Just tm, n)
+        addLine (t, n) [pdx| name = $nm |] = (t, Just nm)
+        addLine (t, n) [pdx| name = ?nm |] = (t, Just nm)
+        addLine acc [pdx| icon = %_ |] = acc
+        addLine acc [pdx| color = %_ |] = acc
+        addLine acc stmt = trace ("unknown section in create_faction_from_template: " ++ show stmt) acc
+createFactionFromTemplate [pdx| %_ = $tmpl |] = msgToPP (MsgCreateFactionFromTemplate "" tmpl)
+createFactionFromTemplate stmt = preStatement stmt
+
+----------------------------------------------
+-- Handler for add_units_to_division_template --
+----------------------------------------------
+-- | Handler for @add_units_to_division_template@, which adds battalions or
+-- support companies to a template, and so to every division already built to it.
+addUnitsToDivisionTemplate :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+addUnitsToDivisionTemplate stmt@[pdx| %_ = @scr |] =
+    case foldl' addLine (Nothing, []) scr of
+        (Just name, units@(_:_)) -> do
+            unitlocs <- traverse getGameL10n units
+            msgToPP (MsgAddUnitsToDivisionTemplate name (joinClauses unitlocs))
+        _ -> preStatement stmt
+    where
+        addLine (n, us) [pdx| template_name = ?nm |] = (Just nm, us)
+        addLine (n, us) [pdx| regiments = @rscr |] = (n, us ++ unitNames rscr)
+        addLine (n, us) [pdx| support = @rscr |] = (n, us ++ unitNames rscr)
+        addLine (n, us) [pdx| regimental_support = @rscr |] = (n, us ++ unitNames rscr)
+        addLine acc stmt = trace ("unknown section in add_units_to_division_template: " ++ show stmt) acc
+        -- The number beside each unit is the column it goes in, not how many of
+        -- it to add, so there is nothing in it worth reading on the wiki.
+        unitNames uscr = [unit | [pdx| $unit = %_ |] <- uscr]
+addUnitsToDivisionTemplate stmt = preStatement stmt
+
+------------------------------------------
+-- Handler for set_division_template_cap --
+------------------------------------------
+-- | Handler for @set_division_template_cap@, which limits how many divisions of
+-- a template the country may hold. The cap is often a script constant rather
+-- than a number written out.
+setDivisionTemplateCap :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+setDivisionTemplateCap stmt@[pdx| %_ = @scr |] =
+    case foldl' addLine (Nothing, Nothing, Nothing) scr of
+        (Just name, mcap, mcapvar) -> do
+            constant <- maybe (return Nothing) constantValue mcapvar
+            case (mcap, constant, mcapvar) of
+                (Just cap, _, _) -> msgToPP (MsgSetDivisionTemplateCap name cap)
+                (_, Just cap, _) -> msgToPP (MsgSetDivisionTemplateCap name cap)
+                (_, _, Just capvar) -> msgToPP (MsgSetDivisionTemplateCapVar name capvar)
+                _ -> msgToPP (MsgSetDivisionTemplateCap name 1)
+        _ -> preStatement stmt
+    where
+        addLine (n, c, cv) [pdx| division_template = ?nm |] = (Just nm, c, cv)
+        addLine (n, c, cv) [pdx| division_cap = !amt |] = (n, Just amt, cv)
+        addLine (n, c, cv) [pdx| division_cap = $var |] = (n, c, Just var)
+        addLine acc stmt = trace ("unknown section in set_division_template_cap: " ++ show stmt) acc
+setDivisionTemplateCap stmt = preStatement stmt
+
+-------------------------
+-- Handler for set_truce --
+-------------------------
+-- | Handler for @set_truce@, which bars the two countries from going to war with
+-- one another for a time.
+setTruce :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+setTruce stmt@[pdx| %_ = @scr |] =
+    case foldl' addLine (Nothing, Nothing) scr of
+        (Just target, mdays) -> do
+            targetloc <- fromMaybe "" <$> eflag (Just HOI4Country) target
+            msgToPP (MsgSetTruce targetloc (fromMaybe 0 mdays))
+        _ -> preStatement stmt
+    where
+        addLine (t, d) [pdx| target = $vartag:$var |] = (Just (Right (vartag, var)), d)
+        addLine (t, d) [pdx| target = ?tgt |] = (Just (Left tgt), d)
+        addLine (t, d) [pdx| days = !n |] = (t, Just n)
+        addLine acc stmt = trace ("unknown section in set_truce: " ++ show stmt) acc
+setTruce stmt = preStatement stmt
+
+----------------------------
+-- Handler for white_peace --
+----------------------------
+-- | Handler for @white_peace@, which ends the war between the two countries with
+-- neither taking anything. The other side is named bare, or given as @tag@
+-- inside a block where a @message@ may name the event that tells it so.
+whitePeace :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+whitePeace stmt@[pdx| %_ = @scr |] =
+    case [inner | inner@[pdx| tag = %_ |] <- scr] of
+        (tagstmt : _) -> withFlag MsgMakeWhitePeace tagstmt
+        [] -> preStatement stmt
+whitePeace stmt = withFlag MsgMakeWhitePeace stmt
+
+-----------------------
+-- Handler for puppet --
+-----------------------
+-- | Handler for @puppet@, which makes the target a subject. Written as a block
+-- it also says whether the subject's wars are ended along with it, which they
+-- are unless the script says otherwise.
+puppetCountry :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+puppetCountry stmt@[pdx| %_ = @scr |] =
+    case foldl' addLine (Nothing, True, True) scr of
+        (Just target, endwars, endcivil) -> do
+            targetloc <- fromMaybe "" <$> eflag (Just HOI4Country) target
+            msgToPP (MsgPuppetCountry targetloc (endWarText endwars endcivil))
+        _ -> preStatement stmt
+    where
+        addLine (t, w, c) [pdx| target = $vartag:$var |] = (Just (Right (vartag, var)), w, c)
+        addLine (t, w, c) [pdx| target = ?tgt |] = (Just (Left tgt), w, c)
+        addLine (t, w, c) [pdx| end_wars = no |] = (t, False, c)
+        addLine (t, w, c) [pdx| end_wars = yes |] = (t, True, c)
+        addLine (t, w, c) [pdx| end_civil_wars = no |] = (t, w, False)
+        addLine (t, w, c) [pdx| end_civil_wars = yes |] = (t, w, True)
+        addLine acc [pdx| always = %_ |] = acc
+        addLine acc stmt = trace ("unknown section in puppet: " ++ show stmt) acc
+puppetCountry stmt = withFlag MsgPuppet stmt
+
+-- | How a subject's own wars are dealt with as it is made one.
+endWarText :: Bool -> Bool -> Text
+endWarText endwars endcivil = case (endwars, endcivil) of
+    (True, True) -> ", ending its wars and civil wars"
+    (True, False) -> ", ending its wars"
+    (False, True) -> ", ending its civil wars"
+    (False, False) -> ""
+
+------------------------------------
+-- Handler for set_power_balance --
+------------------------------------
+-- | Handler for @set_power_balance@, which starts a balance of power or moves
+-- one already running. Only the fields it is given take effect; whatever it
+-- leaves out is left as it stands.
+setPowerBalance :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+setPowerBalance stmt@[pdx| %_ = @scr |] =
+    case foldl' addLine (Nothing, Nothing, Nothing, Nothing, False) scr of
+        (Just bopid, mvalue, mleft, mright, isdefault) -> do
+            boploc <- getGameL10n bopid
+            leftloc <- traverse getGameL10n mleft
+            rightloc <- traverse getGameL10n mright
+            basemsg <- msgToPP (MsgSetPowerBalance boploc bopid)
+            valmsg <- case mvalue of
+                Just val -> indentUp (msgToPP (MsgSetPowerBalanceValue val))
+                Nothing -> return []
+            sidemsg <- case (leftloc, rightloc) of
+                (Nothing, Nothing) -> return []
+                _ -> indentUp (msgToPP (MsgSetPowerBalanceSides
+                        (fromMaybe "" leftloc) (fromMaybe "" rightloc)))
+            defmsg <- if isdefault
+                then indentUp (msgToPP MsgSetPowerBalanceDefault)
+                else return []
+            return (basemsg ++ valmsg ++ sidemsg ++ defmsg)
+        _ -> preStatement stmt
+    where
+        addLine (i, v, l, r, d) [pdx| id = $bopid |] = (Just bopid, v, l, r, d)
+        addLine (i, v, l, r, d) [pdx| set_value = !n |] = (i, Just n, l, r, d)
+        addLine (i, v, l, r, d) [pdx| left_side = $s |] = (i, v, Just s, r, d)
+        addLine (i, v, l, r, d) [pdx| right_side = $s |] = (i, v, l, Just s, d)
+        addLine (i, v, l, r, d) [pdx| set_default = yes |] = (i, v, l, r, True)
+        addLine acc [pdx| set_default = no |] = acc
+        addLine acc stmt = trace ("unknown section in set_power_balance: " ++ show stmt) acc
+setPowerBalance stmt = preStatement stmt
+
+-------------------------------------------
+-- Handler for get_highest_scored_country --
+-------------------------------------------
+-- | Handler for @get_highest_scored_country@, which runs a scorer over every
+-- country and saves the winner in a variable for the script to read back.
+getHighestScoredCountry :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+getHighestScoredCountry stmt@[pdx| %_ = @scr |] =
+    case foldl' addLine (Nothing, Nothing) scr of
+        (Just scorer, mvar) ->
+            msgToPP (MsgGetHighestScoredCountry scorer
+                        (fromMaybe "highest_scored_country" mvar))
+        _ -> preStatement stmt
+    where
+        addLine (s, v) [pdx| scorer = $sc |] = (Just sc, v)
+        addLine (s, v) [pdx| var = $vr |] = (s, Just vr)
+        addLine (s, v) [pdx| var = ?vr |] = (s, Just vr)
+        addLine acc stmt = trace ("unknown section in get_highest_scored_country: " ++ show stmt) acc
+getHighestScoredCountry stmt = preStatement stmt
+
+------------------------------------
+-- Handler for add_contested_owner --
+------------------------------------
+-- | Handler for @add_contested_owner@, which puts a second claimant on a state.
+-- It is written from either side, so the one name it takes is a country in a
+-- state scope and a state in a country scope.
+addContestedOwner :: (HOI4Info g, Monad m) => StatementHandler g m
+addContestedOwner stmt@[pdx| %_ = !(_ :: Double) |] = withState MsgAddContestedOwnerState stmt
+addContestedOwner stmt = withFlag MsgAddContestedOwner stmt
+
+
+-------------------------------------
+-- Handler for transfer_units_fraction --
+-------------------------------------
+data TransferUnits = TransferUnits
+        {   tu_target :: Maybe (Either Text (Text, Text))
+        ,   tu_size :: Maybe Double
+        ,   tu_army :: Maybe Double
+        ,   tu_navy :: Maybe Double
+        ,   tu_air :: Maybe Double
+        ,   tu_stockpile :: Maybe Double
+        ,   tu_keep_leaders :: Bool
+        }
+
+newTU :: TransferUnits
+newTU = TransferUnits Nothing Nothing Nothing Nothing Nothing Nothing False
+
+-- | Handler for @transfer_units_fraction@, which hands part of the country's
+-- forces to another. @size@ sets the share for everything not given a share of
+-- its own, so each arm is written out with whichever of the two applies to it.
+transferUnitsFraction :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+transferUnitsFraction stmt@[pdx| %_ = @scr |] = case tu_target tu of
+        Just target -> do
+            targetloc <- fromMaybe "" <$> eflag (Just HOI4Country) target
+            basemsg <- msgToPP (MsgTransferUnitsFraction targetloc (tu_keep_leaders tu))
+            shares <- indentUp (fold <$> traverse share
+                [ ("army", tu_army tu), ("navy", tu_navy tu), ("air force", tu_air tu)
+                , ("stockpile", tu_stockpile tu) ])
+            return (basemsg ++ shares)
+        Nothing -> preStatement stmt
+    where
+        tu = foldl' addLine newTU scr
+        addLine t [pdx| target = $vartag:$var |] = t { tu_target = Just (Right (vartag, var)) }
+        addLine t [pdx| target = ?tgt |] = t { tu_target = Just (Left tgt) }
+        addLine t [pdx| size = !n |] = t { tu_size = Just n }
+        addLine t [pdx| army_ratio = !n |] = t { tu_army = Just n }
+        addLine t [pdx| navy_ratio = !n |] = t { tu_navy = Just n }
+        addLine t [pdx| air_ratio = !n |] = t { tu_air = Just n }
+        addLine t [pdx| stockpile_ratio = !n |] = t { tu_stockpile = Just n }
+        addLine t [pdx| keep_unit_leaders = yes |] = t { tu_keep_leaders = True }
+        addLine t [pdx| keep_unit_leaders = no |] = t { tu_keep_leaders = False }
+        -- Which leaders go along, and which organizations they are moved
+        -- between; neither says anything about how much is handed over.
+        addLine t [pdx| keep_unit_leaders_trigger = %_ |] = t
+        addLine t [pdx| source_organization = %_ |] = t
+        addLine t [pdx| target_organization = %_ |] = t
+        addLine t stmt = trace ("unknown section in transfer_units_fraction: " ++ show stmt) t
+
+        share (what, mratio) = case mratio <|> tu_size tu of
+            Just ratio -> msgToPP (MsgTransferUnitsShare what ratio)
+            Nothing -> return []
+transferUnitsFraction stmt = preStatement stmt
+
+-------------------------------------
+-- Handler for add_resistance_target --
+-------------------------------------
+-- | Handler for @add_resistance_target@, which moves the resistance a state
+-- settles at. The tooltip names the reason the game gives the player for it.
+addResistanceTarget :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+addResistanceTarget stmt@[pdx| %_ = @scr |] =
+    case foldl' addLine (Nothing, Nothing, Nothing) scr of
+        (Just amount, mtip, mdays) -> do
+            tiploc <- traverse getGameL10n mtip
+            msgToPP (MsgAddResistanceTarget amount (fromMaybe 0 mdays) (fromMaybe "" tiploc))
+        _ -> preStatement stmt
+    where
+        addLine (a, t, d) [pdx| amount = !n |] = (Just n, t, d)
+        addLine (a, t, d) [pdx| tooltip = $tip |] = (a, Just tip, d)
+        addLine (a, t, d) [pdx| days = !n |] = (a, t, Just n)
+        -- Whose occupation the target applies to. The state is in scope either
+        -- way, so this narrows which occupier rather than saying anything new.
+        addLine acc [pdx| occupier = %_ |] = acc
+        addLine acc [pdx| occupied = %_ |] = acc
+        addLine acc stmt = trace ("unknown section in add_resistance_target: " ++ show stmt) acc
+addResistanceTarget stmt@[pdx| %_ = !amount |] = msgToPP (MsgAddResistanceTarget amount 0 "")
+addResistanceTarget stmt = preStatement stmt
