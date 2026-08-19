@@ -629,13 +629,20 @@ parseHOI4Buildings scripts = return $ HM.unions
 -- each of the department traits it can take on, keyed on the token script refers
 -- to it by. Most are localized under their own token, but a fair number are not
 -- and only their entry says which key to use.
+-- Alongside the names, the archetype each organization is built out of, which
+-- is the only thing that says what kind of manufacturer it is.
 parseHOI4MioNames :: (IsGameState (GameState g), IsGameData (GameData g), Monad m) =>
-    HashMap String GenericScript -> PPT g m (HashMap Text Text)
-parseHOI4MioNames scripts = return $ HM.unions (map organization (concat (HM.elems scripts)))
+    HashMap String GenericScript -> PPT g m (HashMap Text Text, HashMap Text Text)
+parseHOI4MioNames scripts = return (HM.unions (map organization orgs), HM.unions (map archetype orgs))
     where
+        orgs = concat (HM.elems scripts)
         organization [pdx| $token = @scr |] =
             HM.fromList (nameOf token scr ++ concatMap trait scr)
         organization _ = HM.empty
+        archetype [pdx| $token = @scr |] = case fst (extractStmt (matchLhsText "include") scr) of
+            Just [pdx| %_ = $base |] -> HM.singleton token base
+            _ -> HM.empty
+        archetype _ = HM.empty
         -- A trait carries its own token, so the block it is written in says both
         -- halves; a trait added by one organization and altered by another is
         -- named the same either way, so the later entry may simply win.

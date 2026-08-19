@@ -149,6 +149,7 @@ instance IsGame HOI4 where
                 ,   hoi4buildings = HM.empty
                 ,   hoi4mioScripts = HM.empty
                 ,   hoi4mionames = HM.empty
+                ,   hoi4mioincludes = HM.empty
                 ,   hoi4scriptconstantScripts = HM.empty
                 ,   hoi4scriptconstants = HM.empty
                 ,   hoi4lockeys = []
@@ -346,6 +347,9 @@ instance HOI4Info HOI4 where
     getMioScripts = do
         HOI4D ed <- get
         return (hoi4mioScripts ed)
+    getMioIncludes = do
+        HOI4D ed <- get
+        return (hoi4mioincludes ed)
     getMioNames = do
         HOI4D ed <- get
         return (hoi4mionames ed)
@@ -539,7 +543,7 @@ parseHOI4Scripts = do
     bops <- parseHOI4BopRanges =<< getBopScripts
     techspathed <- parseHOI4TechnologiesPath =<< getTechnologyScripts
     buildings <- parseHOI4Buildings =<< getBuildingScripts
-    mionames <- parseHOI4MioNames =<< getMioScripts
+    (mionames, mioincludes) <- parseHOI4MioNames =<< getMioScripts
     constants <- parseHOI4ScriptConstants =<< getScriptConstantScripts
     modkeys <- parseHOI4LocKeys =<< getLocKeys
 
@@ -591,6 +595,7 @@ parseHOI4Scripts = do
             ,   hoi4techs = techspathed
             ,   hoi4buildings = buildings
             ,   hoi4mionames = mionames
+            ,   hoi4mioincludes = mioincludes
             ,   hoi4scriptconstants = constants
             ,   hoi4modkeys = modkeys
             }

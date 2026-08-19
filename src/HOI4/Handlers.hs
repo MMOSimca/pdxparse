@@ -15,6 +15,8 @@ module HOI4.Handlers (
     ,   compound
     ,   compoundMessage
     ,   compoundMessageNot
+    ,   setDivisionTemplateLock
+    ,   clearDivisionTemplateCap
     ,   compoundMessageScope
     ,   compoundMessageCondition
     ,   compoundMessageExtractTag
@@ -734,7 +736,7 @@ limitClause [pdx| %_ = @scr |] = do
             (i:is) -> all (i ==) is
     return $ if not flat || length texts > limitClauseMax || any (not . isClause) texts
         then Nothing
-        else Just (joinClauses (map lowerFirst texts))
+        else Just (joinClauses (dropRepeatedSubject (map lowerFirst texts)))
 limitClause _ = return Nothing
 
 -- | Whether a condition is written as a statement about the thing it applies to,
@@ -847,6 +849,29 @@ compoundMessageNot stmt@[pdx| %_ = @scr |] = case scr of
             _ -> compoundMessage MsgNot stmt
     _ -> compoundMessage MsgNot stmt
 compoundMessageNot stmt = compoundMessage MsgNot stmt
+
+-- | Drop the subject of a clause where an earlier clause in the same list has
+-- already named it. A character block folds to a line that opens with the
+-- person's name in bold, and two of those joined together say the name twice --
+-- "X is active in this country and X is not a Field Marshal" -- where English
+-- would say it once and carry it over.
+dropRepeatedSubject :: [Text] -> [Text]
+dropRepeatedSubject = go []
+    where
+        go _ [] = []
+        go seen (t:ts) = case subject t of
+            Just (name, rest) | name `elem` seen -> rest : go seen ts
+            Just (name, _) -> t : go (name : seen) ts
+            Nothing -> t : go seen ts
+        -- A subject is a name in bold at the head of the clause; the bold marks
+        -- are what say where it ends.
+        subject t = do
+            afterOpen <- T.stripPrefix bold t
+            let (name, rest) = T.breakOn bold afterOpen
+            after <- T.stripPrefix bold rest
+            trimmed <- T.stripPrefix " " after
+            if T.null name then Nothing else Just (name, trimmed)
+        bold = "'''"
 
 -- | Join clauses into a list the way it would be written out: a serial comma
 -- between all but the last two, which take an "and".
@@ -4570,3 +4595,25 @@ unlockDecisionTooltip stmt@[pdx| %_ = @scr |] = do
         Just stmt@[pdx| %_ = ?txt |] -> locandid MsgUnlockDecisionTooltip stmt
         _ -> preStatement stmt
 unlockDecisionTooltip stmt = preStatement stmt
+-- | Handler for @set_division_template_lock@, which stops a template being edited
+-- and its divisions being trained or disbanded, or lets them be again.
+setDivisionTemplateLock :: (HOI4Info g, Monad m) => StatementHandler g m
+setDivisionTemplateLock stmt@[pdx| %_ = @scr |] = case (template, locked) of
+    (Just name, Just yn) -> msgToPP (MsgSetDivisionTemplateLock name yn)
+    _ -> preStatement stmt
+    where
+        (template, locked) = foldl' addLine (Nothing, Nothing) scr
+        addLine (t, l) [pdx| division_template = ?name |] = (Just name, l)
+        addLine (t, l) [pdx| is_locked = yes |] = (t, Just True)
+        addLine (t, l) [pdx| is_locked = no |] = (t, Just False)
+        addLine acc _ = acc
+setDivisionTemplateLock stmt = preStatement stmt
+
+-- | Handler for @clear_division_template_cap@, which lifts the limit on how many
+-- divisions of a template the country may hold.
+clearDivisionTemplateCap :: (HOI4Info g, Monad m) => StatementHandler g m
+clearDivisionTemplateCap stmt@[pdx| %_ = @scr |] =
+    case [name | [pdx| division_template = ?name |] <- scr] of
+        (name : _) -> msgToPP (MsgClearDivisionTemplateCap name)
+        [] -> preStatement stmt
+clearDivisionTemplateCap stmt = preStatement stmt

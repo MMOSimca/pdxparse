@@ -26,6 +26,8 @@ module HOI4.SpecialHandlers (
     ,   advisorPost
     ,   setCanBeFiredInAdvisorRole
     ,   addRelationRuleOverride
+    ,   reduceFocusCompletionCost
+    ,   mioScope
     ,   createIntelligenceAgency
     ,   upgradeIntelligenceAgency
     ,   hasDoneAgencyUpgrade
@@ -64,7 +66,7 @@ import qualified Data.HashMap.Strict as HM
 --import Data.Set (Set)
 
 
-import Data.Char (isDigit, toUpper)
+import Data.Char (chr, isDigit, toUpper)
 import Data.List (foldl', sortOn, elemIndex, find)
 import Data.Maybe
 
@@ -3031,3 +3033,196 @@ agencyUpgradeBranches = HM.fromList
     , ("upgrade_decryption_boost"       , "branch_crypto")
     , ("upgrade_crypto_strength"        , "branch_crypto")
     ]
+
+-------------------------------------
+-- Handler for national focus costs --
+-------------------------------------
+
+-- | Handler for @reduce_focus_completion_cost@, which takes days off however many
+-- focuses are named in it. The focuses are written as links to where each stands
+-- in its tree, so that a reader can go and see which ones were sped up.
+reduceFocusCompletionCost :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+reduceFocusCompletionCost stmt@[pdx| %_ = @scr |] = case cost of
+    Nothing -> preStatement stmt
+    Just days -> do
+        basemsg <- msgToPP (MsgReduceFocusCompletionCost days)
+        links <- indentUp (concatMapM focusLink focuses)
+        return (basemsg ++ links)
+    where
+        (cost, focuses) = foldl' addLine (Nothing, []) scr
+        addLine (c, fs) [pdx| cost = !n |] = (Just n, fs)
+        addLine (c, fs) [pdx| focus = @arr |] = (c, fs ++ mapMaybe bareName arr)
+        addLine (c, fs) [pdx| focus = $theid |] = (c, fs ++ [theid])
+        addLine acc stmt = trace ("unknown section in reduce_focus_completion_cost: " ++ show stmt) acc
+        bareName (StatementBare (GenericLhs theid [])) = Just theid
+        bareName _ = Nothing
+reduceFocusCompletionCost stmt = preStatement stmt
+
+-- | One focus written the way the wiki writes it: a template call naming the page
+-- it is written up on and the focus itself. A focus on no page of the wiki falls
+-- back to its icon and name written out, which is how focuses are named
+-- everywhere else.
+focusLink :: (HOI4Info g, Monad m) => Text -> PPT g m IndentedMessages
+focusLink theid = do
+    focuses <- getNationalFocus
+    case HM.lookup theid focuses of
+        Just nf | Just page <- focusPage focuses nf -> msgToPP (MsgFocusLink page theid)
+        Just nf -> msgToPP (MsgFocusNamed (nf_icon nf) theid (nf_name_loc nf))
+        Nothing -> msgToPP (MsgUnprocessed ("<tt>" <> theid <> "</tt>"))
+
+-- | The wiki page a focus is written up on. Which file script keeps a focus in
+-- says which page it belongs to, bar three files the wiki writes up over two
+-- pages each: Spain's two sides are told apart by the tag their ids carry, and
+-- Germany's and the Soviet Union's halves each run in one stretch, so the focus
+-- the second half opens with says where the break falls.
+focusPage :: HashMap Text HOI4NationalFocus -> HOI4NationalFocus -> Maybe Text
+focusPage focuses nf = byTag <|> bySplit <|> HM.lookup file focusPages
+    where
+        file = T.toLower (T.takeWhileEnd (\c -> c /= '/' && c /= (chr 92)) (T.pack (nf_path nf)))
+        byTag = listToMaybe
+            [ page | (tag, page) <- focusTagPages, tag `T.isPrefixOf` nf_id nf ]
+        bySplit = do
+            (before, marker, from) <- HM.lookup file focusPageSplits
+            split <- HM.lookup marker focuses
+            return (if nf_ordinal nf >= nf_ordinal split then from else before)
+
+-- | The wiki page each focus file is written up on, keyed on the name of the file.
+focusPages :: HashMap Text Text
+focusPages = HM.fromList
+    [ ("generic.txt"                            , "generic")
+    , ("horn_of_africa.txt"                     , "hoa")
+    , ("australia.txt"                          , "ast")
+    , ("australia_taog.txt"                     , "ast2")
+    , ("india.txt"                              , "raj")
+    , ("india_goe.txt"                          , "raj2")
+    , ("canada.txt"                             , "can")
+    , ("new_zealand.txt"                        , "nzl")
+    , ("south_africa.txt"                       , "saf")
+    , ("czechoslovakia.txt"                     , "cze")
+    , ("czechoslovakia_mu.txt"                  , "cze2")
+    , ("hungary.txt"                            , "hun")
+    , ("hungary_wuw.txt"                        , "hun2")
+    , ("habsburg_joint.txt"                     , "habsburg")
+    , ("romania.txt"                            , "rom")
+    , ("yugoslavia.txt"                         , "yug")
+    , ("japan.txt"                              , "jap")
+    , ("usa.txt"                                , "usa")
+    , ("uk.txt"                                 , "eng")
+    , ("netherlands.txt"                        , "hol")
+    , ("mexico.txt"                             , "mex")
+    , ("france.txt"                             , "fra")
+    , ("free_france.txt"                        , "fre")
+    , ("vichy_france.txt"                       , "vic")
+    , ("portugal.txt"                           , "por")
+    , ("bulgaria.txt"                           , "bul")
+    , ("greece.txt"                             , "gre")
+    , ("turkey.txt"                             , "tur")
+    , ("poland.txt"                             , "pol")
+    , ("baltic_shared.txt"                      , "baltic")
+    , ("estonia.txt"                            , "est")
+    , ("latvia.txt"                             , "lat")
+    , ("lithuania.txt"                          , "lit")
+    , ("italy.txt"                              , "ita")
+    , ("ethiopia.txt"                           , "eth")
+    , ("switzerland.txt"                        , "swi")
+    , ("austria.txt"                            , "aus")
+    , ("belgium.txt"                            , "bel")
+    , ("congo.txt"                              , "cog")
+    , ("congo_shared.txt"                       , "belcog")
+    , ("denmark.txt"                            , "den")
+    , ("finland.txt"                            , "fin")
+    , ("iceland.txt"                            , "ice")
+    , ("norway.txt"                             , "nor")
+    , ("sweden.txt"                             , "swe")
+    , ("nordic_shared.txt"                      , "nordic")
+    , ("argentina.txt"                          , "arg")
+    , ("brazil.txt"                             , "bra")
+    , ("chile.txt"                              , "chl")
+    , ("paraguay.txt"                           , "par")
+    , ("uruguay.txt"                            , "urg")
+    , ("paraguay_uruguay_shared_branch.txt"     , "guay")
+    , ("toa_shared_military_branch.txt"         , "smb")
+    , ("afghanistan.txt"                        , "afg")
+    , ("iraq.txt"                               , "irq")
+    , ("persia.txt"                             , "per")
+    , ("goe_shared_saadabad_branch.txt"         , "ssb")
+    , ("philippines.txt"                        , "phi")
+    , ("indonesia.txt"                          , "ins")
+    , ("indonesia_joint.txt"                    , "ins_join")
+    , ("siam.txt"                               , "sia")
+    , ("abdacom_shared_branch.txt"              , "abdacom")
+    , ("austro_hungarian_releasable_shared.txt" , "slo")
+    , ("china_shared.txt"                       , "chishared")
+    , ("china_warlord.txt"                      , "warlord")
+    , ("china_shared_tsr.txt"                   , "chishared2")
+    , ("china_warlord_sea.txt"                  , "warlord2")
+    , ("china_nationalist.txt"                  , "chi")
+    , ("china_nationalist_sea.txt"              , "chi2")
+    , ("china_communist.txt"                    , "prc")
+    , ("china_communist_sea.txt"                , "prc2")
+    , ("china_nationalist_warlord_tsr.txt"      , "warlordchi")
+    , ("china_communist_warlord_tsr.txt"        , "warlordprc")
+    , ("tsr_lingguang_incident_joint_branch.txt", "lingg")
+    , ("ncns_ma_clique_joint_branch.txt"        , "ma_clique")
+    , ("manchukuo.txt"                          , "man")
+    , ("manchukuo_tsr.txt"                      , "man2")
+    ]
+
+-- | A file the wiki writes up over two pages, with the focus the second page
+-- opens with. Naming the focus rather than a line or a count keeps the split in
+-- the right place when the game adds focuses to the first half.
+focusPageSplits :: HashMap Text (Text, Text, Text)
+focusPageSplits = HM.fromList
+    [ ("germany.txt", ("gerh", "GER_oppose_hitler_ww", "gero"))
+    , ("soviet.txt" , ("sovi", "SOV_the_path_of_marxism_leninism", "sovp"))
+    ]
+
+-- | Where the two halves of a file are not written one after the other, the tag
+-- an id opens with tells them apart. Spain's two sides share a file this way.
+focusTagPages :: [(Text, Text)]
+focusTagPages =
+    [ ("SPR_", "spr")
+    , ("SPA_", "spa")
+    ]
+
+
+-------------------------------------------------
+-- Handlers for military industrial organizations --
+-------------------------------------------------
+
+-- | Handler for a @mio:@ scope, whose block holds whatever is being done to one
+-- military industrial organization. The organization is named as a heading, with
+-- what kind of manufacturer it is after the name, since the name alone rarely
+-- says.
+mioScope :: (HOI4Info g, Monad m) => StatementHandler g m
+mioScope stmt = case stmt of
+    Statement (GenericLhs _ [token]) _ (CompoundRhs scr) -> withCurrentIndent $ \_ -> do
+        name <- mioName token
+        kind <- mioKind token
+        let named = maybe name (\k -> name <> " ('''" <> k <> "''')") kind
+        header <- plainMsg' (named <> ":")
+        scriptMsgs <- ppMany scr
+        return (header : scriptMsgs)
+    _ -> preStatement stmt
+
+-- | The name of an organization. Most are localized under their own token; the
+-- rest are named by the key their entry gives.
+mioName :: (HOI4Info g, Monad m) => Text -> PPT g m Text
+mioName token = do
+    names <- getMioNames
+    mloc <- getGameL10nIfPresent token
+    case mloc of
+        Just loc -> return (Doc.oneLine loc)
+        Nothing -> case HM.lookup token names of
+            Just key -> Doc.oneLine <$> getGameL10n key
+            Nothing -> return ("<tt>" <> token <> "</tt>")
+
+-- | What kind of manufacturer an organization is, which is said by the archetype
+-- its entry is built out of rather than by anything of its own. An organization
+-- written out in full has no archetype and so nothing to say here.
+mioKind :: (HOI4Info g, Monad m) => Text -> PPT g m (Maybe Text)
+mioKind token = do
+    includes <- getMioIncludes
+    case HM.lookup token includes of
+        Nothing -> return Nothing
+        Just archetype -> fmap Doc.oneLine <$> getGameL10nIfPresent archetype

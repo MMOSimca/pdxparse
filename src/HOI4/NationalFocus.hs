@@ -44,7 +44,7 @@ import HOI4.Common -- everything
 -- | Empty national focus. Starts off Nothing/empty everywhere, except id and name
 -- (which should get filled in immediately).
 newHOI4NationalFocus :: HOI4NationalFocus
-newHOI4NationalFocus = HOI4NationalFocus "(Unknown)" "(Unknown)" Nothing Nothing "GFX_goal_unknown" Nothing undefined Nothing [] Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing undefined
+newHOI4NationalFocus = HOI4NationalFocus "(Unknown)" "(Unknown)" Nothing Nothing "GFX_goal_unknown" Nothing undefined Nothing [] Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing undefined 0
 
 -- | Take the decisions scripts from game data and parse them into decision
 -- data structures.
@@ -54,7 +54,7 @@ parseHOI4NationalFocuses scripts = HM.unions . HM.elems <$> do
     tryParse <- hoistExceptions $
         HM.traverseWithKey
             (\sourceFile scr ->
-                setCurrentFile sourceFile $ mapM (parseHOI4NationalFocus (fileVars scr)) $ concatMap mapTree scr)
+                setCurrentFile sourceFile $ mapM (uncurry (parseHOI4NationalFocus (fileVars scr))) $ zip [0..] $ concatMap mapTree scr)
             scripts
     case tryParse of
         Left err -> do
@@ -72,6 +72,9 @@ parseHOI4NationalFocuses scripts = HM.unions . HM.elems <$> do
         mkNfMap :: [HOI4NationalFocus] -> HashMap Text HOI4NationalFocus
         mkNfMap = HM.fromList . map (nf_id &&& id)
 
+        -- A tree holds all the focuses standing in it; a focus shared between
+        -- trees stands on its own. Either way the order they come out in is the
+        -- order the file writes them in.
         mapTree scr = case scr of
             [pdx| focus_tree = @focus |] -> focus
             [pdx| shared_focus = @_ |] -> [scr]
@@ -89,9 +92,9 @@ fileVars = HM.fromList . mapMaybe getvar
 -- | Parse a statement in an national focus file. Some statements aren't
 -- national focus'; for those, and for any obvious errors, return Right Nothing.
 parseHOI4NationalFocus :: (IsGameState (GameState g), IsGameData (GameData g), MonadError Text m) =>
-    HashMap Text Double -> GenericStatement -> PPT g m (Either Text (Maybe HOI4NationalFocus))
-parseHOI4NationalFocus _ (StatementBare _) = throwError "bare statement at top level"
-parseHOI4NationalFocus vars [pdx| %left = %right |] = case right of
+    HashMap Text Double -> Int -> GenericStatement -> PPT g m (Either Text (Maybe HOI4NationalFocus))
+parseHOI4NationalFocus _ _ (StatementBare _) = throwError "bare statement at top level"
+parseHOI4NationalFocus vars ordinal [pdx| %left = %right |] = case right of
     CompoundRhs parts -> case left of
         CustomLhs _ -> throwError "internal error: custom lhs"
         IntLhs _ -> throwError "int lhs at top level"
@@ -106,7 +109,8 @@ parseHOI4NationalFocus vars [pdx| %left = %right |] = case right of
                     nnf <- hoistErrors $ foldM (nationalFocusAddSection vars)
                                                 (Just newHOI4NationalFocus {nf_path = file
                                                                             ,nf_name_loc = nfNameLoc
-                                                                            ,nf_name_desc = nfNameDesc})
+                                                                            ,nf_name_desc = nfNameDesc
+                                                                            ,nf_ordinal = ordinal})
                                                 parts
                     case nnf of
                         Left err -> return (Left err)
@@ -122,7 +126,7 @@ parseHOI4NationalFocus vars [pdx| %left = %right |] = case right of
         getNFTxt ([pdx| text = $nfname|]:_) = Just nfname
         getNFTxt (_:xs) = getNFTxt xs
         getNFTxt [] = Nothing
-parseHOI4NationalFocus _ _ = withCurrentFile $ \file ->
+parseHOI4NationalFocus _ _ _ = withCurrentFile $ \file ->
     throwError ("unrecognised form for national focus in " <> T.pack file)
 
 -- | Interpret one section of an national focus. If understood, add it to the
@@ -274,7 +278,7 @@ parseHOI4NationalFocusesPath scripts = do
     tryParse <- hoistExceptions $
         HM.traverseWithKey
             (\sourceFile scr ->
-                setCurrentFile sourceFile $ mapM (parseHOI4NationalFocus (fileVars scr)) $ concatMap mapTree scr)
+                setCurrentFile sourceFile $ mapM (uncurry (parseHOI4NationalFocus (fileVars scr))) $ zip [0..] $ concatMap mapTree scr)
             scripts
     case tryParse of
         Left err -> do
@@ -290,6 +294,9 @@ parseHOI4NationalFocusesPath scripts = do
                     Right nfocus -> nfocus)
                     enfs
     where
+        -- A tree holds all the focuses standing in it; a focus shared between
+        -- trees stands on its own. Either way the order they come out in is the
+        -- order the file writes them in.
         mapTree scr = case scr of
             [pdx| focus_tree = @focus |] -> focus
             [pdx| shared_focus = @_ |] -> [scr]

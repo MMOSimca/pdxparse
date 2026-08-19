@@ -534,6 +534,18 @@ data ScriptMessage
     | MsgAIAddHeader {scriptMessageMultiplier :: Double}
     | MsgResetProvinceName {scriptMessageAmt :: Double}
     | MsgHasCompletedFocus {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageLoc :: Text}
+    | MsgReduceFocusCompletionCost {scriptMessageAmt :: Double}
+    | MsgFocusLink {scriptMessageWhat :: Text, scriptMessageWhat2 :: Text}
+    | MsgFocusNamed {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageLoc :: Text}
+    | MsgAddMioSize {scriptMessageAmt :: Double}
+    | MsgAddMioFunds {scriptMessageAmt :: Double}
+    | MsgAddMioFundsGainFactor {scriptMessageAmt :: Double}
+    | MsgIsSpecialProjectCompleted {scriptMessageWhat :: Text}
+    | MsgSetDivisionTemplateLock {scriptMessageWhat :: Text, scriptMessageYn :: Bool}
+    | MsgClearDivisionTemplateCap {scriptMessageWhat :: Text}
+    | MsgIsFieldMarshal {scriptMessageYn :: Bool}
+    | MsgIsCorpsCommander {scriptMessageYn :: Bool}
+    | MsgPromoteToFieldMarshal
     | MsgCompleteNationalFocus {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageLoc :: Text}
     | MsgUnlockNationalFocus {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageLoc :: Text}
     | MsgFocus {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageLoc :: Text}
@@ -3151,6 +3163,73 @@ instance RenderMessage Script ScriptMessage where
                 , toMessage (roundNumNoSpace _amt)
                 , ")"
                 ]
+        MsgReduceFocusCompletionCost {scriptMessageAmt = _amt}
+            -> mconcat
+                [ "Reduce the time by "
+                , toMessage (bold (plainNumMin _amt))
+                , plural _amt " day" " days"
+                , " for:"
+                ]
+        MsgFocusLink {scriptMessageWhat = _what, scriptMessageWhat2 = _what2}
+            -> mconcat
+                [ "{{Focus|", _what, "|", _what2, "}}" ]
+        MsgFocusNamed {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageLoc = _loc}
+            -> mconcat
+                [ "[[File:"
+                , _icon
+                , ".png|28px]]"
+                , " <!-- "
+                , _what
+                , " -->"
+                , toMessage (iquotes _loc)
+                ]
+        MsgAddMioSize {scriptMessageAmt = _amt}
+            -> mconcat
+                [ "Gain "
+                , toMessage $ templateColor (colourNum True _amt)
+                , plural _amt " size" " sizes"
+                ]
+        MsgAddMioFunds {scriptMessageAmt = _amt}
+            -> mconcat
+                [ "Funds: "
+                , toMessage $ templateColor (colourNumSign True _amt)
+                ]
+        MsgAddMioFundsGainFactor {scriptMessageAmt = _amt}
+            -> mconcat
+                [ "Funds Gain: "
+                , toMessage $ templateColor (reducedNum (colourPcSign True) _amt)
+                ]
+        MsgIsSpecialProjectCompleted {scriptMessageWhat = _what}
+            -> mconcat
+                [ "Has completed special project "
+                , toMessage (bold (Doc.strictText _what))
+                ]
+        MsgSetDivisionTemplateLock {scriptMessageWhat = _what, scriptMessageYn = _yn}
+            -> mconcat
+                [ toMessage (ifThenElseT _yn "Disable" "Enable")
+                , " editing of "
+                , toMessage (bold (Doc.strictText _what))
+                , " template and training or disbanding units belonging to it"
+                ]
+        MsgClearDivisionTemplateCap {scriptMessageWhat = _what}
+            -> mconcat
+                [ "Clear division cap for "
+                , toMessage (bold (Doc.strictText _what))
+                ]
+        MsgIsFieldMarshal {scriptMessageYn = _yn}
+            -> mconcat
+                [ "Is "
+                , toMessage (ifThenElseT _yn "" "''not'' ")
+                , "a Field Marshal"
+                ]
+        MsgIsCorpsCommander {scriptMessageYn = _yn}
+            -> mconcat
+                [ "Is "
+                , toMessage (ifThenElseT _yn "" "''not'' ")
+                , "a Corps Commander"
+                ]
+        MsgPromoteToFieldMarshal
+            -> "Is promoted to Field Marshal"
         MsgHasCompletedFocus {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageLoc = _loc}
             -> mconcat
                 [ "Has completed national focus "
