@@ -678,6 +678,16 @@ modifiersTable = HM.fromList
         ,("research_sharing_per_country_bonus_factor" , ("MODIFIER_RESEARCH_SHARING_PER_COUNTRY_BONUS_FACTOR", MsgModifierPcPosReduced, Just 2))
         ,("research_speed_factor"           , ("MODIFIER_RESEARCH_SPEED_FACTOR", MsgModifierPcPosReduced, Just 2))
         ,("local_resources_factor"          , ("MODIFIER_LOCAL_RESOURCES_FACTOR", MsgModifierPcPosReduced, Just 2))
+        -- The same modifier narrowed to one resource. Script writes
+        -- @local_resources_@ and any resource name, and each is localized under
+        -- the modifier's own name rather than under a MODIFIER_ key.
+        ,("local_resources_oil_factor"      , ("local_resources_oil_factor", MsgModifierPcPosReduced, Just 2))
+        ,("local_resources_aluminium_factor" , ("local_resources_aluminium_factor", MsgModifierPcPosReduced, Just 2))
+        ,("local_resources_rubber_factor"   , ("local_resources_rubber_factor", MsgModifierPcPosReduced, Just 2))
+        ,("local_resources_tungsten_factor" , ("local_resources_tungsten_factor", MsgModifierPcPosReduced, Just 2))
+        ,("local_resources_steel_factor"    , ("local_resources_steel_factor", MsgModifierPcPosReduced, Just 2))
+        ,("local_resources_chromium_factor" , ("local_resources_chromium_factor", MsgModifierPcPosReduced, Just 2))
+        ,("local_resources_coal_factor"     , ("local_resources_coal_factor", MsgModifierPcPosReduced, Just 2))
         ,("surrender_limit"                 , ("MODIFIER_SURRENDER_LIMIT", MsgModifierPcPosReduced, Just 2))
         ,("max_surrender_limit_offset"      , ("MODIFIER_MAX_SURRENDER_LIMIT_OFFSET", MsgModifierPcPosReduced, Just 2)) --precision 2
 
@@ -1650,10 +1660,15 @@ ppDynModBox dmod effects = do
 
 removeDynamicModifier :: (HOI4Info g, Monad m) => StatementHandler g m
 removeDynamicModifier stmt@[pdx| %_ = $txt |] = withLocAtom MsgRemoveDynamicMod stmt
-removeDynamicModifier stmt@[pdx| %_ = @dyn |] = do
-    case dyn of
-        [stmtd@[pdx| %_ = $txt |]] ->  withLocAtom MsgRemoveDynamicMod stmtd
-        _-> preStatement stmt
+-- A @scope@ narrows which copy of the modifier goes, and @days@ is left over
+-- from adding it; the name is the only part of the block that says what is
+-- taken away.
+removeDynamicModifier stmt@[pdx| %_ = @dyn |] =
+    case [modstmt | modstmt@[pdx| modifier = %_ |] <- dyn] of
+        (modstmt : _) -> withLocAtom MsgRemoveDynamicMod modstmt
+        [] -> case dyn of
+            [stmtd@[pdx| %_ = $txt |]] -> withLocAtom MsgRemoveDynamicMod stmtd
+            _ -> preStatement stmt
 removeDynamicModifier stmt = preStatement stmt
 
 -------------------------------------------------------
@@ -2538,6 +2553,13 @@ addRemoveLeaderTrait msg stmt@[pdx| %_ = $trait |] = do
     let traitmsg = namemsg : traitmsg'
     baseMsg <- msgToPP msg
     return $ baseMsg ++ traitmsg
+-- The block form names the trait under @trait@, and may say which of the
+-- country's leaders it belongs to under @ideology@. The trait is the part that
+-- carries anything to read.
+addRemoveLeaderTrait msg stmt@[pdx| %_ = @scr |] =
+    case [traitstmt | traitstmt@[pdx| trait = %_ |] <- scr] of
+        (traitstmt : _) -> addRemoveLeaderTrait msg traitstmt
+        [] -> preStatement stmt
 addRemoveLeaderTrait _ stmt = preStatement stmt
 
 addRemoveUnitTrait :: (Monad m, HOI4Info g) => ScriptMessage -> StatementHandler g m
