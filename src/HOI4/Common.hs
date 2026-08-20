@@ -133,8 +133,12 @@ ppScriptedBlock what name [pdx| %_ = @scr |] stmt | not (null scr) = do
             -- indented under, so take that step back off.
             withExpandedBlock name (indentDown (ppMany scr))
         else if not collapse then
-            -- Too long, and unfolding blocks are not wanted on this wiki.
-            plainStatement what stmt
+            -- Too long, and unfolding blocks are not wanted on this wiki. The
+            -- call is all there is left to say which block was passed over, so
+            -- it is set as code and said to be one we chose not to write out,
+            -- rather than left looking like a statement we failed to read.
+            plainMsg $ "Abnormally Large " <> what <> "`"
+                        <> Doc.doc2text (genericStatement2doc stmt) <> "`"
         else do
             -- Too long to read in passing. The name stays as the line the reader
             -- sees, with the body folded away behind it. It has to be written as
