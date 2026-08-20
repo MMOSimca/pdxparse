@@ -2677,7 +2677,7 @@ instance RenderMessage Script ScriptMessage where
         MsgHasWarWithMajor {scriptMessageYn = _yn}
             -> mconcat
                 [ "Is "
-                , toMessage (ifThenElseT _yn "at war with a major country" "at peace with all major countries")
+                , toMessage (ifThenElseT _yn "at war with a Major Country" "not at war with a Major Country")
                 ]
         MsgIsCapital {scriptMessageYn = _yn}
             -> mconcat
