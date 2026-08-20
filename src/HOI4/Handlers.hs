@@ -2612,28 +2612,63 @@ checkVariable msgWW msgWV stmt@[pdx| %_ = @scr |]
             = cv { cv_which = Just val }
         addLine cv [pdx| value = !val |]
             = cv { cv_value = Just val }
+        addLine cv [pdx| value > !val |]
+            = cv { cv_value = Just val, cv_comp = "greater than" }
+        addLine cv [pdx| value < !val |]
+            = cv { cv_value = Just val, cv_comp = "less than" }
         addLine cv [pdx| value = $val |]
             = cv { cv_which2 = Just val }
+        addLine cv [pdx| value > $val |]
+            = cv { cv_which2 = Just val, cv_comp = "greater than" }
+        addLine cv [pdx| value < $val |]
+            = cv { cv_which2 = Just val, cv_comp = "less than" }
+        addLine cv [pdx| value = $vartag:$val |]
+            = cv { cv_which2 = Just (vartag <> ":" <> val) }
+        addLine cv [pdx| value > $vartag:$val |]
+            = cv { cv_which2 = Just (vartag <> ":" <> val), cv_comp = "greater than" }
+        addLine cv [pdx| value < $vartag:$val |]
+            = cv { cv_which2 = Just (vartag <> ":" <> val), cv_comp = "less than" }
         addLine cv [pdx| compare = $comp |]
             = cv { cv_comp = T.replace "_" " " comp}
-        addLine cv [pdx| $var = !val |]
+        -- The short forms below name the variable on the left, so they match any
+        -- statement at all. A field we do not know -- @tooltip@, which names the
+        -- text the game shows in place of the comparison -- would be read as one
+        -- of them and overwrite the variable already found, so a short form is
+        -- only taken while nothing has claimed the slot.
+        addLine cv [pdx| $var = !val |] | isNothing (cv_which cv)
             = cv { cv_which = Just var, cv_value = Just val, cv_comp = "equals" }
-        addLine cv [pdx| $var < !val |]
+        addLine cv [pdx| $var < !val |] | isNothing (cv_which cv)
             = cv { cv_which = Just var, cv_value = Just val, cv_comp = "less than" }
-        addLine cv [pdx| $var > !val |]
+        addLine cv [pdx| $var > !val |] | isNothing (cv_which cv)
             = cv { cv_which = Just var, cv_value = Just val, cv_comp = "greater than" }
-        addLine cv [pdx| $var = $val |]
+        addLine cv [pdx| $var = $val |] | isNothing (cv_which cv)
             = cv { cv_which = Just var, cv_which2 = Just val, cv_comp = "equals" }
-        addLine cv [pdx| $var < $val |]
+        addLine cv [pdx| $var < $val |] | isNothing (cv_which cv)
             = cv { cv_which = Just var, cv_which2 = Just val, cv_comp = "less than" }
-        addLine cv [pdx| $var > $val |]
+        addLine cv [pdx| $var > $val |] | isNothing (cv_which cv)
             = cv { cv_which = Just var, cv_which2 = Just val, cv_comp = "greater than" }
+        addLine cv [pdx| $var = $vartag:$val |] | isNothing (cv_which cv)
+            = cv { cv_which = Just var, cv_which2 = Just (vartag <> ":" <> val), cv_comp = "equals" }
+        addLine cv [pdx| $var < $vartag:$val |] | isNothing (cv_which cv)
+            = cv { cv_which = Just var, cv_which2 = Just (vartag <> ":" <> val), cv_comp = "less than" }
+        addLine cv [pdx| $var > $vartag:$val |] | isNothing (cv_which cv)
+            = cv { cv_which = Just var, cv_which2 = Just (vartag <> ":" <> val), cv_comp = "greater than" }
+        -- A variable of another country's is reached through that country, which
+        -- leaves the name on the left carrying tags of its own.
+        addLine cv [pdx| $a:$b:$c = $val |] | isNothing (cv_which cv)
+            = cv { cv_which = Just (a <> ":" <> b <> ":" <> c), cv_which2 = Just val, cv_comp = "equals" }
         addLine cv _ = cv
         toTT :: Text -> Text
         toTT t = "<tt>" <> t <> "</tt>"
         pp_cv :: CheckVariable -> PPT g m ScriptMessage
         pp_cv cv = case (cv_which cv, cv_which2 cv, cv_value cv, cv_comp cv) of
-            (Just v1, Just v2, Nothing, comp) -> do return $ msgWW comp (toTT v1) (toTT v2)
+            (Just v1, Just v2, Nothing, comp) -> do
+                mconst <- if "constant:" `T.isPrefixOf` v2
+                    then constantValue v2
+                    else return Nothing
+                case mconst of
+                    Just val -> return $ msgWV comp (toTT v1) val
+                    Nothing -> return $ msgWW comp (toTT v1) (toTT v2)
             (Just v,  Nothing, Just val, comp) -> do return $ msgWV comp (toTT v) val
             _ -> do return $ preMessage stmt
 checkVariable _ _ stmt = preStatement stmt
