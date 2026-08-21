@@ -11,6 +11,7 @@ module HOI4.Handlers (
     ,   flagText
     ,   isTag
     ,   getStateLoc
+    ,   fillLocScopes
     ,   ppMtth
     ,   compound
     ,   compoundMessage
@@ -186,7 +187,7 @@ module HOI4.Handlers (
     ,   eflag
     ) where
 
-import Data.Char (toLower, isAlpha, isUpper, isDigit)
+import Data.Char (toLower, toUpper, isAlpha, isUpper, isDigit)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
@@ -357,6 +358,73 @@ getCoHi name = do
             case rulLoc of
                 Just rulingTag -> return $ chRulingTag chistory
                 Nothing -> return name
+
+-- | Fill in the names a piece of localization asks the game to look up for it,
+-- written as a scope and one of the game's name commands in brackets, e.g.
+-- @[SOV.GetAdjective]@. The game reads those as it draws the text; the words
+-- around them are written to be read with the name in place, so leaving them as
+-- written makes the text no use to anyone.
+--
+-- Only a scope that names one particular thing is filled in: a country tag or a
+-- state id. A pronoun such as @ROOT@ means whichever country the text is drawn
+-- for, which nothing outside the game can say, so those are left alone -- as is
+-- any command we don't know, and the @[?constant:...]@ references that
+-- 'HOI4.SpecialHandlers.fillConstants' deals with instead.
+fillLocScopes :: (HOI4Info g, Monad m) => Text -> PPT g m Text
+fillLocScopes text = case T.breakOn "[" text of
+    (_, rest) | T.null rest -> return text
+    (before, rest) -> case T.stripPrefix "]" closing of
+        -- Unterminated bracket: nothing sensible to do, leave the rest as it is.
+        Nothing -> return text
+        Just after -> do
+            mname <- scopeName inner
+            filled <- fillLocScopes after
+            return $ before <> fromMaybe ("[" <> inner <> "]") mname <> filled
+        where (inner, closing) = T.breakOn "]" (T.drop 1 rest)
+
+-- | What one bracketed scope command comes to, or 'Nothing' for one we cannot
+-- work out. See 'fillLocScopes'.
+scopeName :: (HOI4Info g, Monad m) => Text -> PPT g m (Maybe Text)
+scopeName inner = case T.stripPrefix "." cmdrest of
+    Just cmd
+        | not (T.null target), T.all isDigit target ->
+            case cmd of
+                "GetName" -> getGameL10nIfPresent ("STATE_" <> target)
+                _ -> return Nothing
+        | isTag target -> countryLoc target cmd
+    _ -> return Nothing
+    where (target, cmdrest) = T.breakOn "." inner
+
+-- | The name a country goes by, in the form the given name command asks for. A
+-- country is named for the party that rules it at the start of the game, which
+-- is what the game itself shows until the party changes, so the key that party
+-- gives is tried before the plain one. Each form falls back on the ones before
+-- it, since a country the game has little to say about has only its plain name.
+countryLoc :: (HOI4Info g, Monad m) => Text -> Text -> PPT g m (Maybe Text)
+countryLoc tag cmd = do
+    ideoTag <- getCoHi tag
+    let plain = [ideoTag, tag]
+        keys = case cmd of
+            "GetName" -> plain
+            "GetNameDef" -> defKeys
+            "GetNameDefCap" -> defKeys
+            "GetAdjective" -> [ideoTag <> "_ADJ", tag <> "_ADJ"] ++ plain
+            _ -> []
+        defKeys = [ideoTag <> "_DEF", tag <> "_DEF"] ++ plain
+    mloc <- firstLoc keys
+    return $ if cmd == "GetNameDefCap" then capitalize <$> mloc else mloc
+    where
+        firstLoc [] = return Nothing
+        firstLoc (key:rest) = do
+            mloc <- getGameL10nIfPresent key
+            case mloc of
+                Just loc | not (T.null loc) -> return (Just loc)
+                _ -> firstLoc rest
+        -- The definite form starts with the article where the country takes one
+        -- ("the Soviet Union"), and this is the form used to open a sentence.
+        capitalize t = case T.uncons t of
+            Just (c, rest) -> T.cons (toUpper c) rest
+            Nothing -> t
 
 -- | Emit an appropriate phrase for a pronoun.
 -- If a scope is passed, that is the type the current command expects. If they

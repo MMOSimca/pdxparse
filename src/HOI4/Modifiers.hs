@@ -18,7 +18,7 @@ import Control.Monad.State (gets)
 import Data.Foldable (fold)
 import Data.Maybe (isJust, fromJust, fromMaybe, catMaybes, mapMaybe)
 import Data.Monoid ((<>))
-import Data.List ( sortOn, intersperse, foldl', intercalate )
+import Data.List ( sortOn, foldl', intercalate )
 import Data.Set (toList, fromList)
 
 import Data.HashMap.Strict (HashMap)
@@ -47,6 +47,7 @@ import MessageTools
 
 import Debug.Trace (trace, traceM)
 import HOI4.SpecialHandlers (modifierMSG)
+import HOI4.Handlers (fillLocScopes)
 import System.FilePath (takeBaseName)
 
 parseHOI4OpinionModifiers :: (IsGameState (GameState g), IsGameData (GameData g), Monad m) =>
@@ -143,8 +144,8 @@ writeHOI4OpinionModifiers :: (HOI4Info g, MonadIO m) => PPT g m ()
 writeHOI4OpinionModifiers = do
     opinionModifiers <- getOpinionModifiers
     writeFeatures "opinion_modifiers"
-                  [Feature { featurePath = Just "templates"
-                           , featureId = Just "opinion_modifier.txt"
+                  [Feature { featurePath = Just "modules"
+                           , featureId = Just "opinion_list.lua"
                            , theFeature = Right (HM.elems opinionModifiers)
                            }]
                   ppOpinionModifiers
@@ -155,8 +156,8 @@ writeHOI4OpinionModifiers' = do
     pathOmod <- parseHOI4NationalFocusesPath opinionModifiers
     let pathedOmods :: [Feature [HOI4OpinionModifier]]
         pathedOmods = map (\omods -> Feature {
-                                    featurePath = Just "templates"
-                                ,   featureId = Just (T.pack $ takeBaseName $ omodPath $ head omods) <> Just ".txt"
+                                    featurePath = Just "modules"
+                                ,   featureId = Just (T.pack $ takeBaseName $ omodPath $ head omods) <> Just ".lua"
                                 ,   theFeature = Right omods })
                             (HM.elems pathOmod)
     writeFeatures "opinion_modifiers"
@@ -188,77 +189,89 @@ parseHOI4NationalFocusesPath scripts = do
                     Right nfocus -> nfocus)
                     enfs
 
--- Based on https://hoi4.paradoxwikis.com/Template:Opinion
+-- | The data behind [[Template:Opinion]]. The template itself is now a stub
+-- calling [[Module:Opinion]], which does all the wording and colouring and
+-- takes its numbers from [[Module:Opinion/List]] -- the table written here.
+-- The module looks a modifier up by the lowercased id it is handed, so the keys
+-- are lowercased to match.
 ppOpinionModifiers :: (HOI4Info g, Monad m) => [HOI4OpinionModifier] -> PPT g m Doc
 ppOpinionModifiers modifiers = do
     version <- gets (gameVersion . getSettings)
     modifiers_pp'd <- mapM ppOpinionModifier (sortOn (T.toCaseFold . omodName) modifiers)
-    return . mconcat $ ["<includeonly>{{#switch:{{ lc:{{{1}}} }}", PP.line
-        ,"| #default = <span style=\"color: red; font-size: 11px;\">(unrecognized string \"{{{1}}}\" for [[Template:Opinion]])</span>[[Category:Pages with unrecognized opinion modifier strings]]", PP.line]
+    return . mconcat $
+        ["--[[", PP.line
+        ,"This module compiles the lists of all opinion modifiers.", PP.line
+        ,"It's meant to be required by \"Module:Opinion\"", PP.line
+        , PP.line
+        ,"Automatically generated for ", Doc.strictText version
+        ," from the file(s): "
+        , Doc.strictText $ T.pack $ intercalate ", " ((toList . fromList) (map omodPath modifiers))
+        , PP.line
+        ,"--]]", PP.line
+        , PP.line
+        ,"local p = {", PP.line]
         ++ modifiers_pp'd ++
-        ["}}</includeonly><noinclude>{{Version|", Doc.strictText version, "}}"
+        ["}", PP.line
         , PP.line
-        , "Automatically generated from the file(s): "
-        , Doc.strictText $ T.pack $ intercalate ", " (map (\p -> "{{path|"++p++"}}") ((toList . fromList) (map omodPath modifiers)))
-        , PP.line, PP.line
-        , "{{template doc}}", PP.line
-        , "[[Category:Templates]]</noinclude>"
-        , PP.line
+        ,"return p", PP.line
         ]
-
-
 
 ppOpinionModifier :: (HOI4Info g, Monad m) => HOI4OpinionModifier -> PPT g m Doc
 ppOpinionModifier mod = do
-    locName <- wikifyLocColours <$> getGameL10n (omodName mod)
+    -- The comments naming the keys a text was filled in from are for a human
+    -- reading wiki source; nobody reads this table, so they would be dead weight
+    -- in every entry. The names the text asks the game for are filled in, since
+    -- a modifier is written about one particular country or state and the words
+    -- around the name are written to be read with it in place.
+    locName <- fillLocScopes . stripLocKeys . wikifyLocColours =<< getGameL10n (omodName mod)
     return . mconcat $
-        [ "| "
+        [ " "
         , Doc.strictText $ T.toLower (omodName mod)
-        , " = "
-        , iquotes locName
-        , " {{#ifeq:{{{2|}}}|0|| ("
+        , " = { loc = \""
+        , Doc.strictText $ luaString locName
+        , "\", "
         ] ++
-        intersperse " / " (
-            if isTrade then
-                modText "" " Trade relation" (omodValue mod)
-                else
-                   modText "{{icon|opinion}} " " opinion" (omodValue mod)
-            ++ modText "" " min" (omodMin mod)
-            ++ modText "" " max" (omodMax mod)
-            ++ duration (omodDays mod) (omodMonths mod) (omodYears mod)
-            ++ monthlyDecay (omodValue mod) (omodDecay mod)
-        ) ++
-        [ ") }}"
+        -- A trade relation is told apart by this flag alone, so it is written
+        -- even though it carries no number of its own.
+        [ "trade = true, " | fromMaybe False (omodTrade mod) ] ++
+        field "value" (omodValue mod) ++
+        field "max_trust" (omodMax mod) ++
+        field "min_trust" (omodMin mod) ++
+        field "days" (durationDays mod) ++
+        field "decay" (omodDecay mod) ++
+        [ "},"
         , PP.line
         ]
 
     where
-        modText :: Text -> Text -> Maybe Double -> [Doc]
-        modText p s (Just val) | val /= 0 = [mconcat [ Doc.strictText p, templateColor $ colourNumSign True val, Doc.strictText s ]]
-        modText _ _ _ = []
+        field :: Text -> Maybe Double -> [Doc]
+        field name (Just val) = [Doc.strictText name, " = ", Doc.ppFloat val, ", "]
+        field _ Nothing = []
 
-        isTrade = fromMaybe False $ omodTrade mod
-        isTarget = fromMaybe False $ omodTarget mod
+-- | How long the modifier lasts, in the one unit the module knows. Script says
+-- days, months or years, but [[Module:Opinion]] holds only a @days@ field and
+-- breaks it up again itself, counting a year as 365 days and a month as 30.
+-- Converting the same way round means what it prints is what the script asked
+-- for: a year for every twelve months, and thirty days for each month over.
+durationDays :: HOI4OpinionModifier -> Maybe Double
+durationDays mod = if total == 0 then Nothing else Just total
+    where
+        months = floor (fromMaybe 0 (omodMonths mod)) :: Int
+        years = floor (fromMaybe 0 (omodYears mod)) :: Int
+        (yearsOfMonths, monthsLeft) = months `divMod` 12
+        total = fromIntegral ((years + yearsOfMonths) * 365 + monthsLeft * 30)
+                    + fromMaybe 0 (omodDays mod)
 
-        monthlyDecay :: Maybe Double -> Maybe Double -> [Doc]
-        monthlyDecay (Just op) (Just decay) = [mconcat [
-                templateColor $ colourNumSign True (if op < 0 then decay else -decay)
-                , Doc.strictText " Monthly decay"
-            ]]
-        monthlyDecay _ _ = []
-
-        duration :: Maybe Double -> Maybe Double -> Maybe Double -> [Doc]
-        duration (Just d) Nothing Nothing   | d /= 0 = [mconcat ["{{icon|time}} ", Doc.strictText $ formatDays d]]
-        duration Nothing (Just m) Nothing   | m /= 0 = [mconcat ["{{icon|time}} ", Doc.strictText $ formatMonths m]]
-        duration Nothing Nothing (Just y)   | y /= 0 = [mconcat ["{{icon|time}} ", Doc.strictText $ formatYears $ floor y]]
-        duration (Just d) (Just m) Nothing  | d /= 0 || m /= 0 = [mconcat ["{{icon|time}} ", fmt "month" m, " and ", fmt "day" d]]
-        duration (Just d) Nothing (Just y)  | d /= 0 || y /= 0 = [mconcat ["{{icon|time}} ", Doc.strictText $ formatDays (y*356+d)]]
-        duration Nothing (Just m) (Just y)  | m /= 0 || y /= 0 = [mconcat ["{{icon|time}} ", Doc.strictText $ formatMonths (y*12+m)]]
-        duration (Just d) (Just m) (Just y) | d /= 0 || m /= 0 || y /= 0 = [mconcat ["{{icon|time}} ", fmt "year" y, " and ", fmt "month" m, " and ", fmt "day" d]]
-        duration _ _ _ = []
-
-        fmt :: Text -> Double -> Doc
-        fmt t v = mconcat [ plainNum v, " ", Doc.strictText $ t <> (if v == 1.0 then "" else "s") ]
+-- | Make a localized name safe to sit inside a Lua double-quoted string. A name
+-- written over two lines is flattened, since the module prints it as one phrase.
+luaString :: Text -> Text
+luaString = T.concatMap escape
+    where
+        escape '\\' = "\\\\"
+        escape '"' = "\\\""
+        escape '\n' = " "
+        escape '\r' = ""
+        escape c = T.singleton c
 
 parseHOI4DynamicModifiers :: (IsGameData (GameData g), IsGameState (GameState g), Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap Text HOI4DynamicModifier)

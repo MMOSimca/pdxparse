@@ -32,6 +32,7 @@ module HOI4.Messages (
     ,   template, templateDoc
     ,   templateColor, templateColor'
     ,   wikifyLocColours
+    ,   stripLocKeys
     ,   message, messageText
     ,   imsg2doc, imsg2doc_html
     ,   IndentedMessage, IndentedMessages
@@ -6111,10 +6112,6 @@ substColoured names = go
         lifted (before, name, after) =
             go before <> "{{icon|" <> T.toLower name <> "|1}}"
                 <> maybe (go after) lifted (splitBuilding after)
-        stripLocKeys t = case T.breakOn "<!--Localisation key:" t of
-            (before, rest)
-                | T.null rest -> before
-                | otherwise -> before <> stripLocKeys (T.drop 3 (snd (T.breakOn "-->" rest)))
         -- The first building named in the text, and what surrounds it. Only
         -- whole words count, so "Land Forts" is the plural and not the
         -- singular with a stray "s" left over.
@@ -6138,6 +6135,17 @@ substColoured names = go
         -- Underscores count, so that a script name that happens to contain a
         -- building's, such as "[?built_a_dockyard]", is left alone.
         isWordChar c = isAlphaNum c || c == '_'
+
+-- | Take out the comments that name the localization key each substituted
+-- placeholder was filled from. They are there for a human reading the wiki
+-- source to see what a piece of text came from, so anywhere the text is read by
+-- something other than a person -- a Lua table, a heading a link jumps to -- they
+-- are only bulk, and this is how they come off again.
+stripLocKeys :: Text -> Text
+stripLocKeys t = case T.breakOn "<!--Localisation key:" t of
+    (before, rest)
+        | T.null rest -> before
+        | otherwise -> before <> stripLocKeys (T.drop 3 (snd (T.breakOn "-->" rest)))
 
 -- | Rewrite the colour templates that a localization's @§@ codes turn into the
 -- way the wiki writes the same emphasis. The game's green and red for good and

@@ -2136,13 +2136,6 @@ doctrineLocLookup kind theid = go (candidates kind (T.toLower theid))
             in ["SUBDOCTRINE_" <> T.toUpper stem]
                ++ [ "SUBDOCTRINE_" <> t <> T.toUpper stem
                   | t <- ["SCREEN_", "SUBMARINE_", "CARRIER_"] ]
-        -- What a name is worked out from is noted in the text as a comment, and
-        -- neither a heading a link jumps to nor the words on the link can carry
-        -- one.
-        stripLocKeys t = case T.breakOn "<!--Localisation key:" t of
-            (before, rest)
-                | T.null rest -> before
-                | otherwise -> before <> stripLocKeys (T.drop 3 (snd (T.breakOn "-->" rest)))
 
 -- | A link to the part of the doctrine tree script has named, on the wiki page
 -- for the folder it belongs to. A folder is the page itself; anything under one
