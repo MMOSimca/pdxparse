@@ -17,7 +17,8 @@ import Control.Monad.Except (MonadError (..))
 import Control.Monad.State (gets)
 import Control.Monad.Trans (MonadIO (..))
 
-import Data.Char (toLower)
+import Data.Char (isSpace, toLower)
+import Data.List (nub)
 import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
 
 import Data.HashMap.Strict (HashMap)
@@ -45,7 +46,7 @@ import HOI4.Messages (wikifyLocColours)
 -- | Empty national focus. Starts off Nothing/empty everywhere, except id and name
 -- (which should get filled in immediately).
 newHOI4NationalFocus :: HOI4NationalFocus
-newHOI4NationalFocus = HOI4NationalFocus "(Unknown)" "(Unknown)" Nothing Nothing "GFX_goal_unknown" Nothing undefined Nothing [] Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing undefined 0
+newHOI4NationalFocus = HOI4NationalFocus "(Unknown)" "(Unknown)" Nothing Nothing "GFX_goal_unknown" Nothing undefined Nothing [] Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing undefined 0 Nothing
 
 -- | Take the decisions scripts from game data and parse them into decision
 -- data structures.
@@ -55,7 +56,10 @@ parseHOI4NationalFocuses scripts = HM.unions . HM.elems <$> do
     tryParse <- hoistExceptions $
         HM.traverseWithKey
             (\sourceFile scr ->
-                setCurrentFile sourceFile $ mapM (uncurry (parseHOI4NationalFocus (fileVars scr))) $ zip [0..] $ concatMap mapTree scr)
+                setCurrentFile sourceFile $
+                    mapM (\(ordinal, (country, stmt)) ->
+                            parseHOI4NationalFocus (fileVars scr) country ordinal stmt)
+                         (zip [0..] (concatMap mapTree scr)))
             scripts
     case tryParse of
         Left err -> do
@@ -73,13 +77,14 @@ parseHOI4NationalFocuses scripts = HM.unions . HM.elems <$> do
         mkNfMap :: [HOI4NationalFocus] -> HashMap Text HOI4NationalFocus
         mkNfMap = HM.fromList . map (nf_id &&& id)
 
-        -- A tree holds all the focuses standing in it; a focus shared between
-        -- trees stands on its own. Either way the order they come out in is the
-        -- order the file writes them in.
+        -- A tree holds all the focuses standing in it, and says which country
+        -- it is for; a focus shared between trees stands on its own and belongs
+        -- to no one country. Either way the order they come out in is the order
+        -- the file writes them in.
         mapTree scr = case scr of
-            [pdx| focus_tree = @focus |] -> focus
-            [pdx| shared_focus = @_ |] -> [scr]
-            [pdx| joint_focus = @_ |] -> [scr]
+            [pdx| focus_tree = @focus |] -> map ((,) (treeCountry focus)) focus
+            [pdx| shared_focus = @_ |] -> [(Nothing, scr)]
+            [pdx| joint_focus = @_ |] -> [(Nothing, scr)]
             _ -> []
 
 -- | Collect the file-local script constants (@var = 10 at top level of a
@@ -92,10 +97,27 @@ fileVars = HM.fromList . mapMaybe getvar
 
 -- | Parse a statement in an national focus file. Some statements aren't
 -- national focus'; for those, and for any obvious errors, return Right Nothing.
+-- | The country a focus tree is written for, where it is written for just the
+-- one. A tree scores in its @country@ block how likely each country is to be
+-- given it, and a tree meant for a single country names only that one there. A
+-- tree shared between a set of releasable nations names all of them, and none
+-- of those is the country its page is about.
+treeCountry :: GenericScript -> Maybe Text
+treeCountry tree = case nub (tagsIn scoring) of
+    [tag] -> Just tag
+    _ -> Nothing
+    where
+        scoring = concat [scr | [pdx| country = @scr |] <- tree]
+        tagsIn = concatMap tagOf
+        tagOf [pdx| tag = $tag |] = [tag]
+        tagOf [pdx| original_tag = $tag |] = [tag]
+        tagOf [pdx| %_ = @inner |] = tagsIn inner
+        tagOf _ = []
+
 parseHOI4NationalFocus :: (IsGameState (GameState g), IsGameData (GameData g), MonadError Text m) =>
-    HashMap Text Double -> Int -> GenericStatement -> PPT g m (Either Text (Maybe HOI4NationalFocus))
-parseHOI4NationalFocus _ _ (StatementBare _) = throwError "bare statement at top level"
-parseHOI4NationalFocus vars ordinal [pdx| %left = %right |] = case right of
+    HashMap Text Double -> Maybe Text -> Int -> GenericStatement -> PPT g m (Either Text (Maybe HOI4NationalFocus))
+parseHOI4NationalFocus _ _ _ (StatementBare _) = throwError "bare statement at top level"
+parseHOI4NationalFocus vars country ordinal [pdx| %left = %right |] = case right of
     CompoundRhs parts -> case left of
         CustomLhs _ -> throwError "internal error: custom lhs"
         IntLhs _ -> throwError "int lhs at top level"
@@ -111,7 +133,8 @@ parseHOI4NationalFocus vars ordinal [pdx| %left = %right |] = case right of
                                                 (Just newHOI4NationalFocus {nf_path = file
                                                                             ,nf_name_loc = nfNameLoc
                                                                             ,nf_name_desc = nfNameDesc
-                                                                            ,nf_ordinal = ordinal})
+                                                                            ,nf_ordinal = ordinal
+                                                                            ,nf_country = country})
                                                 parts
                     case nnf of
                         Left err -> return (Left err)
@@ -127,7 +150,7 @@ parseHOI4NationalFocus vars ordinal [pdx| %left = %right |] = case right of
         getNFTxt ([pdx| text = $nfname|]:_) = Just nfname
         getNFTxt (_:xs) = getNFTxt xs
         getNFTxt [] = Nothing
-parseHOI4NationalFocus _ _ _ = withCurrentFile $ \file ->
+parseHOI4NationalFocus _ _ _ _ = withCurrentFile $ \file ->
     throwError ("unrecognised form for national focus in " <> T.pack file)
 
 -- | Interpret one section of an national focus. If understood, add it to the
@@ -279,7 +302,10 @@ parseHOI4NationalFocusesPath scripts = do
     tryParse <- hoistExceptions $
         HM.traverseWithKey
             (\sourceFile scr ->
-                setCurrentFile sourceFile $ mapM (uncurry (parseHOI4NationalFocus (fileVars scr))) $ zip [0..] $ concatMap mapTree scr)
+                setCurrentFile sourceFile $
+                    mapM (\(ordinal, (country, stmt)) ->
+                            parseHOI4NationalFocus (fileVars scr) country ordinal stmt)
+                         (zip [0..] (concatMap mapTree scr)))
             scripts
     case tryParse of
         Left err -> do
@@ -295,13 +321,14 @@ parseHOI4NationalFocusesPath scripts = do
                     Right nfocus -> nfocus)
                     enfs
     where
-        -- A tree holds all the focuses standing in it; a focus shared between
-        -- trees stands on its own. Either way the order they come out in is the
-        -- order the file writes them in.
+        -- A tree holds all the focuses standing in it, and says which country
+        -- it is for; a focus shared between trees stands on its own and belongs
+        -- to no one country. Either way the order they come out in is the order
+        -- the file writes them in.
         mapTree scr = case scr of
-            [pdx| focus_tree = @focus |] -> focus
-            [pdx| shared_focus = @_ |] -> [scr]
-            [pdx| joint_focus = @_ |] -> [scr]
+            [pdx| focus_tree = @focus |] -> map ((,) (treeCountry focus)) focus
+            [pdx| shared_focus = @_ |] -> [(Nothing, scr)]
+            [pdx| joint_focus = @_ |] -> [(Nothing, scr)]
             _ -> []
 
 ppNationalFocuses :: forall g m. (HOI4Info g, Monad m) => [HOI4NationalFocus] -> PPT g m Doc
@@ -376,24 +403,38 @@ ppNationalFocus nf = setCurrentFile (nf_path nf) $ do
     bypass_pp <- nfArgExtra "bypass" nf_bypass ppScript
     completionReward_pp <- setIsInEffect True $ nfArg nf_completion_reward ppScript
     selectEffect_pp <- setIsInEffect True $ nfArgExtra "select" nf_select_effect ppScript
+    -- The wiki heads each column with the country the tree is for, standing
+    -- outside the list as the scope everything under it is read in. A focus
+    -- shared between trees has no one country to name, and a column with
+    -- nothing in it gets no heading of its own. The heading names the country
+    -- itself, not whatever it is called under the party in power at the start,
+    -- so the tag is localized on its own rather than through 'getCoHi'.
+    countryHeading <- case nf_country nf of
+        Nothing -> return []
+        Just tag -> do
+            name <- getGameL10n tag
+            return [Doc.strictText name, ":", PP.line]
+    let headed col
+            | T.all isSpace (Doc.doc2text (mconcat col)) = col
+            | otherwise = countryHeading ++ col
     return . mconcat $
         [ "|- id = \"", Doc.strictText (nf_name_loc nf),"\"" , PP.line
         , "| {{iconbox|image=", Doc.strictText icon_pp, ".png ", PP.line
         , "| ", Doc.strictText (nf_name_loc nf) , "<!-- ", Doc.strictText (nf_id nf), " -->", PP.line
         , "| ",maybe mempty (Doc.strictText . Doc.nl2br) (nf_name_desc nf), PP.line , "}}", Doc.strictText alt_icon_pp, PP.line
         , "| ", PP.line]++
-        allowBranch_pp ++
-        prerequisite_pp ++
-        mutuallyExclusive_pp ++
-        available_pp ++
-        joint_trigger_pp ++
-        bypass_pp ++
+        headed (allowBranch_pp ++
+                prerequisite_pp ++
+                mutuallyExclusive_pp ++
+                available_pp ++
+                joint_trigger_pp ++
+                bypass_pp) ++
         [ "| ", PP.line]++
-        completionReward_pp ++
-        joint_reward_origin_pp ++
-        joint_reward_member_pp ++
---        complete_tool_pp ++
-        selectEffect_pp
+        headed (completionReward_pp ++
+                joint_reward_origin_pp ++
+                joint_reward_member_pp ++
+--                complete_tool_pp ++
+                selectEffect_pp)
 
 ppPrereq :: (HOI4Info g, Monad m) => [GenericScript] -> PPT g m [Doc]
 ppPrereq [] = return [""]

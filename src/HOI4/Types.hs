@@ -547,6 +547,8 @@ data HOI4NationalFocus = HOI4NationalFocus
     ,   nf_joint_trigger :: Maybe GenericScript
     ,   nf_path :: FilePath -- ^ Source file
     ,   nf_ordinal :: Int -- ^ Where it sits in the order of its own file
+    ,   nf_country :: Maybe Text -- ^ The country whose tree it stands in, where
+                                 --   it stands in one country's alone
     } deriving (Show)
 
 data HOI4CountryHistory = HOI4CountryHistory

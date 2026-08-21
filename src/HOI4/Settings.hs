@@ -66,6 +66,8 @@ import HOI4.Misc (parseHOI4CountryHistory
                  , parseHOI4LocKeys)
 
 -- | Temporary (?) fix for CHI and PRC both localizing to "China"
+-- The wiki keeps "China" for CHI and names PRC after the state it holds at the
+-- start, "Chinese Soviet Republic", so the clash is broken on PRC's side.
 -- Can be extended/removed as necessary
 fixLocalization :: Settings -> Settings
 fixLocalization s =
@@ -74,12 +76,17 @@ fixLocalization s =
         l10n = gameL10n s
         l10nForLan = HM.findWithDefault HM.empty lan l10n
         findKey key = content $ HM.findWithDefault (LocEntry 0 key) key l10nForLan
-        chiLoc = findKey "CHI"
-        newHavLoc = chiLoc <> " (CHI)"
-        newL10n = HM.insert "CHI" (LocEntry 0 newHavLoc) l10nForLan
+        prcLoc = findKey "PRC"
+        prcPartyLoc = findKey "PRC_communism"
+        -- A key with no entry comes back as itself, so fall back to the tag
+        -- rather than putting "PRC_communism" on the page as a country name.
+        newPrcLoc = if prcPartyLoc == "PRC_communism"
+                        then prcLoc <> " (PRC)"
+                        else prcPartyLoc
+        newL10n = HM.insert "PRC" (LocEntry 0 newPrcLoc) l10nForLan
     in
-        if chiLoc == findKey "PRC" then
-            trace ("Note: Applying localization fix for CHI/PRC: " ++ show chiLoc ++ " -> " ++ show newHavLoc) $
+        if prcLoc == findKey "CHI" then
+            trace ("Note: Applying localization fix for CHI/PRC: " ++ show prcLoc ++ " -> " ++ show newPrcLoc) $
                 s { gameL10n = HM.insert lan newL10n l10n }
         else
             trace "Warning: fixLocalization hack for CHI/PRC in HOI4/Settings.hs no longer needed!" s
