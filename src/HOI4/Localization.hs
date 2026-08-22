@@ -16,7 +16,10 @@ module HOI4.Localization (
     ,   getGameL10nArgs
     ,   getGameL10nDefault
     ,   getGameL10nIfPresent
+    ,   getGameL10nFor
+    ,   getGameL10nIfPresentFor
     ,   fillLocScopes
+    ,   fillLocScopesFor
     ,   scriptedLocVariants
     ,   getCoHi
     ) where
@@ -55,6 +58,18 @@ getGameL10nDefault def key = fillLocScopes =<< S.getGameL10nDefault def key
 getGameL10nIfPresent :: (HOI4Info g, Monad m) => Text -> PPT g m (Maybe Text)
 getGameL10nIfPresent key = traverse fillLocScopes =<< S.getGameL10nIfPresent key
 
+-- | As 'getGameL10n', reading @ROOT@ in what it finds as the country given. See
+-- 'fillLocScopesFor'.
+getGameL10nFor :: (HOI4Info g, Monad m) => Maybe Text -> Text -> PPT g m Text
+getGameL10nFor mroot key = fillLocScopesFor mroot =<< S.getGameL10n key
+
+-- | As 'getGameL10nIfPresent', reading @ROOT@ in what it finds as the country
+-- given. See 'fillLocScopesFor'.
+getGameL10nIfPresentFor :: (HOI4Info g, Monad m) =>
+    Maybe Text -> Text -> PPT g m (Maybe Text)
+getGameL10nIfPresentFor mroot key =
+    traverse (fillLocScopesFor mroot) =<< S.getGameL10nIfPresent key
+
 -- | Fill in the names a piece of localization asks the game to look up for it,
 -- written as a scope and one of the game's name commands in brackets, e.g.
 -- @[SOV.GetAdjective]@.
@@ -67,32 +82,41 @@ getGameL10nIfPresent key = traverse fillLocScopes =<< S.getGameL10nIfPresent key
 -- ours in it comes back untouched, brackets and all, so this is safe to put in
 -- front of every lookup.
 fillLocScopes :: (HOI4Info g, Monad m) => Text -> PPT g m Text
-fillLocScopes = fillLocScopesTo 4
+fillLocScopes = fillLocScopesFor Nothing
 
--- | As 'fillLocScopes', counting down how many times a text filled in may name
--- a scripted localization of its own. Script nests them a level or two -- a
+-- | As 'fillLocScopes', reading @ROOT@ as the country given. Text the game draws
+-- for one country in particular says @ROOT@ where that country's name belongs,
+-- so knowing which country it is drawn for is as good as having the name
+-- written out. A country can be made to go by another name while keeping the
+-- same tree, but only late and rarely, and a name from the wrong end of that is
+-- still plainly the same country -- which the pronoun on its own is not.
+fillLocScopesFor :: (HOI4Info g, Monad m) => Maybe Text -> Text -> PPT g m Text
+fillLocScopesFor mroot = fillLocScopesTo mroot 4
+
+-- | As 'fillLocScopesFor', counting down how many times a text filled in may
+-- name a scripted localization of its own. Script nests them a level or two -- a
 -- tooltip naming a modifier whose own name is worked out the same way -- and the
 -- count is what stops a name written in terms of itself going round forever.
-fillLocScopesTo :: (HOI4Info g, Monad m) => Int -> Text -> PPT g m Text
-fillLocScopesTo depth text = case T.breakOn "[" text of
+fillLocScopesTo :: (HOI4Info g, Monad m) => Maybe Text -> Int -> Text -> PPT g m Text
+fillLocScopesTo mroot depth text = case T.breakOn "[" text of
     (_, rest) | T.null rest -> return text
     (before, rest) -> case T.stripPrefix "]" closing of
         -- Unterminated bracket: nothing sensible to do, leave the rest as it is.
         Nothing -> return text
         Just after -> do
-            mname <- scopeName depth inner
-            filled <- fillLocScopesTo depth after
+            mname <- scopeName mroot depth inner
+            filled <- fillLocScopesTo mroot depth after
             return $ before <> fromMaybe ("[" <> inner <> "]") mname <> filled
         where (inner, closing) = T.breakOn "]" (T.drop 1 rest)
 
 -- | What one bracketed scope command comes to, or 'Nothing' for one we cannot
 -- work out. See 'fillLocScopes'.
-scopeName :: (HOI4Info g, Monad m) => Int -> Text -> PPT g m (Maybe Text)
-scopeName depth inner = case T.stripPrefix "." cmdrest of
+scopeName :: (HOI4Info g, Monad m) => Maybe Text -> Int -> Text -> PPT g m (Maybe Text)
+scopeName mroot depth inner = case T.stripPrefix "." cmdrest of
     -- Nothing is being asked of a scope, so the brackets may instead name a
     -- scripted localization: the game picking between several texts as it draws
     -- this one.
-    Nothing -> scriptedLocDefault depth inner
+    Nothing -> scriptedLocDefault mroot depth inner
     -- A state is named by the id it is scripted under, and has only the one
     -- name: no ruling party to vary it and no article to put in front of it.
     Just cmd | not (T.null target), T.all isDigit target ->
@@ -101,19 +125,26 @@ scopeName depth inner = case T.stripPrefix "." cmdrest of
             else return Nothing
     Just cmd -> do
         mtag <- countryTag target
-        maybe (return Nothing) (`countryLoc` cmd) mtag
+        case mtag of
+            Just tag -> countryLoc tag cmd
+            -- Every other pronoun means whichever country the text happens to
+            -- be drawn for, which nothing outside the game can say.
+            Nothing | T.toLower target == "root" ->
+                        maybe (return Nothing) (`countryLoc` cmd) mroot
+                    | otherwise -> return Nothing
     where (target, cmdrest) = T.breakOn "." inner
 
 -- | The text a scripted localization settles on -- the one the game shows when
 -- none of the conditions written for the others hold.
-scriptedLocDefault :: (HOI4Info g, Monad m) => Int -> Text -> PPT g m (Maybe Text)
-scriptedLocDefault depth name
+scriptedLocDefault :: (HOI4Info g, Monad m) =>
+    Maybe Text -> Int -> Text -> PPT g m (Maybe Text)
+scriptedLocDefault mroot depth name
     | depth <= 0 = return Nothing
     | otherwise = do
         slocs <- getScriptedLoc
         case scriptedLocFallback =<< HM.lookup name slocs of
             Nothing -> return Nothing
-            Just txt -> traverse (fillLocScopesTo (depth - 1))
+            Just txt -> traverse (fillLocScopesTo mroot (depth - 1))
                             =<< S.getGameL10nIfPresent (sloc_key txt)
 
 -- | Which of a scripted localization's texts is the one it settles on: the
@@ -129,8 +160,9 @@ scriptedLocFallback texts = case filter (isNothing . sloc_trigger) texts of
 -- has these only where the whole of it is a reference to a scripted
 -- localization, e.g. @[CZE_continue_with_snejdareks_plan]@; anything else says
 -- the one thing however it is read.
-scriptedLocVariants :: (HOI4Info g, Monad m) => Text -> PPT g m [(Text, GenericScript)]
-scriptedLocVariants key = do
+scriptedLocVariants :: (HOI4Info g, Monad m) =>
+    Maybe Text -> Text -> PPT g m [(Text, GenericScript)]
+scriptedLocVariants mroot key = do
     raw <- S.getGameL10n key
     case T.stripSuffix "]" =<< T.stripPrefix "[" (T.strip raw) of
         Nothing -> return []
@@ -141,7 +173,7 @@ scriptedLocVariants key = do
     where
         withTrigger txt = (,) (sloc_key txt) <$> sloc_trigger txt
         localize (lockey, trig) = (,)
-            <$> (traverse fillLocScopes =<< S.getGameL10nIfPresent lockey)
+            <$> (traverse (fillLocScopesFor mroot) =<< S.getGameL10nIfPresent lockey)
             <*> pure trig
         sequenceLoc (mloc, trig) = (,) <$> mloc <*> pure trig
 

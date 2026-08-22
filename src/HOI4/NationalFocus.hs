@@ -144,15 +144,21 @@ parseHOI4NationalFocus vars country ordinal [pdx| %left = %right |] = case right
             else
                 withCurrentFile $ \file -> do
                     let nameKey = fromMaybe (getNFId parts) (getNFTxt parts)
-                    nfNameLoc <- wikifyLocColours <$> getGameL10n nameKey
-                    nfNameDesc <- fmap wikifyLocColours <$> getGameL10nIfPresent (nameKey <> "_desc")
+                        -- A focus standing in one country's tree is written for
+                        -- that country, and says ROOT where its name belongs.
+                        -- One shared between trees has no country of its own,
+                        -- and 'country' is already Nothing for those.
+                        root = if id == "focus" then country else Nothing
+                    nfNameLoc <- wikifyLocColours <$> getGameL10nFor root nameKey
+                    nfNameDesc <- fmap wikifyLocColours
+                                    <$> getGameL10nIfPresentFor root (nameKey <> "_desc")
                     -- A focus given several names points its localization at a
                     -- scripted one, which names a text for each set of
                     -- conditions and one to fall back on. The fallback is the
                     -- name the focus is listed under, so the rest are the names
                     -- it goes by instead.
                     nfNameVariants <- map (first wikifyLocColours)
-                                        <$> scriptedLocVariants nameKey
+                                        <$> scriptedLocVariants root nameKey
                     nnf <- hoistErrors $ foldM (nationalFocusAddSection vars)
                                                 (Just newHOI4NationalFocus {nf_path = file
                                                                             ,nf_name_loc = nfNameLoc
