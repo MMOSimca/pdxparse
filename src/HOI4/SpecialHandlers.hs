@@ -110,7 +110,7 @@ handleSwapIdeas stmt@[pdx| %_ = @scr |]
         pp_si :: TextAtom -> PPT g m IndentedMessages
         pp_si ta = case (ta_what ta, ta_atom ta) of
             (Just what, Just atom) -> do
-                add_loc <- handleIdea True what
+                add_loc <- handleIdeaWithEffects True what
                 remove_loc <- handleIdea False atom
                 case (add_loc, remove_loc) of
                     (Just (addcategory, addideaIcon, addideaKey, addidea_loc, Just addeffectbox),
@@ -197,7 +197,22 @@ getbareidea _ = "<!-- Check Script -->"
 handleIdea :: (HOI4Info g, Monad m) =>
         Bool -> Text ->
            PPT g m (Maybe (Text, Text, Text, Text, Maybe IndentedMessages))
-handleIdea addIdea ide = do
+handleIdea = handleIdea' False
+
+-- | As 'handleIdea', for an idea named for what it grants rather than to say
+-- which one it is. A national spirit says what it grants wherever it turns up,
+-- while a designer or a company is usually only named -- but where one is
+-- swapped for an improved version, what the new one grants is the whole of what
+-- the swap does, so it is written out whatever kind of idea it is.
+handleIdeaWithEffects :: (HOI4Info g, Monad m) =>
+        Bool -> Text ->
+           PPT g m (Maybe (Text, Text, Text, Text, Maybe IndentedMessages))
+handleIdeaWithEffects = handleIdea' True
+
+handleIdea' :: (HOI4Info g, Monad m) =>
+        Bool -> Bool -> Text ->
+           PPT g m (Maybe (Text, Text, Text, Text, Maybe IndentedMessages))
+handleIdea' always addIdea ide = do
     ides <- getIdeas
     charto <- getCharToken
     let midea = HM.lookup ide ides
@@ -209,7 +224,8 @@ handleIdea addIdea ide = do
             idea_loc <- getGameL10n ideaname
             category <- if id_category iidea == "country" then getGameL10n "FE_COUNTRY_SPIRIT" else getGameL10n $ id_category iidea
             effectbox <- modmessage iidea idea_loc ideaKey ideaIcon
-            effectboxNS <- if id_category iidea == "country" && addIdea then return $ Just effectbox else return Nothing
+            effectboxNS <- if addIdea && (always || id_category iidea == "country")
+                              then return $ Just effectbox else return Nothing
             return $ Just (category, ideaIcon, ideaKey, idea_loc, effectboxNS)
         Nothing -> case HM.lookup ide charto of
             Nothing -> return Nothing

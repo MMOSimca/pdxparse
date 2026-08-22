@@ -221,7 +221,7 @@ import MessageTools (plural, iquotes, italicText, boldText, typewriterText
 import QQ -- everything
 -- everything
 import SettingsTypes ( PPT, IsGameData (..), GameData (..), IsGameState (..), GameState (..)
-                     , indentUp, withCurrentIndent, withCurrentIndentZero, alsoIndent'
+                     , indentUp, indentDown, withCurrentIndent, withCurrentIndentZero, alsoIndent'
                      , withCurrentFile
                      , getGameInterface, getGameInterfaceIfPresent, unsnoc
                      , LocArg (..) )
@@ -2338,8 +2338,11 @@ withFlagOrState _ _ stmt = preStatement stmt -- CHECK FOR USEFULNESS
 
 customTriggerTooltip :: (HOI4Info g, Monad m) => StatementHandler g m
 customTriggerTooltip [pdx| %_ = @scr |]
-    -- ignore the custom tooltip -- BC - let's not
-    = ppMany scr
+    -- The tooltip says what the effects inside it would do without doing them,
+    -- so what it holds is written where the tooltip itself stood. A line of its
+    -- own would say nothing, and the indent that comes with one would put its
+    -- contents a step further in than the effects standing beside it.
+    = indentDown (ppMany scr)
 customTriggerTooltip stmt = preStatement stmt
 
 ---------------
