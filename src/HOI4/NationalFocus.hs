@@ -35,12 +35,12 @@ import FileIO (Feature (..), writeFeatures)
 import QQ (pdx)
 import SettingsTypes ( PPT, Settings (..)
                      , IsGame (..), IsGameData (..), IsGameState (..)
-                     , getGameL10n, getGameL10nIfPresent
                      , setCurrentFile, withCurrentFile
                      , hoistErrors, hoistExceptions
                      , indentUp
                      , getGameInterface, getGameInterfaceIfPresent)
 import HOI4.Common -- everything
+import HOI4.Localization
 import HOI4.Messages (wikifyLocColours)
 
 -- | Empty national focus. Starts off Nothing/empty everywhere, except id and name
@@ -50,7 +50,7 @@ newHOI4NationalFocus = HOI4NationalFocus "(Unknown)" "(Unknown)" Nothing Nothing
 
 -- | Take the decisions scripts from game data and parse them into decision
 -- data structures.
-parseHOI4NationalFocuses :: (IsGameData (GameData g), IsGameState (GameState g), Monad m) =>
+parseHOI4NationalFocuses :: (HOI4Info g, Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap Text HOI4NationalFocus)
 parseHOI4NationalFocuses scripts = HM.unions . HM.elems <$> do
     tryParse <- hoistExceptions $
@@ -114,7 +114,7 @@ treeCountry tree = case nub (tagsIn scoring) of
         tagOf [pdx| %_ = @inner |] = tagsIn inner
         tagOf _ = []
 
-parseHOI4NationalFocus :: (IsGameState (GameState g), IsGameData (GameData g), MonadError Text m) =>
+parseHOI4NationalFocus :: (HOI4Info g, MonadError Text m) =>
     HashMap Text Double -> Maybe Text -> Int -> GenericStatement -> PPT g m (Either Text (Maybe HOI4NationalFocus))
 parseHOI4NationalFocus _ _ _ (StatementBare _) = throwError "bare statement at top level"
 parseHOI4NationalFocus vars country ordinal [pdx| %left = %right |] = case right of
@@ -296,7 +296,7 @@ writeHOI4NationalFocuses = do
 --            let xs = reverse $ map (nf_path &&& id) nf in
 --            HM.fromListWith (++) [ (k, [v]) | (k, v) <- xs ]
 
-parseHOI4NationalFocusesPath :: (IsGameData (GameData g), IsGameState (GameState g), Monad m) =>
+parseHOI4NationalFocusesPath :: (HOI4Info g, Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap FilePath [HOI4NationalFocus])
 parseHOI4NationalFocusesPath scripts = do
     tryParse <- hoistExceptions $

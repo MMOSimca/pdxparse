@@ -89,12 +89,12 @@ import QQ -- everything
 -- everything
 import SettingsTypes ( PPT, IsGameData (..), GameData (..), IsGameState (..), GameState (..)
                      , indentUp, getCurrentIndent, withCurrentIndent, withCurrentIndentCustom
-                     , getGameL10n, getGameL10nIfPresent, getGameL10nArgs
                      , LocArg (..)
                      , concatMapM
                      , getGameInterface, getGameInterfaceIfPresent)
 import {-# SOURCE #-} HOI4.Common (ppMany, ppOne, extractStmt, matchLhsText)
 import HOI4.Types -- everything
+import HOI4.Localization
 import Debug.Trace
 import HOI4.Handlers -- everything
 
@@ -564,7 +564,7 @@ modifierMSG hidden targ stmt@[pdx| $mod = $var|] =  let lmod = T.toLower mod in 
                 Nothing -> preStatement stmt
 modifierMSG _ _ stmt = preStatement stmt
 
-numericLocPost :: (IsGameState (GameState g), IsGameData (GameData g), Monad m) =>
+numericLocPost :: (HOI4Info g, Monad m) =>
     Text
         -> (Text -> Double -> Maybe Text -> ScriptMessage)
         -> StatementHandler g m

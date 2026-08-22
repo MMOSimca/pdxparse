@@ -27,10 +27,10 @@ import Abstract -- everything
 import QQ (pdx)
 import SettingsTypes ( PPT
                      , IsGame (..), IsGameData (..), IsGameState (..)
-                     , getGameL10n, getGameL10nIfPresent
                      , setCurrentFile, withCurrentFile
                      , hoistErrors, hoistExceptions)
 import HOI4.Common -- everything
+import HOI4.Localization
 import HOI4.Messages (wikifyLocColours)
 ----------------
 -- Characters --
@@ -254,7 +254,7 @@ getAdvinfo cha = foldM addLine newAI
         addLine ai [pdx| $other = %_ |] = trace ("unknown section in advisor info: " ++ show other) $ return ai
         addLine ai stmt = trace ("unknown form in advisor info: " ++ show stmt) $ return ai
 
-parseHOI4CountryLeaderTraits :: (IsGameData (GameData g), IsGameState (GameState g), Monad m) =>
+parseHOI4CountryLeaderTraits :: (HOI4Info g, Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap Text HOI4CountryLeaderTrait)
 parseHOI4CountryLeaderTraits scripts = HM.unions . HM.elems <$> do
     tryParse <- hoistExceptions $
@@ -280,7 +280,7 @@ parseHOI4CountryLeaderTraits scripts = HM.unions . HM.elems <$> do
                 where mkCltMap :: [HOI4CountryLeaderTrait] -> HashMap Text HOI4CountryLeaderTrait
                       mkCltMap = HM.fromList . map (clt_id &&& id)
 
-parseHOI4CountryLeaderTrait :: (IsGameData (GameData g), IsGameState (GameState g), MonadError Text m) =>
+parseHOI4CountryLeaderTrait :: (HOI4Info g, MonadError Text m) =>
     GenericStatement -> PPT g m (Either Text (Maybe HOI4CountryLeaderTrait))
 parseHOI4CountryLeaderTrait [pdx| $id = @effects |]
     = withCurrentFile $ \file -> do
@@ -321,7 +321,7 @@ parseHOI4CountryLeaderTrait [pdx| $id = @effects |]
 parseHOI4CountryLeaderTrait stmt = trace (show stmt) $ withCurrentFile $ \file ->
     throwError ("unrecognised form for country_leader in " <> T.pack file)
 
-parseHOI4UnitLeaderTraits :: (IsGameData (GameData g), IsGameState (GameState g), Monad m) =>
+parseHOI4UnitLeaderTraits :: (HOI4Info g, Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap Text HOI4UnitLeaderTrait)
 parseHOI4UnitLeaderTraits scripts = HM.unions . HM.elems <$> do
     tryParse <- hoistExceptions $
@@ -347,7 +347,7 @@ parseHOI4UnitLeaderTraits scripts = HM.unions . HM.elems <$> do
                 where mkUltMap :: [HOI4UnitLeaderTrait] -> HashMap Text HOI4UnitLeaderTrait
                       mkUltMap = HM.fromList . map (ult_id &&& id)
 
-parseHOI4UnitLeaderTrait :: (IsGameData (GameData g), IsGameState (GameState g), MonadError Text m) =>
+parseHOI4UnitLeaderTrait :: (HOI4Info g, MonadError Text m) =>
     GenericStatement -> PPT g m (Either Text (Maybe HOI4UnitLeaderTrait))
 parseHOI4UnitLeaderTrait [pdx| $id = @effects |]
     = withCurrentFile $ \file -> do

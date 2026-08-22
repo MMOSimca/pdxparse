@@ -31,12 +31,11 @@ import Abstract -- everything
 import QQ (pdx)
 import SettingsTypes ( PPT, Settings (..){-, Game (..)-}
                      {-, IsGame (..)-}, IsGameData (..), IsGameState (..), GameState (..)
-                     , getGameL10n, getGameL10nIfPresent
                      , setCurrentFile, withCurrentFile, withCurrentIndent
                      , hoistErrors, hoistExceptions
                      , getGameInterface)
 import HOI4.Types -- everything
--- everything
+import HOI4.Localization
 import HOI4.Common (extractStmt, matchExactText, ppMany, HOI4OpinionModifier (HOI4OpinionModifier))
 import FileIO (Feature (..), writeFeatures)
 import Text.PrettyPrint.Leijen.Text (Doc)
@@ -47,10 +46,9 @@ import MessageTools
 
 import Debug.Trace (trace, traceM)
 import HOI4.SpecialHandlers (modifierMSG)
-import HOI4.Handlers (fillLocScopes)
 import System.FilePath (takeBaseName)
 
-parseHOI4OpinionModifiers :: (IsGameState (GameState g), IsGameData (GameData g), Monad m) =>
+parseHOI4OpinionModifiers :: (HOI4Info g, Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap Text HOI4OpinionModifier)
 parseHOI4OpinionModifiers scripts = HM.unions . HM.elems <$> do
     tryParse <- hoistExceptions $
@@ -80,7 +78,7 @@ newHOI4OpinionModifier id locid path = HOI4OpinionModifier id locid path Nothing
 
 -- | Parse a statement in an opinion modifiers file. Some statements aren't
 -- modifiers; for those, and for any obvious errors, return Right Nothing.
-parseHOI4OpinionModifier :: (IsGameState (GameState g), IsGameData (GameData g), MonadError Text m) =>
+parseHOI4OpinionModifier :: (HOI4Info g, MonadError Text m) =>
     GenericStatement -> PPT g m (Either Text (Maybe HOI4OpinionModifier))
 parseHOI4OpinionModifier (StatementBare _) = throwError "bare statement at top level"
 parseHOI4OpinionModifier [pdx| %left = %right |] = case right of
@@ -164,7 +162,7 @@ writeHOI4OpinionModifiers' = do
                   pathedOmods
                   ppOpinionModifiers
 
-parseHOI4NationalFocusesPath :: (IsGameData (GameData g), IsGameState (GameState g), Monad m) =>
+parseHOI4NationalFocusesPath :: (HOI4Info g, Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap FilePath [HOI4OpinionModifier])
 parseHOI4NationalFocusesPath scripts = do
     tryParse <- hoistExceptions $
@@ -220,10 +218,8 @@ ppOpinionModifier :: (HOI4Info g, Monad m) => HOI4OpinionModifier -> PPT g m Doc
 ppOpinionModifier mod = do
     -- The comments naming the keys a text was filled in from are for a human
     -- reading wiki source; nobody reads this table, so they would be dead weight
-    -- in every entry. The names the text asks the game for are filled in, since
-    -- a modifier is written about one particular country or state and the words
-    -- around the name are written to be read with it in place.
-    locName <- fillLocScopes . stripLocKeys . wikifyLocColours =<< getGameL10n (omodName mod)
+    -- in every entry.
+    locName <- stripLocKeys . wikifyLocColours <$> getGameL10n (omodName mod)
     return . mconcat $
         [ " "
         , Doc.strictText $ T.toLower (omodName mod)
@@ -273,7 +269,7 @@ luaString = T.concatMap escape
         escape '\r' = ""
         escape c = T.singleton c
 
-parseHOI4DynamicModifiers :: (IsGameData (GameData g), IsGameState (GameState g), Monad m) =>
+parseHOI4DynamicModifiers :: (HOI4Info g, Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap Text HOI4DynamicModifier)
 parseHOI4DynamicModifiers scripts = HM.unions . HM.elems <$> do
     tryParse <- hoistExceptions $
@@ -296,7 +292,7 @@ parseHOI4DynamicModifiers scripts = HM.unions . HM.elems <$> do
                 where mkModMap :: [HOI4DynamicModifier] -> HashMap Text HOI4DynamicModifier
                       mkModMap = HM.fromList . map (dmodName &&& id)
 
-parseHOI4DynamicModifier :: (IsGameData (GameData g), IsGameState (GameState g), MonadError Text m) =>
+parseHOI4DynamicModifier :: (HOI4Info g, MonadError Text m) =>
     GenericStatement -> PPT g m (Either Text (Maybe HOI4DynamicModifier))
 parseHOI4DynamicModifier [pdx| $modid = @effects |]
     = withCurrentFile $ \file -> do
@@ -382,7 +378,7 @@ writeHOI4DynamicModifiers = do
                 ]
 
 
-parseHOI4Modifiers :: (IsGameData (GameData g), IsGameState (GameState g), Monad m) =>
+parseHOI4Modifiers :: (HOI4Info g, Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap Text HOI4Modifier)
 parseHOI4Modifiers scripts = HM.unions . HM.elems <$> do
     tryParse <- hoistExceptions $
@@ -405,7 +401,7 @@ parseHOI4Modifiers scripts = HM.unions . HM.elems <$> do
                 where mkModMap :: [HOI4Modifier] -> HashMap Text HOI4Modifier
                       mkModMap = HM.fromList . map (modName &&& id)
 
-parseHOI4Modifier :: (IsGameData (GameData g), IsGameState (GameState g), MonadError Text m) =>
+parseHOI4Modifier :: (HOI4Info g, MonadError Text m) =>
     GenericStatement -> PPT g m (Either Text (Maybe HOI4Modifier))
 parseHOI4Modifier [pdx| $modid = @effects |]
     = withCurrentFile $ \file -> do

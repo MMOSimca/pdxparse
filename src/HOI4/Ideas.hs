@@ -28,15 +28,15 @@ import Abstract -- everything
 import QQ (pdx)
 import SettingsTypes ( PPT
                      , IsGame (..), IsGameData (..), IsGameState (..)
-                     , getGameL10n, getGameL10nIfPresent
                      , setCurrentFile, withCurrentFile
                      , hoistExceptions)
 import HOI4.Common -- everything
+import HOI4.Localization
 import HOI4.Messages (wikifyLocColours)
 
 -- | Take the idea group scripts from game data and parse them into idea group
 -- data structures.
-parseHOI4Ideas :: (IsGameState (GameState g), IsGameData (GameData g), Monad m) =>
+parseHOI4Ideas :: (HOI4Info g, Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap Text HOI4Idea)
 parseHOI4Ideas scripts = HM.unions . HM.elems <$> do
     tryParse <- hoistExceptions $
@@ -62,7 +62,7 @@ parseHOI4Ideas scripts = HM.unions . HM.elems <$> do
                       mkIdeaMap = HM.fromList . map (id_id &&& id)
 
 -- | Parse one file's idea groups scripts into idea data structures.
-parseHOI4IdeaGroup :: (IsGameData (GameData g), IsGameState (GameState g), Monad m) =>
+parseHOI4IdeaGroup :: (HOI4Info g, Monad m) =>
     GenericStatement -> PPT g (ExceptT Text m) [Either Text (Maybe HOI4Idea)]
 parseHOI4IdeaGroup stmt@(StatementBare _) = throwError "bare statement at top level"
 parseHOI4IdeaGroup [pdx| $left = @scr |]
@@ -80,7 +80,7 @@ newIdea :: HOI4Idea
 newIdea = HOI4Idea undefined undefined "<!-- Check Script -->" undefined "GFX_idea_unknown" Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing undefined undefined
 
 -- | Parse one idea script into a idea data structure.
-parseHOI4Idea :: (IsGameData (GameData g), IsGameState (GameState g), Monad m) =>
+parseHOI4Idea :: (HOI4Info g, Monad m) =>
     GenericStatement -> Text -> PPT g (ExceptT Text m) (Maybe HOI4Idea)
 parseHOI4Idea [pdx| $ideaName = %rhs |] category = case rhs of
     CompoundRhs parts -> do

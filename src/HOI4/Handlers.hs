@@ -222,10 +222,11 @@ import QQ -- everything
 -- everything
 import SettingsTypes ( PPT, IsGameData (..), GameData (..), IsGameState (..), GameState (..)
                      , indentUp, withCurrentIndent, withCurrentIndentZero, alsoIndent'
-                     , getGameL10n, getGameL10nArgs, getGameL10nIfPresent, withCurrentFile
+                     , withCurrentFile
                      , getGameInterface, getGameInterfaceIfPresent, unsnoc
                      , LocArg (..) )
 import HOI4.Templates
+import HOI4.Localization
 import {-# SOURCE #-} HOI4.Common (ppScript, ppMany, ppOne, extractStmt, matchLhsText)
 import HOI4.Types -- everything
 
@@ -345,86 +346,6 @@ flag :: (HOI4Info g, Monad m) =>
 flag expectscope = allowPronoun expectscope $ \name -> do
                     nameIdeo <- getCoHi name
                     template "flag" . (:[]) <$> getGameL10n nameIdeo
-
-getCoHi :: (Monad m, HOI4Info g) =>
-    Text -> PPT g m Text
-getCoHi name = do
-    chistories <- getCountryHistory
-    let mchistories = HM.lookup name chistories
-    case mchistories of
-        Nothing -> return name
-        Just chistory -> do
-            rulLoc <- getGameL10nIfPresent (chRulingTag chistory)
-            case rulLoc of
-                Just rulingTag -> return $ chRulingTag chistory
-                Nothing -> return name
-
--- | Fill in the names a piece of localization asks the game to look up for it,
--- written as a scope and one of the game's name commands in brackets, e.g.
--- @[SOV.GetAdjective]@. The game reads those as it draws the text; the words
--- around them are written to be read with the name in place, so leaving them as
--- written makes the text no use to anyone.
---
--- Only a scope that names one particular thing is filled in: a country tag or a
--- state id. A pronoun such as @ROOT@ means whichever country the text is drawn
--- for, which nothing outside the game can say, so those are left alone -- as is
--- any command we don't know, and the @[?constant:...]@ references that
--- 'HOI4.SpecialHandlers.fillConstants' deals with instead.
-fillLocScopes :: (HOI4Info g, Monad m) => Text -> PPT g m Text
-fillLocScopes text = case T.breakOn "[" text of
-    (_, rest) | T.null rest -> return text
-    (before, rest) -> case T.stripPrefix "]" closing of
-        -- Unterminated bracket: nothing sensible to do, leave the rest as it is.
-        Nothing -> return text
-        Just after -> do
-            mname <- scopeName inner
-            filled <- fillLocScopes after
-            return $ before <> fromMaybe ("[" <> inner <> "]") mname <> filled
-        where (inner, closing) = T.breakOn "]" (T.drop 1 rest)
-
--- | What one bracketed scope command comes to, or 'Nothing' for one we cannot
--- work out. See 'fillLocScopes'.
-scopeName :: (HOI4Info g, Monad m) => Text -> PPT g m (Maybe Text)
-scopeName inner = case T.stripPrefix "." cmdrest of
-    Just cmd
-        | not (T.null target), T.all isDigit target ->
-            case cmd of
-                "GetName" -> getGameL10nIfPresent ("STATE_" <> target)
-                _ -> return Nothing
-        | isTag target -> countryLoc target cmd
-    _ -> return Nothing
-    where (target, cmdrest) = T.breakOn "." inner
-
--- | The name a country goes by, in the form the given name command asks for. A
--- country is named for the party that rules it at the start of the game, which
--- is what the game itself shows until the party changes, so the key that party
--- gives is tried before the plain one. Each form falls back on the ones before
--- it, since a country the game has little to say about has only its plain name.
-countryLoc :: (HOI4Info g, Monad m) => Text -> Text -> PPT g m (Maybe Text)
-countryLoc tag cmd = do
-    ideoTag <- getCoHi tag
-    let plain = [ideoTag, tag]
-        keys = case cmd of
-            "GetName" -> plain
-            "GetNameDef" -> defKeys
-            "GetNameDefCap" -> defKeys
-            "GetAdjective" -> [ideoTag <> "_ADJ", tag <> "_ADJ"] ++ plain
-            _ -> []
-        defKeys = [ideoTag <> "_DEF", tag <> "_DEF"] ++ plain
-    mloc <- firstLoc keys
-    return $ if cmd == "GetNameDefCap" then capitalize <$> mloc else mloc
-    where
-        firstLoc [] = return Nothing
-        firstLoc (key:rest) = do
-            mloc <- getGameL10nIfPresent key
-            case mloc of
-                Just loc | not (T.null loc) -> return (Just loc)
-                _ -> firstLoc rest
-        -- The definite form starts with the article where the country takes one
-        -- ("the Soviet Union"), and this is the form used to open a sentence.
-        capitalize t = case T.uncons t of
-            Just (c, rest) -> T.cons (toUpper c) rest
-            Nothing -> t
 
 -- | Emit an appropriate phrase for a pronoun.
 -- If a scope is passed, that is the type the current command expects. If they
@@ -592,7 +513,7 @@ isPronoun s = T.map toLower s `S.member` pronouns || (\ls -> ".owner" `T.isSuffi
             ]
 
 -- Get the localization for a state ID, if available.
-getStateLoc :: (IsGameData (GameData g), Monad m) =>
+getStateLoc :: (HOI4Info g, Monad m) =>
     Int -> PPT g m Text
 getStateLoc n = do
     let stateid_t = T.pack (show n)
@@ -1627,7 +1548,7 @@ numericIcon _ _ _ stmt = plainMsg $ preStatementText' stmt
 
 -- | Handler for statements that have a number and an icon, plus a fixed
 -- localizable atom.
-numericIconLoc :: (IsGameState (GameState g), IsGameData (GameData g), Monad m) =>
+numericIconLoc :: (HOI4Info g, Monad m) =>
     Text
         -> Text
         -> (Text -> Text -> Double -> ScriptMessage)
@@ -1645,7 +1566,7 @@ numericIconLoc the_icon what _ msgvar [pdx| %_ = $amttag:$amt |]
 numericIconLoc _ _ _ _ stmt = plainMsg $ preStatementText' stmt
 
 -- | Handler for statements that have a number and a localizable atom.
-numericLoc :: (IsGameState (GameState g), IsGameData (GameData g), Monad m) =>
+numericLoc :: (HOI4Info g, Monad m) =>
     Text
         -> (Text -> Double -> ScriptMessage)
         -> StatementHandler g m
@@ -1695,12 +1616,12 @@ numericIconChange _ _ _ _ stmt = plainMsg $ preStatementText' stmt -- CHECK FOR 
 -- localization string, it gets wrapped in a @<tt>@ element instead.
 
 -- convenience synonym
-tryLoc :: (IsGameData (GameData g), Monad m) => Text -> PPT g m (Maybe Text)
+tryLoc :: (HOI4Info g, Monad m) => Text -> PPT g m (Maybe Text)
 tryLoc = getGameL10nIfPresent
 
 -- | Get icon and localization for the atom given. Return @mempty@ if there is
 -- no icon, and wrapped in @<tt>@ tags if there is no localization.
-tryLocAndIcon :: (IsGameData (GameData g), Monad m) => Text -> PPT g m (Text,Text)
+tryLocAndIcon :: (HOI4Info g, Monad m) => Text -> PPT g m (Text,Text)
 tryLocAndIcon atom = do
     loc <- tryLoc atom
     return (fromMaybe mempty (Just (iconText atom)),
@@ -1709,7 +1630,7 @@ tryLocAndIcon atom = do
 
 -- | Get localization for the atom given. Return atom
 -- if there is no localization.
-tryLocMaybe :: (IsGameData (GameData g), Monad m) => Text -> PPT g m (Text,Text)
+tryLocMaybe :: (HOI4Info g, Monad m) => Text -> PPT g m (Text,Text)
 tryLocMaybe atom = do
     loc <- tryLoc atom
     return ("", fromMaybe atom loc)
@@ -4031,7 +3952,7 @@ handleDate after before stmt@[pdx| %_ < %date |] = case date of
 handleDate _ _ stmt = preStatement stmt
 
 
-isMonth :: (IsGameData (GameData g), Monad m) =>
+isMonth :: (HOI4Info g, Monad m) =>
     Int -> PPT g m Text
 isMonth month
     = getGameL10n $ case month of
@@ -4347,7 +4268,7 @@ withRegion [pdx| %lhs = !stateid |]
     = msgToPP . MsgRegion =<< getRegionLoc stateid
 withRegion stmt = preStatement stmt
 
-getRegionLoc :: (IsGameData (GameData g), Monad m) =>
+getRegionLoc :: (HOI4Info g, Monad m) =>
     Int -> PPT g m Text
 getRegionLoc n = do
     let regionid_t = T.pack (show n)

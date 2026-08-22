@@ -37,13 +37,13 @@ import qualified Text.PrettyPrint.Leijen.Text as PP
 import Abstract -- everything
 import qualified Doc
 import HOI4.Common -- everything
+import HOI4.Localization
 import FileIO (Feature (..), writeFeatures)
 import HOI4.Messages (imsg2doc, wikifyLocColours)
 import MessageTools (iquotes)
 import QQ (pdx)
 import SettingsTypes ( PPT, Settings (..)
                      , IsGame (..), IsGameData (..)
-                     , getGameL10n, getGameL10nIfPresent
                      , setCurrentFile, withCurrentFile
                      , hoistErrors, hoistExceptions
                      , getGameInterface, getGameInterfaceIfPresent)

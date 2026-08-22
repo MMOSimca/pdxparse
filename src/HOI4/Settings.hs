@@ -27,9 +27,9 @@ import Abstract -- everything
 import FileIO (buildPath, readScript)
 import SettingsTypes ( PPT, Settings (..), L10nScheme (..)
                      , IsGame (..), IsGameData (..), IsGameState (..)
-                     , getGameL10nIfPresent
                      , safeIndex, safeLast)
 import HOI4.Types -- everything
+import HOI4.Localization
 import Yaml (LocEntry (..))
 
 -- Handlers
@@ -525,6 +525,18 @@ readHOI4Scripts = do
 -- | Interpret the script ASTs as usable data.
 parseHOI4Scripts :: Monad m => PPT HOI4 m ()
 parseHOI4Scripts = do
+    -- The country history has to be read and stored before anything else, since
+    -- it says which party rules each country at the start of the game and so
+    -- which of its several names the game calls it by. Every localization
+    -- lookup from here on asks for that name (see "HOI4.Localization"), and a
+    -- parser that stored its text before the history was in hand would have
+    -- stored it under the wrong one.
+    (countryHistory, initialVariables) <- parseHOI4CountryHistory =<< getCountryHistoryScripts
+    modify $ \(HOI4D s) -> HOI4D $
+            s { hoi4countryHistory = countryHistory
+            ,   hoi4initialvariables = initialVariables
+            }
+
     -- Need idea groups and modifiers before everything else
     ideas <- parseHOI4Ideas =<< getIdeaScripts
     opinionModifiers <- parseHOI4OpinionModifiers =<< getOpinionModifierScripts
@@ -536,7 +548,6 @@ parseHOI4Scripts = do
     on_actions <- getOnActionsScripts
     nationalFocus <- parseHOI4NationalFocuses =<< getNationalFocusScripts
 
-    (countryHistory, initialVariables) <- parseHOI4CountryHistory =<< getCountryHistoryScripts
     (characters, chartoken) <- parseHOI4Characters =<< getCharacterScripts
     countryleadertraits <- parseHOI4CountryLeaderTraits =<< getCountryLeaderTraitScripts
     unitleadertraits <- parseHOI4UnitLeaderTraits =<< getUnitLeaderTraitScripts
@@ -582,8 +593,6 @@ parseHOI4Scripts = do
             ,   hoi4dynamicmodifiers = dynamicModifiers
             ,   hoi4modifiers = modifiers
 
-            ,   hoi4countryHistory = countryHistory
-            ,   hoi4initialvariables = initialVariables
             ,   hoi4characters = characters
             ,   hoi4countryleadertraits = countryleadertraits
             ,   hoi4unitleadertraits = unitleadertraits

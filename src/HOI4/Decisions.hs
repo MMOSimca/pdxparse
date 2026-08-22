@@ -43,11 +43,11 @@ import HOI4.Handlers (flagText, getStateLoc)
 import QQ (pdx)
 import SettingsTypes ( PPT, Settings (..)
                      , IsGame (..), IsGameData (..), IsGameState (..)
-                     , getGameL10n, getGameL10nIfPresent
                      , setCurrentFile, withCurrentFile
                      , hoistErrors, hoistExceptions
                      , getGameInterface, getGameInterfaceIfPresent)
 import HOI4.Common -- everything
+import HOI4.Localization
 
 -- | Empty decision category. Starts off Nothing/empty everywhere, except id and name
 -- (which should get filled in immediately).
@@ -56,7 +56,7 @@ newDecisionCat id locid locdesc = HOI4Decisioncat id locid locdesc "decision_cat
 
 -- | Take the decisions categories scripts from game data and parse them into decision
 -- data structures.
-parseHOI4Decisioncats :: (IsGameData (GameData g), IsGameState (GameState g), Monad m) =>
+parseHOI4Decisioncats :: (HOI4Info g, Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap Text HOI4Decisioncat)
 parseHOI4Decisioncats scripts = HM.unions . HM.elems <$> do
     tryParse <- hoistExceptions $
@@ -80,7 +80,7 @@ parseHOI4Decisioncats scripts = HM.unions . HM.elems <$> do
                       mkDecCatMap = HM.fromList . map (decc_name &&& id)
 
 -- | Parse one decisioncategory script into a decision data structure.
-parseHOI4Decisioncat :: (IsGameData (GameData g), IsGameState (GameState g), MonadError Text m) =>
+parseHOI4Decisioncat :: (HOI4Info g, MonadError Text m) =>
     GenericStatement -> PPT g m (Either Text (Maybe HOI4Decisioncat))
 parseHOI4Decisioncat (StatementBare _) = throwError "bare statement at top level"
 parseHOI4Decisioncat [pdx| %left = %right |] = case right of
@@ -206,7 +206,7 @@ newDecision = HOI4Decision undefined undefined Nothing Nothing Nothing Nothing N
 
 -- | Take the decisions scripts from game data and parse them into decision
 -- data structures.
-parseHOI4Decisions :: (IsGameData (GameData g), IsGameState (GameState g), Monad m) =>
+parseHOI4Decisions :: (HOI4Info g, Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap Text HOI4Decision)
 parseHOI4Decisions scripts = HM.unions . HM.elems <$> do
     tryParse <- hoistExceptions $
@@ -230,7 +230,7 @@ parseHOI4Decisions scripts = HM.unions . HM.elems <$> do
                       mkDecMap = HM.fromList . map (dec_name &&& id)
 
 -- | Parse one file's decision groups scripts into decision data structures.
-parseHOI4DecisionGroup :: (IsGameData (GameData g), IsGameState (GameState g), Monad m) =>
+parseHOI4DecisionGroup :: (HOI4Info g, Monad m) =>
     GenericStatement -> PPT g (ExceptT Text m) [Either Text (Maybe HOI4Decision)]
 parseHOI4DecisionGroup (StatementBare _) = throwError "bare statement at top level"
 parseHOI4DecisionGroup [pdx| $left = @scr |]
@@ -243,7 +243,7 @@ parseHOI4DecisionGroup _ = withCurrentFile $ \file ->
     throwError ("unrecognised form for decision in " <> T.pack file)
 
 -- | Parse one decision script into a decision data structure.
-parseHOI4Decision :: (IsGameData (GameData g), IsGameState (GameState g), Monad m) =>
+parseHOI4Decision :: (HOI4Info g, Monad m) =>
     GenericStatement -> Text -> PPT g (ExceptT Text m) (Maybe HOI4Decision)
 parseHOI4Decision [pdx| $decName = %rhs |] category = case rhs of
     CompoundRhs parts -> do
@@ -264,7 +264,7 @@ parseHOI4Decision [pdx| %check = %_ |] _ = case check of
 parseHOI4Decision _ _ = throwError "unrecognized form for decision (LHS)"
 
 -- | Add a sub-clause of the decision script to the data structure.
-decisionAddSection :: (IsGameData (GameData g),  MonadError Text m) =>
+decisionAddSection :: (HOI4Info g, MonadError Text m) =>
     Maybe HOI4Decision -> GenericStatement -> PPT g m (Maybe HOI4Decision)
 decisionAddSection Nothing _ = return Nothing
 -- desc needs localization, so it can't be handled in the pure code below

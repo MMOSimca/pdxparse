@@ -729,7 +729,7 @@ handlersNumStates = Tr.fromList
         ]
 
 -- Helpers for text/value pairs
-tryLocAndIconTitle :: (IsGameData (GameData g), Monad m) => Text -> PPT g m (Text, Text)
+tryLocAndIconTitle :: (HOI4Info g, Monad m) => Text -> PPT g m (Text, Text)
 tryLocAndIconTitle t = tryLocAndIcon (t <> "_title")
 
 -- | Handlers for text/value pairs.

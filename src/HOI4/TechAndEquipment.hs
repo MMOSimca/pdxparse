@@ -36,10 +36,10 @@ import QQ (pdx)
 import SettingsTypes ( PPT, Settings (..)
                      , IsGame (..), IsGameData (..), IsGameState (..)
                      , withCurrentIndent, getGameInterface
-                     , getGameL10n, getGameL10nIfPresent
                      , setCurrentFile, withCurrentFile
-                     , hoistErrors, hoistExceptions, getGameInterfaceIfPresent, concatMapM, indentUp, getGameL10nDefault)
+                     , hoistErrors, hoistExceptions, getGameInterfaceIfPresent, concatMapM, indentUp)
 import HOI4.Common -- everything
+import HOI4.Localization
 import Data.Char (toLower)
 import HOI4.SpecialHandlers (modifiersTable)
 
@@ -120,7 +120,7 @@ processUnits stmt@[pdx| %left = %right |] = case right of
 processUnits _ = withCurrentFile $ \file ->
     throwError ("unrecognised form for terrain in " <> T.pack file)
 
-parseHOI4TechnologiesPath :: (IsGameData (GameData g), IsGameState (GameState g), Monad m) =>
+parseHOI4TechnologiesPath :: (HOI4Info g, Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap FilePath [HOI4Technology])
 parseHOI4TechnologiesPath scripts = do
     tryParse <- hoistExceptions $
@@ -149,7 +149,7 @@ newHOI4Technology id locid = HOI4Technology id locid Nothing "" Nothing Nothing 
 
 -- | Parse a statement in an opinion modifiers file. Some statements aren't
 -- modifiers; for those, and for any obvious errors, return Right Nothing.
-parseHOI4Technology :: (IsGameState (GameState g), IsGameData (GameData g), MonadError Text m) =>
+parseHOI4Technology :: (HOI4Info g, MonadError Text m) =>
     GenericStatement -> PPT g m (Either Text (Maybe HOI4Technology))
 parseHOI4Technology (StatementBare _) = throwError "bare statement at top level"
 parseHOI4Technology [pdx| %left = %right |] = case right of
