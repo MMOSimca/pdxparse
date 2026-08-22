@@ -216,10 +216,7 @@ ppOpinionModifiers modifiers = do
 
 ppOpinionModifier :: (HOI4Info g, Monad m) => HOI4OpinionModifier -> PPT g m Doc
 ppOpinionModifier mod = do
-    -- The comments naming the keys a text was filled in from are for a human
-    -- reading wiki source; nobody reads this table, so they would be dead weight
-    -- in every entry.
-    locName <- stripLocKeys . wikifyLocColours <$> getGameL10n (omodName mod)
+    locName <- wikifyLocColours <$> getGameL10n (omodName mod)
     return . mconcat $
         [ " "
         , Doc.strictText $ T.toLower (omodName mod)

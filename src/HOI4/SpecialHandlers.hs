@@ -2139,7 +2139,7 @@ doctrineLocLookup kind theid = go (candidates kind (T.toLower theid))
         go (key:rest) = do
             mloc <- getGameL10nIfPresent key
             case mloc of
-                Just loc | not (T.null loc) -> Just . stripLocKeys <$> getGameL10n key
+                Just loc | not (T.null loc) -> Just <$> getGameL10n key
                 _ -> go rest
         candidates "folder" i = [i <> "_doctrine_folder"]
         candidates "track" i = ["DOCTRINE_TRACK_" <> T.toUpper i]

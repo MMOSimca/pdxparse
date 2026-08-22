@@ -454,8 +454,7 @@ unpackTextfragment args = \case
         Nothing -> do
             mloc <- getGameL10nIfPresent k
             case mloc of
-                Just t -> return $ "<!--Localisation key:" <> k <> "-->"
-                                        <> formatLocValue mfmt (LocText t)
+                Just t -> return $ formatLocValue mfmt (LocText t)
                 -- A placeholder that asks for a format is a slot for a value the
                 -- game works out as it draws the text, and the words around it
                 -- are written to be read with the value in place. Where we have
