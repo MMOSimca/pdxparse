@@ -18,6 +18,7 @@ module HOI4.Types (
     ,   HOI4NationalFocus (..)
 
     ,   HOI4CountryHistory (..)
+    ,   HOI4ScriptedLocText (..)
     ,   HOI4Character (..), HOI4Advisor (..)
     ,   HOI4CountryLeaderTrait (..)
     ,   HOI4UnitLeaderTrait (..)
@@ -106,6 +107,10 @@ data HOI4Data = HOI4Data {
     ,   hoi4mioScripts :: HashMap FilePath GenericScript
     ,   hoi4mionames :: HashMap Text Text -- ^ MIO, trait and policy token -> name key
     ,   hoi4mioincludes :: HashMap Text Text -- ^ MIO token -> archetype it is built from
+    ,   hoi4scriptedlocScripts :: HashMap FilePath GenericScript
+    ,   hoi4scriptedloc :: HashMap Text [HOI4ScriptedLocText] -- ^ name -> the
+                                 --   texts it can come to, in the order the game
+                                 --   tries them
     ,   hoi4scriptconstantScripts :: HashMap FilePath GenericScript
     ,   hoi4scriptconstants :: HashMap Text Double -- ^ dotted path -> value
     ,   hoi4lockeys :: [Text]
@@ -249,6 +254,11 @@ class (IsGame g,
     -- and policy is known by, keyed on its token
     getMioNames :: Monad m => PPT g m (HashMap Text Text)
     getMioIncludes :: Monad m => PPT g m (HashMap Text Text)
+    -- | Get scripted localization script
+    getScriptedLocScripts :: Monad m => PPT g m (HashMap FilePath GenericScript)
+    -- | Get the parsed scripted localizations, keyed on the name script calls
+    -- each of them by
+    getScriptedLoc :: Monad m => PPT g m (HashMap Text [HOI4ScriptedLocText])
     -- | Get script constant script
     getScriptConstantScripts :: Monad m => PPT g m (HashMap FilePath GenericScript)
     -- | Get the numbers script can name instead of writing out, keyed on the
@@ -527,6 +537,9 @@ data HOI4NationalFocus = HOI4NationalFocus
     ,   nf_icon_variants :: [(Text, GenericScript)] -- ^ Icons the focus shows in
                                  --   place of its usual one, each with the
                                  --   conditions the game shows it under
+    ,   nf_name_variants :: [(Text, GenericScript)] -- ^ Names the focus goes by
+                                 --   in place of its usual one, each with the
+                                 --   conditions the game uses it under
     ,   nf_cost :: Double
     ,   nf_allow_branch  :: Maybe GenericScript
     ,   nf_prerequisite  :: [Maybe GenericScript]
@@ -552,6 +565,16 @@ data HOI4NationalFocus = HOI4NationalFocus
     ,   nf_ordinal :: Int -- ^ Where it sits in the order of its own file
     ,   nf_country :: Maybe Text -- ^ The country whose tree it stands in, where
                                  --   it stands in one country's alone
+    } deriving (Show)
+
+-- | One of the texts a scripted localization can come to. The game reads them
+-- in the order they are written and takes the first whose conditions hold; one
+-- that names no conditions holds always, and is the text it settles on when
+-- nothing else applies.
+data HOI4ScriptedLocText = HOI4ScriptedLocText
+    {   sloc_key :: Text -- ^ The localization key holding the text itself
+    ,   sloc_trigger :: Maybe GenericScript -- ^ What has to hold for this text
+                                 --   to be the one used
     } deriving (Show)
 
 data HOI4CountryHistory = HOI4CountryHistory

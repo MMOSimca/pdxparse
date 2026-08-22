@@ -19,6 +19,7 @@ import Control.Monad.Trans (MonadIO (..))
 
 import Data.Char (isSpace, toLower)
 import Data.List (nub)
+import Control.Arrow (first)
 import Data.Either (partitionEithers)
 import Data.Maybe (catMaybes, fromMaybe, listToMaybe, mapMaybe)
 
@@ -47,7 +48,7 @@ import HOI4.Messages (wikifyLocColours, messageText)
 -- | Empty national focus. Starts off Nothing/empty everywhere, except id and name
 -- (which should get filled in immediately).
 newHOI4NationalFocus :: HOI4NationalFocus
-newHOI4NationalFocus = HOI4NationalFocus "(Unknown)" "(Unknown)" Nothing Nothing "GFX_goal_unknown" Nothing [] undefined Nothing [] Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing undefined 0 Nothing
+newHOI4NationalFocus = HOI4NationalFocus "(Unknown)" "(Unknown)" Nothing Nothing "GFX_goal_unknown" Nothing [] [] undefined Nothing [] Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing undefined 0 Nothing
 
 -- | One icon out of a focus's @icon@ block: either the icon it falls back on,
 -- written @yes@, or an icon with the conditions it is shown under. An entry we
@@ -142,12 +143,21 @@ parseHOI4NationalFocus vars country ordinal [pdx| %left = %right |] = case right
                 return (Right Nothing)
             else
                 withCurrentFile $ \file -> do
-                    nfNameLoc <- wikifyLocColours <$> getGameL10n (fromMaybe (getNFId parts) (getNFTxt parts))
-                    nfNameDesc <- fmap wikifyLocColours <$> getGameL10nIfPresent (fromMaybe (getNFId parts) (getNFTxt parts) <> "_desc")
+                    let nameKey = fromMaybe (getNFId parts) (getNFTxt parts)
+                    nfNameLoc <- wikifyLocColours <$> getGameL10n nameKey
+                    nfNameDesc <- fmap wikifyLocColours <$> getGameL10nIfPresent (nameKey <> "_desc")
+                    -- A focus given several names points its localization at a
+                    -- scripted one, which names a text for each set of
+                    -- conditions and one to fall back on. The fallback is the
+                    -- name the focus is listed under, so the rest are the names
+                    -- it goes by instead.
+                    nfNameVariants <- map (first wikifyLocColours)
+                                        <$> scriptedLocVariants nameKey
                     nnf <- hoistErrors $ foldM (nationalFocusAddSection vars)
                                                 (Just newHOI4NationalFocus {nf_path = file
                                                                             ,nf_name_loc = nfNameLoc
                                                                             ,nf_name_desc = nfNameDesc
+                                                                            ,nf_name_variants = nfNameVariants
                                                                             ,nf_ordinal = ordinal
                                                                             ,nf_country = country})
                                                 parts
@@ -419,7 +429,7 @@ ppNationalFocus nf = setCurrentFile (nf_path nf) $ do
         case nf_alt_icon nf of
             Nothing -> return ""
             Just idicon -> return " <!-- ALT icon presentt, check script -->"
-    icon_variants_pp <- ppIconVariants (nf_icon_variants nf)
+    alternatives_pp <- ppAlternatives (nf_name_variants nf) (nf_icon_variants nf)
     prerequisite_pp <- ppPrereq $ catMaybes $ nf_prerequisite nf
     allowBranch_pp <- ppAllowBranch $ nf_allow_branch nf
     mutuallyExclusive_pp <- ppMutuallyExclusive $ nf_mutually_exclusive nf
@@ -430,7 +440,8 @@ ppNationalFocus nf = setCurrentFile (nf_path nf) $ do
     complete_tool_pp <- nfArgClari "<!-- Tooltip shown for completion ->Completion tooltip:" nf_complete_tooltip ppScript
     bypass_pp <- nfArgExtra "bypass" nf_bypass ppScript
     completionReward_pp <- setIsInEffect True $ nfArg nf_completion_reward ppScript
-    selectEffect_pp <- setIsInEffect True $ nfArgExtra "select" nf_select_effect ppScript
+    selectEffect_pp <- setIsInEffect True $
+        nfArgClari "Effects on selecting the focus:" nf_select_effect ppScript
     -- The wiki heads each column with the country the tree is for, standing
     -- outside the list as the scope everything under it is read in. A focus
     -- shared between trees has no one country to name, and a column with
@@ -449,7 +460,7 @@ ppNationalFocus nf = setCurrentFile (nf_path nf) $ do
         [ "|- id = \"", Doc.strictText (nf_name_loc nf),"\"" , PP.line
         , "| {{iconbox|image=", Doc.strictText icon_pp, ".png ", PP.line
         , "| ", Doc.strictText (nf_name_loc nf) , "<!-- ", Doc.strictText (nf_id nf), " -->", PP.line
-        , "| ",maybe mempty (Doc.strictText . Doc.nl2br) (nf_name_desc nf), PP.line , "}}", Doc.strictText alt_icon_pp, icon_variants_pp, PP.line
+        , "| ",maybe mempty (Doc.strictText . Doc.nl2br) (nf_name_desc nf), PP.line , "}}", Doc.strictText alt_icon_pp, alternatives_pp, PP.line
         , "| ", PP.line]++
         headed (allowBranch_pp ++
                 prerequisite_pp ++
@@ -464,31 +475,49 @@ ppNationalFocus nf = setCurrentFile (nf_path nf) $ do
 --                complete_tool_pp ++
                 selectEffect_pp)
 
--- | The icons a focus shows in place of its usual one, each under the conditions
--- the game shows it under. They go behind a fold: a reader wants the icon the
--- focus usually shows, and only then what else it can look like.
+-- | The names and icons a focus shows in place of its usual ones, each under
+-- the conditions the game shows it under. They go behind a fold: a reader wants
+-- what the focus usually is, and only then what else it can be.
 --
--- The conditions are written above the icon they belong to rather than inside
--- the box, since the box's own fields are the focus's name and description, and
--- those belong to the focus rather than to any one of its icons.
-ppIconVariants :: (HOI4Info g, Monad m) => [(Text, GenericScript)] -> PPT g m Doc
-ppIconVariants [] = return mempty
-ppIconVariants variants = do
-    variants_pp'd <- mapM ppIconVariant variants
+-- A focus that changes its name and its icon together writes the same conditions
+-- for both, so where the two match they are shown as the one thing the focus
+-- turns into rather than as two unrelated changes. The conditions are written
+-- above what they bring about; a box's own fields are the focus's name and
+-- description, and the description belongs to the focus however it is named.
+ppAlternatives :: (HOI4Info g, Monad m) =>
+    [(Text, GenericScript)] -> [(Text, GenericScript)] -> PPT g m Doc
+ppAlternatives [] [] = return mempty
+ppAlternatives names icons = do
+    alternatives_pp'd <- mapM ppAlternative alternatives
     return . mconcat $
-        ["'''Alternative Images'''{{collapse|", PP.line]
-        ++ variants_pp'd ++
+        ["'''", title, "'''{{collapse|", PP.line]
+        ++ alternatives_pp'd ++
         ["}}"]
     where
-        ppIconVariant (theicon, scr) = do
-            iconfile <- getGameInterface "goal_unknown" theicon
+        title
+            | null icons = "Alternative Names"
+            | null names = "Alternative Images"
+            | otherwise = "Alternative Names and Images"
+        -- Every icon, with the name that shares its conditions where there is
+        -- one, and then the names left over.
+        alternatives =
+            [ (scr, lookup scr namesByCondition, Just theicon) | (theicon, scr) <- icons ]
+            ++ [ (scr, Just nm, Nothing)
+               | (nm, scr) <- names, scr `notElem` map snd icons ]
+        namesByCondition = [(scr, nm) | (nm, scr) <- names]
+        ppAlternative (scr, mname, micon) = do
             shown <- ppOneLine scr
-            return . mconcat $
-                [ shown, "<br/>", PP.line
-                , "{{iconbox|image=", Doc.strictText iconfile, ".png", PP.line
-                , "|", PP.line
-                , "|  }}", PP.line
-                ]
+            body <- case micon of
+                Nothing -> return [named, PP.line]
+                Just theicon -> do
+                    iconfile <- getGameInterface "goal_unknown" theicon
+                    return
+                        [ "{{iconbox|image=", Doc.strictText iconfile, ".png", PP.line
+                        , "| ", named, PP.line
+                        , "|  }}", PP.line
+                        ]
+            return . mconcat $ [shown, "<br/>", PP.line] ++ body
+            where named = maybe mempty (\nm -> mconcat ["'''", Doc.strictText nm, "'''"]) mname
 
 -- | A trigger written as a single line, for a label with no room for a list.
 ppOneLine :: (HOI4Info g, Monad m) => GenericScript -> PPT g m Doc

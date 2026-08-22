@@ -62,6 +62,7 @@ import HOI4.Misc (parseHOI4CountryHistory
                  , parseHOI4Effects, parseHOI4Triggers
                  , parseHOI4BopRanges, parseHOI4ModifierDefinitions
                  , parseHOI4Buildings, parseHOI4MioNames
+                 , parseHOI4ScriptedLoc
                  , parseHOI4ScriptConstants
                  , parseHOI4LocKeys)
 
@@ -157,6 +158,8 @@ instance IsGame HOI4 where
                 ,   hoi4mioScripts = HM.empty
                 ,   hoi4mionames = HM.empty
                 ,   hoi4mioincludes = HM.empty
+                ,   hoi4scriptedlocScripts = HM.empty
+                ,   hoi4scriptedloc = HM.empty
                 ,   hoi4scriptconstantScripts = HM.empty
                 ,   hoi4scriptconstants = HM.empty
                 ,   hoi4lockeys = []
@@ -360,6 +363,12 @@ instance HOI4Info HOI4 where
     getMioNames = do
         HOI4D ed <- get
         return (hoi4mionames ed)
+    getScriptedLocScripts = do
+        HOI4D ed <- get
+        return (hoi4scriptedlocScripts ed)
+    getScriptedLoc = do
+        HOI4D ed <- get
+        return (hoi4scriptedloc ed)
     getScriptConstantScripts = do
         HOI4D ed <- get
         return (hoi4scriptconstantScripts ed)
@@ -437,6 +446,7 @@ readHOI4Scripts = do
                     "unit_tags" -> "common" </> "unit_tags"
                     "units" -> "common" </> "units"
                     "ideology" -> "common" </> "ideologies"
+                    "scripted_localisation" -> "common" </> "scripted_localisation"
                     "scripted_effect" -> "common" </> "scripted_effects"
                     "scripted_trigger" -> "common" </> "scripted_triggers"
                     "modifier_definitions" -> "common" </> "modifier_definitions"
@@ -476,6 +486,7 @@ readHOI4Scripts = do
     unitScripts <- readHOI4Script "units"
     ideologyScripts <- readHOI4Script "ideology"
 
+    scripted_localisation <- readHOI4Script "scripted_localisation"
     scripted_effects <- readHOI4Script "scripted_effect"
     scripted_triggers <- readHOI4Script "scripted_trigger"
 
@@ -517,6 +528,7 @@ readHOI4Scripts = do
         ,   hoi4techScripts = techscript
         ,   hoi4buildingScripts = buildingscript
         ,   hoi4mioScripts = mioscript
+        ,   hoi4scriptedlocScripts = scripted_localisation
         ,   hoi4scriptconstantScripts = constantscript
         ,   hoi4lockeys = lockeys
         }
@@ -532,9 +544,11 @@ parseHOI4Scripts = do
     -- parser that stored its text before the history was in hand would have
     -- stored it under the wrong one.
     (countryHistory, initialVariables) <- parseHOI4CountryHistory =<< getCountryHistoryScripts
+    scriptedLoc <- parseHOI4ScriptedLoc =<< getScriptedLocScripts
     modify $ \(HOI4D s) -> HOI4D $
             s { hoi4countryHistory = countryHistory
             ,   hoi4initialvariables = initialVariables
+            ,   hoi4scriptedloc = scriptedLoc
             }
 
     -- Need idea groups and modifiers before everything else

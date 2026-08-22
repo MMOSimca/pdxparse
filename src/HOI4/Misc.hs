@@ -13,6 +13,7 @@ module HOI4.Misc (
         ,parseHOI4ModifierDefinitions
         ,parseHOI4Buildings
         ,parseHOI4MioNames
+        ,parseHOI4ScriptedLoc
         ,parseHOI4ScriptConstants
         ,parseHOI4LocKeys
     ) where
@@ -25,7 +26,7 @@ import Control.Monad.Except (MonadError (..))
 
 import Data.Char (isUpper, isAlphaNum)
 import Data.List ( sortOn, foldl', elemIndex )
-import Data.Maybe (catMaybes, mapMaybe)
+import Data.Maybe (catMaybes, listToMaybe, mapMaybe)
 
 import System.FilePath (takeFileName)
 
@@ -670,6 +671,34 @@ parseHOI4MioNames scripts = return (HM.unions (map organization orgs), HM.unions
 -- one entry per number. Nothing but numbers is kept: the other categories hold
 -- lists of countries or states, which script uses in ways that have nothing to do
 -- with a value.
+-- | Read the scripted localizations: the texts the game picks between as it
+-- draws a piece of localization, written as a @defined_text@ naming the key to
+-- read under each set of conditions. Localization refers to one of these by
+-- putting its name in brackets, e.g. @[CZE_continue_with_snejdareks_plan]@.
+--
+-- The texts are kept in the order they are written, since that is the order the
+-- game tries them in and the last of them is usually the one it settles on.
+parseHOI4ScriptedLoc :: (IsGameState (GameState g), IsGameData (GameData g), Monad m) =>
+    HashMap String GenericScript -> PPT g m (HashMap Text [HOI4ScriptedLocText])
+parseHOI4ScriptedLoc scripts = return $ HM.fromList
+    (mapMaybe definedText (concat (HM.elems scripts)))
+    where
+        definedText [pdx| defined_text = @scr |] = case getName scr of
+            Just name -> Just (name, mapMaybe locText scr)
+            Nothing -> Nothing
+        definedText _ = Nothing
+        getName scr = listToMaybe [nm | [pdx| name = $nm |] <- scr]
+        locText [pdx| text = @txt |] = case getKey txt of
+            Just key -> Just HOI4ScriptedLocText
+                {   sloc_key = key
+                ,   sloc_trigger = listToMaybe [trig | [pdx| trigger = @trig |] <- txt]
+                }
+            Nothing -> Nothing
+        locText _ = Nothing
+        getKey txt = listToMaybe $
+            [key | [pdx| localization_key = $key |] <- txt]
+            ++ [key | [pdx| localization_key = ?key |] <- txt]
+
 parseHOI4ScriptConstants :: (IsGameState (GameState g), IsGameData (GameData g), Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap Text Double)
 parseHOI4ScriptConstants scripts = return $ HM.fromList
