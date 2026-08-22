@@ -19,7 +19,8 @@ import Control.Monad.Trans (MonadIO (..))
 
 import Data.Char (isSpace, toLower)
 import Data.List (nub)
-import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
+import Data.Either (partitionEithers)
+import Data.Maybe (catMaybes, fromMaybe, listToMaybe, mapMaybe)
 
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
@@ -41,12 +42,26 @@ import SettingsTypes ( PPT, Settings (..)
                      , getGameInterface, getGameInterfaceIfPresent)
 import HOI4.Common -- everything
 import HOI4.Localization
-import HOI4.Messages (wikifyLocColours)
+import HOI4.Messages (wikifyLocColours, messageText)
 
 -- | Empty national focus. Starts off Nothing/empty everywhere, except id and name
 -- (which should get filled in immediately).
 newHOI4NationalFocus :: HOI4NationalFocus
-newHOI4NationalFocus = HOI4NationalFocus "(Unknown)" "(Unknown)" Nothing Nothing "GFX_goal_unknown" Nothing undefined Nothing [] Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing undefined 0 Nothing
+newHOI4NationalFocus = HOI4NationalFocus "(Unknown)" "(Unknown)" Nothing Nothing "GFX_goal_unknown" Nothing [] undefined Nothing [] Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing undefined 0 Nothing
+
+-- | One icon out of a focus's @icon@ block: either the icon it falls back on,
+-- written @yes@, or an icon with the conditions it is shown under. An entry we
+-- cannot read is dropped, since the focus still has its other icons to show.
+iconVariant :: GenericStatement -> Maybe (Either Text (Text, GenericScript))
+iconVariant [pdx| $key = yes |] = Just (Left (gfxKey key))
+iconVariant [pdx| $key = @scr |] = Just (Right (gfxKey key, scr))
+iconVariant _ = Nothing
+
+-- | The name an icon goes by in the interface files, which is what a lookup
+-- wants. Script writes it either with the @GFX_@ on the front or without.
+gfxKey :: Text -> Text
+gfxKey txt = if "GFX_" `T.isPrefixOf` txt then txt else "GFX_" <> txt
+
 
 -- | Take the decisions scripts from game data and parse them into decision
 -- data structures.
@@ -175,13 +190,18 @@ nationalFocusAddSection vars nf stmt
                 _-> trace "bad nf completion_reward" nf
             "icon" -> case rhs of
                 GenericRhs txt [] ->
-                    let txtd = if "GFX_" `T.isPrefixOf` txt then txt else "GFX_" <> txt in
-                    nf { nf_icon = txtd}
+                    nf { nf_icon = gfxKey txt}
                 StringRhs txt ->
-                    let txtd = if "GFX_" `T.isPrefixOf` txt then txt else "GFX_" <> txt in
-                    nf { nf_icon = txtd}
-                CompoundRhs _ ->
-                    nf { nf_icon = "Multiple Pictures possible, check script."}
+                    nf { nf_icon = gfxKey txt}
+                -- A focus can name several icons rather than one, each written
+                -- with the conditions the game shows it under, and one written
+                -- @yes@ that it falls back on when none of the others apply.
+                -- That last one leads, since it is what the focus shows unless
+                -- something makes it show one of the others.
+                CompoundRhs scr ->
+                    let (fallback, conditional) = partitionEithers (mapMaybe iconVariant scr) in
+                    nf { nf_icon = fromMaybe (nf_icon nf) (listToMaybe fallback)
+                       , nf_icon_variants = conditional}
                 _-> trace ("bad nf icon in: " ++ show stmt) nf
             "alternate_icon" -> case rhs of
                 GenericRhs txt [] ->
@@ -384,7 +404,14 @@ ppNationalFocus nf = setCurrentFile (nf_path nf) $ do
                         ,PP.line])
             (field nf)
     icon_pp <- do
-        micon <- getGameInterfaceIfPresent ("GFX_focus_" <> nf_id nf)
+        -- The icon a focus names is the one the game draws it with, so a focus
+        -- that names one is shown with it -- including the one it falls back on
+        -- where it names several. Only a focus that names none of its own is
+        -- shown with the icon named after it, which is the convention the game
+        -- files follow but not a rule the game itself goes by.
+        micon <- if nf_icon nf == nf_icon newHOI4NationalFocus
+                    then getGameInterfaceIfPresent ("GFX_focus_" <> nf_id nf)
+                    else return Nothing
         case micon of
             Nothing -> getGameInterface "goal_unknown" (nf_icon nf)
             Just idicon -> return idicon
@@ -392,6 +419,7 @@ ppNationalFocus nf = setCurrentFile (nf_path nf) $ do
         case nf_alt_icon nf of
             Nothing -> return ""
             Just idicon -> return " <!-- ALT icon presentt, check script -->"
+    icon_variants_pp <- ppIconVariants (nf_icon_variants nf)
     prerequisite_pp <- ppPrereq $ catMaybes $ nf_prerequisite nf
     allowBranch_pp <- ppAllowBranch $ nf_allow_branch nf
     mutuallyExclusive_pp <- ppMutuallyExclusive $ nf_mutually_exclusive nf
@@ -421,7 +449,7 @@ ppNationalFocus nf = setCurrentFile (nf_path nf) $ do
         [ "|- id = \"", Doc.strictText (nf_name_loc nf),"\"" , PP.line
         , "| {{iconbox|image=", Doc.strictText icon_pp, ".png ", PP.line
         , "| ", Doc.strictText (nf_name_loc nf) , "<!-- ", Doc.strictText (nf_id nf), " -->", PP.line
-        , "| ",maybe mempty (Doc.strictText . Doc.nl2br) (nf_name_desc nf), PP.line , "}}", Doc.strictText alt_icon_pp, PP.line
+        , "| ",maybe mempty (Doc.strictText . Doc.nl2br) (nf_name_desc nf), PP.line , "}}", Doc.strictText alt_icon_pp, icon_variants_pp, PP.line
         , "| ", PP.line]++
         headed (allowBranch_pp ++
                 prerequisite_pp ++
@@ -435,6 +463,52 @@ ppNationalFocus nf = setCurrentFile (nf_path nf) $ do
                 joint_reward_member_pp ++
 --                complete_tool_pp ++
                 selectEffect_pp)
+
+-- | The icons a focus shows in place of its usual one, each under the conditions
+-- the game shows it under. They go behind a fold: a reader wants the icon the
+-- focus usually shows, and only then what else it can look like.
+--
+-- The conditions are written above the icon they belong to rather than inside
+-- the box, since the box's own fields are the focus's name and description, and
+-- those belong to the focus rather than to any one of its icons.
+ppIconVariants :: (HOI4Info g, Monad m) => [(Text, GenericScript)] -> PPT g m Doc
+ppIconVariants [] = return mempty
+ppIconVariants variants = do
+    variants_pp'd <- mapM ppIconVariant variants
+    return . mconcat $
+        ["'''Alternative Images'''{{collapse|", PP.line]
+        ++ variants_pp'd ++
+        ["}}"]
+    where
+        ppIconVariant (theicon, scr) = do
+            iconfile <- getGameInterface "goal_unknown" theicon
+            shown <- ppOneLine scr
+            return . mconcat $
+                [ shown, "<br/>", PP.line
+                , "{{iconbox|image=", Doc.strictText iconfile, ".png", PP.line
+                , "|", PP.line
+                , "|  }}", PP.line
+                ]
+
+-- | A trigger written as a single line, for a label with no room for a list.
+ppOneLine :: (HOI4Info g, Monad m) => GenericScript -> PPT g m Doc
+ppOneLine scr = do
+    msgs <- ppMany scr
+    texts <- mapM (\(i, msg) -> (,) i . T.strip <$> messageText msg) msgs
+    return . Doc.strictText . joined $ filter (not . T.null . snd) texts
+    where
+        -- A list says what belongs to what by how far it is indented, which a
+        -- single line has to spell out instead. A step inward reads as the line
+        -- before it introducing what follows; anything else is one more thing
+        -- alongside what came before.
+        joined [] = ""
+        joined (first:rest) = snd first <> go first rest
+        go _ [] = ""
+        go (outer, before) ((i, t):rest) = sep <> t <> go (i, t) rest
+            where
+                sep | i <= outer = ", "
+                    | ":" `T.isSuffixOf` before = " "
+                    | otherwise = ": "
 
 ppPrereq :: (HOI4Info g, Monad m) => [GenericScript] -> PPT g m [Doc]
 ppPrereq [] = return [""]

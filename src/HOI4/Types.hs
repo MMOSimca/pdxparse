@@ -524,6 +524,9 @@ data HOI4NationalFocus = HOI4NationalFocus
     ,   nf_text :: Maybe Text
     ,   nf_icon :: Text
     ,   nf_alt_icon :: Maybe Text
+    ,   nf_icon_variants :: [(Text, GenericScript)] -- ^ Icons the focus shows in
+                                 --   place of its usual one, each with the
+                                 --   conditions the game shows it under
     ,   nf_cost :: Double
     ,   nf_allow_branch  :: Maybe GenericScript
     ,   nf_prerequisite  :: [Maybe GenericScript]
