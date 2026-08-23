@@ -2190,11 +2190,6 @@ doctrineLink kind theid = do
         (Just name, Nothing) -> return name
         _ -> return ("<tt>" <> theid <> "</tt>")
 
--- | The wiki page a doctrine folder is written about on.
-doctrinePage :: Text -> Text
-doctrinePage folder = case T.uncons (T.replace "_" " " folder) of
-    Just (c, rest) -> T.cons (toUpper c) rest <> " doctrine"
-    Nothing -> "Doctrine"
 
 -- | The doctrine folder each track, subdoctrine and grand doctrine sits under,
 -- and so the page each is written about on. Script names one of these without
@@ -2352,23 +2347,19 @@ masteryGainModifier lmod = case T.stripSuffix "_mastery_gain_factor" lmod of
 -- while.
 addMastery :: forall g m. (HOI4Info g, Monad m) => Bool -> StatementHandler g m
 addMastery daily stmt@[pdx| %_ = @scr |] =
-    case (amount, target) of
-        (Just amt, _) | not daily -> do
-            what <- masteryTarget target
-            msgToPP $ MsgAddMastery amt what
-        (Just amt, _) | Just d <- days -> do
-            what <- masteryTarget target
-            msgToPP $ MsgAddDailyMastery amt d what
+    case amount of
+        Just amt | not daily -> masteryTargets (MsgAddMastery amt) targets
+                 | Just d <- days -> masteryTargets (MsgAddDailyMastery amt d) targets
         _ -> preStatement stmt
     where
-        (amount, days, target) = foldl' addLine (Nothing, Nothing, Nothing) scr
+        (amount, days, targets) = foldl' addLine (Nothing, Nothing, []) scr
         addLine (amt, d, t) [pdx| amount = !n |] = (Just n, d, t)
         addLine (amt, d, t) [pdx| days = !n |] = (amt, Just n, t)
         -- The name is what a later effect takes the mastery away by, and says
         -- nothing to a reader.
         addLine acc [pdx| name = %_ |] = acc
-        addLine (amt, d, t) [pdx| $kind = $theid |]
-            | kind `elem` ["track", "sub_doctrine", "folder", "grand_doctrine"] = (amt, d, Just (kind, theid))
+        addLine (amt, d, ts) [pdx| $kind = $theid |]
+            | kind `elem` masteryConditions = (amt, d, ts ++ [(kind, theid)])
         addLine acc stmt = trace ("unknown section in add_mastery: " ++ show stmt) acc
 addMastery _ stmt = preStatement stmt
 
@@ -2377,29 +2368,54 @@ addMastery _ stmt = preStatement stmt
 addMasteryBonus :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
 addMasteryBonus stmt@[pdx| %_ = @scr |] =
     case (bonus, days) of
-        (Just b, Just d) -> do
-            what <- masteryTarget target
-            msgToPP $ MsgAddMasteryBonus b d what
+        (Just b, Just d) -> masteryTargets (MsgAddMasteryBonus b d) targets
         _ -> preStatement stmt
     where
-        (bonus, days, target) = foldl' addLine (Nothing, Nothing, Nothing) scr
+        (bonus, days, targets) = foldl' addLine (Nothing, Nothing, []) scr
         addLine (b, d, t) [pdx| bonus = !n |] = (Just n, d, t)
         addLine (b, d, t) [pdx| days = !n |] = (b, Just n, t)
         addLine acc [pdx| name = %_ |] = acc
-        addLine (b, d, t) [pdx| $kind = $theid |]
-            | kind `elem` ["track", "sub_doctrine", "folder", "grand_doctrine"] = (b, d, Just (kind, theid))
+        addLine (b, d, ts) [pdx| $kind = $theid |]
+            | kind `elem` masteryConditions = (b, d, ts ++ [(kind, theid)])
         addLine acc stmt = trace ("unknown section in add_mastery_bonus: " ++ show stmt) acc
 addMasteryBonus stmt = preStatement stmt
 
--- | How the part of the doctrine tree the mastery goes to is written out. A
--- track holds a run of subdoctrines rather than being one thing, so it is spoken
--- of in the plural; with nothing named at all the mastery goes to the whole tree.
-masteryTarget :: (HOI4Info g, Monad m) => Maybe (Text, Text) -> PPT g m Text
-masteryTarget Nothing = return "every doctrine"
-masteryTarget (Just ("track", theid)) = do
+-- | The ways script narrows down which part of the doctrine tree a mastery
+-- effect is aimed at, in the order the game sets them out in.
+masteryConditions :: [Text]
+masteryConditions = ["folder", "grand_doctrine", "sub_doctrine", "track"]
+
+-- | How the part of the doctrine tree a mastery effect is aimed at is written
+-- out. Script may narrow it down in more than one way at once -- a track of a
+-- given type, under a given grand doctrine -- and the game sets those out one
+-- to a line below the effect, since none of them alone says where the mastery
+-- goes. A single one is said in the same breath as the effect, and with none at
+-- all the mastery goes to the whole tree.
+masteryTargets :: (HOI4Info g, Monad m) =>
+    (Text -> ScriptMessage) -> [(Text, Text)] -> PPT g m IndentedMessages
+masteryTargets msg [] = msgToPP (msg "every doctrine")
+masteryTargets msg [cond] = msgToPP . msg =<< masteryTarget cond
+masteryTargets msg conds = do
+    header <- msgToPP (msg "all tracks that:")
+    said <- indentUp (traverse conditionLine (sortOn order conds))
+    return (header ++ said)
+    where
+        order (kind, _) = fromMaybe (length masteryConditions) (elemIndex kind masteryConditions)
+        conditionLine (kind, theid) = plainMsg' . conditionText kind =<< doctrineLink kind theid
+        conditionText "folder" link = "Are in the " <> link <> " folder"
+        conditionText "grand_doctrine" link = "Have the " <> link <> " grand doctrine"
+        conditionText "sub_doctrine" link = "Have the " <> link <> " subdoctrine"
+        conditionText "track" link = "Are of type " <> link
+        conditionText _ link = link
+
+-- | How one way of narrowing down where the mastery goes is written out on its
+-- own. A track holds a run of subdoctrines rather than being one thing, so it is
+-- spoken of in the plural.
+masteryTarget :: (HOI4Info g, Monad m) => (Text, Text) -> PPT g m Text
+masteryTarget ("track", theid) = do
     link <- doctrineLink "track" theid
     return ("all " <> link <> " tracks")
-masteryTarget (Just (kind, theid)) = doctrineLink kind theid
+masteryTarget (kind, theid) = doctrineLink kind theid
 
 -------------------------------
 -- Handlers for advisor posts --

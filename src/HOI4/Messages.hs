@@ -3148,14 +3148,11 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgAddDoctrineCostReduction {scriptMessageAmt = _amt, scriptMessageAmt2 = _amt2, scriptMessageWhat = _what }
             -> mconcat
-                [ "Gain "
-                , toMessage $ templateColor (colourNum True _amt)
-                , plural _amt " use" " uses"
-                , " of "
-                , toMessage $ templateColor (reducedNum (colourPcSign True) _amt2)
+                [ toMessage (bold (plainNumMin _amt <> "x"))
                 , " "
+                , toMessage $ templateColor (reducedNum (colourPc True) _amt2)
+                , " Doctrine Cost reduction for: "
                 , _what
-                , "doctrine cost reduction for:"
                 ]
         MsgAddEquipmentToStockpile {scriptMessageAmt = _amt, scriptMessageWho = _who, scriptMessageWhat = _what, scriptMessageWhat2 = _what2 }
             -> mconcat

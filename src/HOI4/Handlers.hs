@@ -149,6 +149,7 @@ module HOI4.Handlers (
     ,   createEquipmentVariant
     ,   setRule
     ,   addDoctrineCostReduction
+    ,   doctrinePage
     ,   freeBuildingSlots
     ,   addAutonomyRatio
     ,   sendEquipment
@@ -3607,6 +3608,26 @@ setRule _ stmt = preStatement stmt
 -------------------------------------
 -- Handler for add_doctrine_cost_reduction  --
 -------------------------------------
+-- | The wiki page a doctrine folder is written about on.
+doctrinePage :: Text -> Text
+doctrinePage folder = case T.uncons (T.replace "_" " " folder) of
+    Just (c, rest) -> T.cons (toUpper c) rest <> " doctrine"
+    Nothing -> "Doctrine"
+
+-- | The folders the doctrine tree is divided into, which are the doctrine pages
+-- the wiki has.
+doctrineFolderIds :: [Text]
+doctrineFolderIds = ["land", "air", "naval", "special_forces"]
+
+-- | A link to the page a doctrine category is written about, under the name the
+-- game gives the category. Only the folders have a page each; a category
+-- narrower than a folder has none of its own, and is left as its name.
+doctrineCatLink :: Text -> Text -> Text
+doctrineCatLink cat catloc = case T.stripSuffix "_doctrine" cat of
+    Just folder | folder `elem` doctrineFolderIds ->
+        mconcat ["[[", doctrinePage folder, "|", catloc, "]]"]
+    _ -> catloc
+
 data DoctrineCostReduction = DoctrineCostReduction
         {   dcr_name :: Maybe Text
         ,   dcr_cost_reduction :: Double
@@ -3631,22 +3652,19 @@ addDoctrineCostReduction stmt@[pdx| %_ = @scr |]
         addLine dcr [pdx| category = $cat |] = do
             let oldcat = dcr_category dcr
             catloc <- getGameL10n cat
-            return dcr { dcr_category = oldcat ++ [catloc] }
+            return dcr { dcr_category = oldcat ++ [doctrineCatLink cat catloc] }
         addLine dcr [pdx| technology = $tech |] = do
             let oldtech = dcr_technology dcr
             techloc <- getGameL10n tech
-            return dcr { dcr_technology = oldtech ++ [techloc] }
+            return dcr { dcr_technology = oldtech ++ ["[[" <> techloc <> "]]"] }
         addLine dcr _ = return dcr
+        -- What the reduction covers is said in the same breath as the
+        -- reduction itself, however many doctrines that is.
         pp_dcr :: DoctrineCostReduction -> PPT g m IndentedMessages
-        pp_dcr dcr = do
-            let techcat = dcr_category dcr ++ dcr_technology dcr
-                ifname = case dcr_name dcr of
-                    Just name -> "(" <> italicText name <> ") "
-                    _ -> ""
-                dcrmsg =  MsgAddDoctrineCostReduction (dcr_uses dcr) (dcr_cost_reduction dcr) ifname
-            techcatmsg <- mapM (\tc ->withCurrentIndent $ \i -> return [(i+1, MsgUnprocessed tc)]) techcat
-            dcrmsg_pp <- msgToPP dcrmsg
-            return $ dcrmsg_pp ++ concat techcatmsg
+        pp_dcr dcr = msgToPP $ MsgAddDoctrineCostReduction
+            (dcr_uses dcr)
+            (dcr_cost_reduction dcr)
+            (joinClauses (dcr_category dcr ++ dcr_technology dcr))
 addDoctrineCostReduction stmt = preStatement stmt
 
 -------------------------------------
