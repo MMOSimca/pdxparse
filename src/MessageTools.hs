@@ -56,7 +56,7 @@ module MessageTools (
     ,   module Text.PrettyPrint.Leijen.Text
     ) where
 
-import Data.List (unfoldr, intersperse, find)
+import Data.List (intersperse, find)
 import Data.Maybe (fromMaybe)
 
 import Numeric (floatToDigits)
@@ -79,30 +79,20 @@ instance ToMessage Doc where
 -- Printing numbers --
 ----------------------
 
--- | Pretty-print a number, adding &amp;#8239; (U+202F NARROW NO-BREAK SPACE)
--- at every power of 1000.
+-- | Pretty-print a number, writing out as many decimal places as it happens to
+-- have.
 class Num a => PPSep a where
     ppNumSep :: a -> Doc
-
--- | Split a list into groups of 3 elements.
-group3 :: [a] -> [[a]]
-group3 = unfoldr (\cs -> if null cs then Nothing else Just (splitAt 3 cs))
 
 instance PPSep Integer where
     ppNumSep n = Doc.strictText . T.pack $
             (if n < 0 then "−" else "") <> ppNumSep' True (show (abs n))
 
--- Split into groups of 3 and intersperse the groups with narrow no-break
--- spaces.
--- If first arg is True, start grouping at the end (e.g. for integers).
+-- | Write out a run of digits, whole or fractional. The game breaks a long
+-- number up with a separator and the wiki does not, so the digits go down as
+-- they come.
 ppNumSep' :: Bool -> String -> String
-ppNumSep' isint
-    = mconcat
-        . (if isint then reverse else id)
-        . intersperse "&#8239;"
-        . (if isint then map reverse else id)
-        . group3
-        . (if isint then reverse else id)
+ppNumSep' _ = id
 
 instance PPSep Int where
     ppNumSep = ppNumSep . toInteger
@@ -123,8 +113,8 @@ instance PPSep Double where
                              replicate (negate expn) '0' -- zeroes after decimal
                              ++ concatMap show fracDigits))
 
--- | Format a number to a given number of decimal places, with thousands
--- separators, keeping any trailing zeroes. Unlike 'ppNumSep', which writes out
+-- | Format a number to a given number of decimal places, keeping any trailing
+-- zeroes. Unlike 'ppNumSep', which writes out
 -- only the places a number happens to have, this writes the places it is asked
 -- for: the localization says how precisely a value is meant to be read, which is
 -- not always how precisely it was written in script.
@@ -156,27 +146,27 @@ neededPlaces n = fromMaybe maxPlaces (find isExact [0 .. maxPlaces])
                          in fromIntegral (round (n * fromIntegral scale) :: Integer)
                                 / fromIntegral scale
 
--- | Format a number as is, except add thousands separators.
+-- | Format a number as is.
 plainNum :: Double -> Doc
 plainNum = ppNum False False False False False
 
--- | Format a number as is, except add thousands separators, and keep the minus sign.
+-- | Format a number as is, keeping the minus sign.
 plainNumMin :: Double -> Doc
 plainNumMin = ppNum False False False False True
 
--- | Format a number as is, except add thousands separators and a sign.
+-- | Format a number as is, with a sign.
 plainNumSign :: Double -> Doc
 plainNumSign = ppNum False False False True False
 
--- | Format a number as a percentage. Add thousands separators.
+-- | Format a number as a percentage.
 plainPc :: Double -> Doc
 plainPc = ppNum False True False False False
 
--- | Format a number as a percentage, except add thousands separators, and keep the minus sign.
+-- | Format a number as a percentage, keeping the minus sign.
 plainPcMin :: Double -> Doc
 plainPcMin = ppNum False True False False True
 
--- | Format a number as is, except add thousands separators, a sign and a percent sign.
+-- | Format a number as is, with a sign and a percent sign.
 plainPcSign :: Double -> Doc
 plainPcSign = ppNum False True False True False
 
@@ -189,54 +179,52 @@ roundNum' is_pc pos_plus n =
         rounded = round n
     in ppNum False is_pc True pos_plus False rounded
 
--- | Format a number, but make sure it's an integer by rounding it off. Add
--- thousands separators.
+-- | Format a number, but make sure it's an integer by rounding it off.
 roundNum :: Double -> Doc
 roundNum = roundNum' False False
 
--- | Format a number, but make sure it's an integer by rounding it off. Add
--- thousands separators and optionally a sign
+-- | Format a number, but make sure it's an integer by rounding it off, with an
+-- optional sign.
 roundNumSign :: Bool -> Double -> Doc
 roundNumSign = roundNum' False
 
--- | Format a number, but make sure it's an integer by rounding it off. Don't
--- add thousands separators.
+-- | Format a number, but make sure it's an integer by rounding it off.
 roundNumNoSpace :: (RealFrac n, PPSep n) => n -> Text
 roundNumNoSpace n = Doc.doc2text $ PP.integer (round n :: Integer)
 
 -- | Format a number as a percentage, but make sure it's an integer by rounding
--- it off. Add thousands separators.
+-- it off.
 roundPc :: Double -> Doc
 roundPc = roundNum' True False
 
--- | Format a number in an appropriate colour with thousands separators.
+-- | Format a number in an appropriate colour.
 colourNum :: Bool -> Double -> Doc
 colourNum good = ppNum True False good False False
 
--- | Format a number as a percentage, in an appropriate colour, with thousands separators.
+-- | Format a number as a percentage, in an appropriate colour.
 colourPc :: Bool -> Double -> Doc
 colourPc good = ppNum True True good False False
 
--- | Format a number in an appropriate colour with thousands separators, keeping
+-- | Format a number in an appropriate colour, keeping
 -- the @-@ in front of a negative one. See 'colourPcMin'.
 colourNumMin :: Bool -> Double -> Doc
 colourNumMin good = ppNum True False good False True
 
--- | Format a number as a percentage, in an appropriate colour, with thousands
--- separators, keeping the @-@ in front of a negative one. Unlike 'colourPc',
+-- | Format a number as a percentage, in an appropriate colour, keeping the @-@
+-- in front of a negative one. Unlike 'colourPc',
 -- which drops the sign on the assumption that the surrounding sentence says
 -- which way the value goes, this is for a figure that stands on its own and so
 -- has to say so itself.
 colourPcMin :: Bool -> Double -> Doc
 colourPcMin good = ppNum True True good False True
 
--- | Format a number in an appropriate colour with thousands separators, adding
+-- | Format a number in an appropriate colour, adding
 -- a @+@ at the start if positive.
 colourNumSign :: Bool -> Double -> Doc
 colourNumSign good = ppNum True False good True False
 
--- | Format a number as a percentage in an appropriate colour with thousands
--- separators, adding a @+@ at the start if positive.
+-- | Format a number as a percentage in an appropriate colour, adding a @+@ at
+-- the start if positive.
 colourPcSign :: Bool -> Double -> Doc
 colourPcSign good = ppNum True True good True False
 

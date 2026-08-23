@@ -944,7 +944,7 @@ instance RenderMessage Script ScriptMessage where
         MsgAllCoreState
             -> "All core states:"
         MsgAllCountry
-            -> "All countries in the world:"
+            -> "All countries:"
         MsgAllCountryWithOriginalTag {scriptMessageWho = _who}
             -> mconcat
                 ["All countries with the same original tag as "
@@ -986,7 +986,7 @@ instance RenderMessage Script ScriptMessage where
         MsgAnyCoreState
             -> "Any core state:"
         MsgAnyCountry
-            -> "Any country in the world:"
+            -> "Any country:"
         MsgAnyCountryDivision
             -> "Any division owned:"
         MsgAnyCountryWithCore
@@ -1035,12 +1035,12 @@ instance RenderMessage Script ScriptMessage where
         MsgEveryCoreState
             -> "Every core state:"
         MsgEveryCountry
-            -> "Every country in the world:"
+            -> "Every country:"
         MsgEveryCountryDivision
             -> "Every division owned:"
         MsgEveryCountryWithOriginalTag  {scriptMessageWho = _who}
             -> mconcat
-                ["Every country in the world which is or originally was "
+                ["Every country which is or originally was "
                 , _who
                 , ":"
                 ]
@@ -1081,12 +1081,12 @@ instance RenderMessage Script ScriptMessage where
         MsgRandomCoreState
             -> "One random core state:"
         MsgRandomCountry
-            -> "One random country in the world:"
+            -> "One random country:"
         MsgRandomCountryDivision
             -> "One random owned division:"
         MsgRandomCountryWithOriginalTag  {scriptMessageWho = _who}
             -> mconcat
-                ["One random country in the world which is or originally was "
+                ["One random country which is or originally was "
                 , _who
                 , ":"
                 ]
@@ -1339,16 +1339,16 @@ instance RenderMessage Script ScriptMessage where
             -> "Custom trigger tooltip:"
 
         MsgElse
-            -> "Else:"
+            -> "Otherwise:"
         MsgElseIf
-            -> "Else, if:"
+            -> "Otherwise, if:"
         MsgIf
             -> "If:"
         MsgLimit
             -> "Limited to:"
         MsgPrioritize {scriptMessageWhat = _what}
             -> mconcat
-                [ "Prioritizing the "
+                [ "Prioritize "
                 , _what
                 ]
         MsgOriginalTagToCheck {scriptMessageWho = _who}
@@ -1652,17 +1652,17 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgOwnsState {scriptMessageWhat = _what}
             -> mconcat
-                [ "Owns state "
+                [ "Owns "
                 , _what
                 ]
         MsgControlsState {scriptMessageWhat = _what}
             -> mconcat
-                [ "Controls state "
+                [ "Controls "
                 , _what
                 ]
         MsgHasFullControlOfState {scriptMessageWhat = _what}
             -> mconcat
-                [ "Has full control of state "
+                [ "Has full control of "
                 , _what
                 ]
         MsgClearFlag {scriptMessageFlagType = _flagType, scriptMessageName = _name, scriptMessageLoc = _loc}
@@ -2150,19 +2150,17 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgNumOfCivilianFactories {scriptMessageAmt = _amt, scriptMessageCompare = _comp}
             -> mconcat
-                [ "Has "
-                , _comp
-                , " "
+                [ _comp
+                , plural _amt " {{icon|Cic|1}}" " {{icon|Cics|1}}"
+                , " than "
                 , toMessage (bold (plainNumMin _amt))
-                , " {{icon|cic|1}}"
                 ]
         MsgNumOfCivilianFactoriesVar {scriptMessageAmtText = _amtT, scriptMessageCompare = _comp}
             -> mconcat
-                [ "Has "
-                , _comp
-                , " "
+                [ _comp
+                , " {{icon|Cics|1}}"
+                , " than "
                 , typewriterText _amtT
-                , " {{icon|cic|1}}"
                 ]
         MsgNumOfAvailableCivilianFactories {scriptMessageAmt = _amt, scriptMessageCompare = _comp}
             -> mconcat
@@ -2170,7 +2168,7 @@ instance RenderMessage Script ScriptMessage where
                 , _comp
                 , " "
                 , toMessage (bold (plainNumMin _amt))
-                , " {{icon|cic|1}} available"
+                , " {{icon|Cic|1}} available"
                 ]
         MsgNumOfAvailableCivilianFactoriesVar {scriptMessageAmtText = _amtT, scriptMessageCompare = _comp}
             -> mconcat
@@ -2178,7 +2176,7 @@ instance RenderMessage Script ScriptMessage where
                 , _comp
                 , " "
                 , typewriterText _amtT
-                , " {{icon|cic|1}} available"
+                , " {{icon|Cic|1}} available"
                 ]
         MsgNumOfProjectFactories {scriptMessageAmt = _amt, scriptMessageCompare = _comp}
             -> mconcat
@@ -2186,7 +2184,7 @@ instance RenderMessage Script ScriptMessage where
                 , _comp
                 , " "
                 , toMessage (bold (plainNumMin _amt))
-                , " {{icon|cic|1}} that can be used for projects"
+                , " {{icon|Cic|1}} that can be used for projects"
                 ]
         MsgNumOfProjectFactoriesVar {scriptMessageAmtText = _amtT, scriptMessageCompare = _comp}
             -> mconcat
@@ -2194,57 +2192,49 @@ instance RenderMessage Script ScriptMessage where
                 , _comp
                 , " "
                 , typewriterText _amtT
-                , " {{icon|cic|1}} that can be used for projects"
+                , " {{icon|Cic|1}} that can be used for projects"
                 ]
         MsgNumOfFactories {scriptMessageAmt = _amt, scriptMessageCompare = _comp}
             -> mconcat
-                [ "Has "
-                , _comp
-                , " "
-                , toMessage (bold (plainNumMin _amt))
+                [ _comp
                 , plural _amt " factory" " factories"
+                , " than "
+                , toMessage (bold (plainNumMin _amt))
                 ]
         MsgNumOfFactoriesVar {scriptMessageAmtText = _amtT, scriptMessageCompare = _comp}
             -> mconcat
-                [ "Has "
-                , _comp
-                , " "
-                , typewriterText _amtT
+                [ _comp
                 , " factories"
+                , " than "
+                , typewriterText _amtT
                 ]
         MsgNumOfMilitaryFactories {scriptMessageAmt = _amt, scriptMessageCompare = _comp}
             -> mconcat
-                [ "Has "
-                , _comp
-                , " "
+                [ _comp
+                , plural _amt " {{icon|Mic|1}}" " {{icon|Mics|1}}"
+                , " than "
                 , toMessage (bold (plainNumMin _amt))
-                , " Military"
-                , plural _amt " factory" " factories"
                 ]
         MsgNumOfMilitaryFactoriesVar {scriptMessageAmtText = _amtT, scriptMessageCompare = _comp}
             -> mconcat
-                [ "Has "
-                , _comp
-                , " "
+                [ _comp
+                , " {{icon|Mics|1}}"
+                , " than "
                 , typewriterText _amtT
-                , " Military factories"
                 ]
         MsgNumOfNavalFactories {scriptMessageAmt = _amt, scriptMessageCompare = _comp}
             -> mconcat
-                [ "Has "
-                , _comp
-                , " "
+                [ _comp
+                , plural _amt " {{icon|Nic|1}}" " {{icon|Nics|1}}"
+                , " than "
                 , toMessage (bold (plainNumMin _amt))
-                , "{{icon|nic}}"
-                , plural _amt " Naval Dockyard" " Naval Dockyards"
                 ]
         MsgNumOfNavalFactoriesVar {scriptMessageAmtText = _amtT, scriptMessageCompare = _comp}
             -> mconcat
-                [ "Has "
-                , _comp
-                , " "
+                [ _comp
+                , " {{icon|Nics|1}}"
+                , " than "
                 , typewriterText _amtT
-                , " {{icon|nic}} Naval Dockyards"
                 ]
         MsgNumOfNukes {scriptMessageAmt = _amt, scriptMessageCompare = _comp}
             -> mconcat
@@ -3190,16 +3180,20 @@ instance RenderMessage Script ScriptMessage where
                 , ifThenElseT (T.null _what2) "" ("(" <> italicText _what2 <> ")")
                 , " to the national Stockpile"
                 ]
+        -- Free slots are counted for what can be built in them, so that is
+        -- what is said: more than none free is room for one more, and so on up.
+        -- Most of the time script counts the locked slots in as well, so that
+        -- goes without saying; it is the count that leaves them out that is
+        -- worth a word, since it asks for somewhere to build right now.
         MsgFreeBuildingSlots {scriptMessageCompare = _comp, scriptMessageAmt = _amt, scriptMessageWhat = _what, scriptMessageYn = _yn }
             -> mconcat
-                [ "Has "
-                , _comp
-                , " "
-                , toMessage (bold (plainNumMin _amt))
-                , " free {{icon|building slot|1}} for "
+                [ "Can build "
+                , if _comp == "more than"
+                    then toMessage (bold (plainNumMin (_amt + 1)))
+                    else "fewer than " <> toMessage (bold (plainNumMin _amt))
+                , " more "
                 , _what
-                , " "
-                , toMessage (ifThenElseT _yn "including locked slots" "")
+                , toMessage (ifThenElseT _yn "" " (unlocked slots only)")
                 ]
         MsgIsDemilitarizedZone {scriptMessageYn = _yn}
             -> mconcat
@@ -5081,15 +5075,15 @@ instance RenderMessage Script ScriptMessage where
         MsgAddOffsiteBuilding {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageAmt = _amt}
             -> mconcat
                 [ "Add "
-                , toMessage (bold (plainNumMin _amt))
-                , " off map "
+                , toMessage $ templateColor (colourNum True _amt)
+                , " offmap "
                 , _icon
                 ]
         MsgAddOffsiteBuildingVar {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageAmtText = _amtT}
             -> mconcat
                 [ "Add "
                 , typewriterText _amtT
-                , " off map "
+                , " offmap "
                 , _icon
                 ]
         MsgReleaseAutonomy {scriptMessageWho = _who, scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageAmt = _amt}
@@ -5341,7 +5335,7 @@ instance RenderMessage Script ScriptMessage where
         MsgConstructBuildingInRandomProvince {scriptMessageIcon = _icon, scriptMessageAmt = _amt}
             -> mconcat
                 [ "Add "
-                , toMessage (bold (plainNumMin _amt))
+                , toMessage $ templateColor (colourNum True _amt)
                 , " "
                 , _icon
                 , " in a random province"
@@ -5373,7 +5367,7 @@ instance RenderMessage Script ScriptMessage where
         MsgAddBuildingConstruction {scriptMessageYn = _yn, scriptMessageIcon = _icon, scriptMessageWhat = _type, scriptMessageAmt = _amt, scriptMessageProv = _prov}
             -> mconcat
                 [ ifThenElseT _yn "Add " "Start construction of "
-                , toMessage (bold (plainNumMin _amt))
+                , toMessage $ templateColor (colourNum True _amt)
                 , " "
                 , _icon
                 ,_prov
@@ -6105,7 +6099,7 @@ substColoured names = go
             -- as plain text.
             Just found -> lifted found
         lifted (before, name, after) =
-            go before <> "{{icon|" <> T.toLower name <> "|1}}"
+            go before <> "{{icon|" <> name <> "|1}}"
                 <> maybe (go after) lifted (splitBuilding after)
         -- The first building named in the text, and what surrounds it. Only
         -- whole words count, so "Land Forts" is the plural and not the
@@ -6149,12 +6143,22 @@ wikifyLocColours = go
                     Nothing -> before <> rest
                     Just (code, body, after) ->
                         before <> recoloured code (go body) <> go after
+        -- A colour arrives either as the letter the game writes it with or,
+        -- from 'templateColor'', as its name spelled out.
         recoloured code body = case T.toUpper code of
             "G" -> "{{green|" <> body <> "}}"
             "H" -> "{{green|" <> body <> "}}"
+            "GREEN" -> "{{green|" <> body <> "}}"
             "R" -> "{{red|" <> body <> "}}"
-            "Y" -> "'''" <> body <> "'''"
-            _ -> "{{color|" <> code <> "|" <> body <> "}}"
+            "RED" -> "{{red|" <> body <> "}}"
+            -- Green and red are the game saying whether something is good news
+            -- or bad, which the wiki says the same way. Every other colour is
+            -- the game picking a term out of a sentence against its own dark
+            -- background -- yellow and white for the most part, but the rest of
+            -- the palette turns up too. None of those carry over to a light
+            -- background, where white in particular is next to invisible, so
+            -- they all come out as the emphasis they were meant to be.
+            _ -> "'''" <> body <> "'''"
 
 -- | Split the innards of a template, given the text just after its @{{name|@,
 -- into its first argument, the rest of it, and whatever follows the template.

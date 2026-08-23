@@ -666,9 +666,11 @@ prioritize stmt@[pdx| %_ = @arr |] = do
                 let states = mapMaybe stateFromArray arr
                     stateFromArray (StatementBare (IntLhs e)) = Just e
                     stateFromArray stmt = trace ("Unknown in prioritize array statement: " ++ show stmt) Nothing
-                statesloc <- traverse getStateLoc states
-                let stateslocced = T.pack $ T.unpack (plural (length statesloc) "state " "states ") ++ intercalate ", " (map T.unpack statesloc)
-                msgToPP $ MsgPrioritize stateslocced
+                -- The wiki has a template for a run of states, which names
+                -- them all in the one go, so the ids go to it as they are
+                -- rather than being localized one at a time.
+                msgToPP $ MsgPrioritize $ Doc.doc2text $
+                    template "states" (map (T.pack . show) states)
 prioritize stmt = preStatement stmt
 
 -- | Generic handler for a compound statement that picks out one thing to work
@@ -1108,11 +1110,10 @@ withLocAtomAndIcon iconkey _ msg stmt@[pdx| %_ = $vartag:$var |] = do
         Nothing -> preStatement stmt
 withLocAtomAndIcon iconkey lockey msg [pdx| %_ = ?key |]
     = do what <- Doc.doc2text <$> allowPronoun Nothing (fmap Doc.strictText . getGameL10n) key
-         lociconkey <- if lockey then do
-             loc <- getGameL10n iconkey
-             return $ T.toLower loc
-            else
-             return iconkey
+         -- The icon template reads its key either way round, and asked for the
+         -- term as well it writes it with the capitals the key was given, so a
+         -- localized name goes in as it is written rather than folded down.
+         lociconkey <- if lockey then getGameL10n iconkey else return iconkey
          msgToPP $ msg (iconText lociconkey) what
 withLocAtomAndIcon _ _ _ stmt = preStatement stmt
 
@@ -3662,8 +3663,10 @@ freeBuildingSlots stmt@[pdx| %_ = @scr |]
         addLine fbs [pdx| size = !amt |] =
             let comp = "more than" in
             return fbs { fbs_comp = comp, fbs_size = amt}
-        addLine fbs [pdx| include_locked = %_ |] =
+        addLine fbs [pdx| include_locked = yes |] =
             return fbs { fbs_include_locked = True }
+        addLine fbs [pdx| include_locked = %_ |] =
+            return fbs { fbs_include_locked = False }
         addLine fbs [pdx| province = !num |] =
             return fbs { fbs_province = Just num }
         addLine fbs stmt
