@@ -47,8 +47,8 @@ import HOI4.Common -- everything
 import HOI4.SpecialHandlers ( modifiersTable)
 import HOI4.Messages (ScriptMessage (..), ModifierDisplay, modYesNo, modNoYes)
 
-newHOI4CountryHistory :: Text -> HOI4CountryHistory
-newHOI4CountryHistory chtag = HOI4CountryHistory chtag undefined
+newHOI4CountryHistory :: Maybe Text -> Text -> HOI4CountryHistory
+newHOI4CountryHistory cosmetic chtag = HOI4CountryHistory chtag chtag cosmetic
 
 -- | What the country history says about each country: which party rules it, and
 -- alongside that the value every variable the history writes to starts the game
@@ -59,7 +59,11 @@ parseHOI4CountryHistory :: (IsGameState (GameState g), IsGameData (GameData g), 
 parseHOI4CountryHistory scripts = (, initialVariables) . HM.unions . HM.elems <$> do
     tryParse <- hoistExceptions $
         HM.traverseWithKey
-            (\sourceFile scr -> setCurrentFile sourceFile $ mapM processPolitics $ concatMap mapHisto scr)
+            (\sourceFile scr -> setCurrentFile sourceFile $
+                case (cosmeticTag scr, concatMap mapHisto scr) of
+                    (cosmetic@(Just _), []) -> return
+                        [Right (Just (newHOI4CountryHistory cosmetic (fileTag sourceFile)))]
+                    (cosmetic, stmts) -> mapM (processPolitics cosmetic) stmts)
             scripts
     case tryParse of
         Left err -> do
@@ -80,6 +84,19 @@ parseHOI4CountryHistory scripts = (, initialVariables) . HM.unions . HM.elems <$
         mapHisto scr = case scr of
             stmt@[pdx| set_politics = @pol |] -> [stmt]
             _ -> []
+
+        -- A country whose history sets a cosmetic tag goes by the name that tag
+        -- gives rather than the one its own tag would: this is how Indonesia
+        -- starts out as the Dutch East Indies. Only a tag set at the top level
+        -- counts, since one set inside an @if@ or under a later date is a name
+        -- the country may come to have and not the one it starts with.
+        cosmeticTag :: GenericScript -> Maybe Text
+        cosmeticTag scr = listToMaybe [t | [pdx| set_cosmetic_tag = $t |] <- scr]
+
+        -- Each history file is named for the country it is about, and its tag
+        -- is what the name starts with.
+        fileTag :: FilePath -> Text
+        fileTag = T.pack . take 3 . takeFileName
 
         -- Script keeps the numbers behind a dynamic modifier in variables, so
         -- that it can raise and lower what the modifier grants as the game goes
@@ -123,9 +140,9 @@ parseHOI4CountryHistory scripts = (, initialVariables) . HM.unions . HM.elems <$
         plainAssignment _ = Nothing
 
 processPolitics :: (IsGameState (GameState g), IsGameData (GameData g), MonadError Text m) =>
-    GenericStatement -> PPT g m (Either Text (Maybe HOI4CountryHistory))
-processPolitics (StatementBare _) = throwError "bare statement at top level"
-processPolitics [pdx| %left = %right |] = case right of
+    Maybe Text -> GenericStatement -> PPT g m (Either Text (Maybe HOI4CountryHistory))
+processPolitics _ (StatementBare _) = throwError "bare statement at top level"
+processPolitics cosmetic [pdx| %left = %right |] = case right of
     CompoundRhs parts -> case left of
         CustomLhs _ -> throwError "internal error: custom lhs"
         IntLhs _ -> throwError "int lhs at top level"
@@ -133,7 +150,7 @@ processPolitics [pdx| %left = %right |] = case right of
         GenericLhs id [] -> withCurrentFile $ \file -> do
             let chtag = T.pack $ take 3 $ takeFileName file
             cchist <- hoistErrors $ foldM processPoliticsAddSection
-                                        (Just (newHOI4CountryHistory chtag))
+                                        (Just (newHOI4CountryHistory cosmetic chtag))
                                         parts
             case cchist of
                 Left err -> return (Left err)
@@ -142,7 +159,7 @@ processPolitics [pdx| %left = %right |] = case right of
                     return (Right (Just chist ))
         _ -> throwError "unrecognized form for set_politics"
     _ -> throwError "unrecognized form for set_politics@content"
-processPolitics _ = withCurrentFile $ \file ->
+processPolitics _ _ = withCurrentFile $ \file ->
     throwError ("unrecognised form for set_politics in " <> T.pack file)
 
 processPoliticsAddSection :: (IsGameState (GameState g), MonadError Text m) =>

@@ -580,6 +580,9 @@ data HOI4ScriptedLocText = HOI4ScriptedLocText
 data HOI4CountryHistory = HOI4CountryHistory
     {   chTag :: Text
     ,   chRulingTag :: Text
+    ,   chCosmeticTag :: Maybe Text -- ^ The name the country starts out under,
+                                 --   where its history gives it one instead of
+                                 --   the name its tag alone would give
     } deriving (Show)
 
 data HOI4Advisor = HOI4Advisor

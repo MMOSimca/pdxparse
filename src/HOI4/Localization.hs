@@ -21,13 +21,13 @@ module HOI4.Localization (
     ,   fillLocScopes
     ,   fillLocScopesFor
     ,   scriptedLocVariants
-    ,   getCoHi
+    ,   getCountryName
     ) where
 
 import Data.Char (isAlpha, isDigit, toUpper)
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
-import Data.Maybe (fromMaybe, isNothing, listToMaybe, mapMaybe)
+import Data.Maybe (fromMaybe, isJust, isNothing, listToMaybe, mapMaybe)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -37,6 +37,7 @@ import SettingsTypes (PPT, LocArg (..))
 import qualified SettingsTypes as S
 import qualified Doc
 import MessageTools (template)
+import HOI4.CountryNames (casualName)
 import HOI4.Types -- everything
 
 -- | As 'S.getGameL10n', with the names the text asks the game for filled in.
@@ -179,7 +180,8 @@ scriptedLocVariants mroot key = do
 
 -- | The country a bracketed scope names, if it names one. Script writes a tag in
 -- whatever case the writer felt like and the game reads it either way, so the
--- case is not what tells us: a three-letter word the game knows a country by is.
+-- case is not what tells us: a three-letter word the wiki's table or the game
+-- knows a country by is.
 -- Asking that much keeps an ordinary word that happens to be three letters long
 -- from being read as a tag on the strength of a localization key alone.
 countryTag :: (HOI4Info g, Monad m) => Text -> PPT g m (Maybe Text)
@@ -188,7 +190,8 @@ countryTag target
     | otherwise = do
         inHistory <- HM.member tag <$> getCountryHistory
         named <- traverse S.getGameL10nIfPresent [tag <> "_DEF", tag <> "_ADJ"]
-        return $ if inHistory || any (maybe False (not . T.null)) named
+        return $ if isJust (casualName tag)
+                    || inHistory || any (maybe False (not . T.null)) named
                     then Just tag
                     else Nothing
     where tag = T.toUpper target
@@ -199,6 +202,12 @@ countryTag target
 -- party gives is tried before the plain one. Each form falls back on the ones
 -- before it, since a country the game has little to say about has only its plain
 -- name.
+--
+-- A command that asks only that the country be named -- by name, by flag, or
+-- both -- is answered from the wiki's own table first ('casualName'), where its
+-- editors keep what they call each country. A command that asks for one
+-- particular form of the name -- an adjective, the name apart from any
+-- ideology -- is the game being specific, and keeps to the game's localization.
 --
 -- The game reads these command names without regard to case, and the script is
 -- written every which way, so they are matched the same way here.
@@ -220,7 +229,8 @@ countryLoc tag cmd
                 "getflag" -> plain
                 "getnamewithflag" -> plain
                 _ -> []
-        mloc <- firstLoc keys
+        mcasual <- casualLoc ideoTag
+        mloc <- maybe (firstLoc keys) (return . Just) mcasual
         return $ flip fmap mloc $ \loc -> case form of
             -- The wiki's flag template draws a country's flag and its name, the
             -- same two things the game draws for a name with a flag. Its @0@
@@ -237,6 +247,32 @@ countryLoc tag cmd
         (form, capitalized) = case T.stripSuffix "cap" lcmd of
             Just stem -> (stem, True)
             Nothing -> (lcmd, False)
+        -- The table's name for the country, in the form asked for, where the
+        -- command is one the table answers and the table has an entry. The
+        -- definite form is the table's name with its article on the front,
+        -- found by way of whichever key the game writes that name under; a
+        -- name the game never writes has no article to find, and a country
+        -- whose name carries no article is written the same with or without
+        -- one, so the bare name serves for both.
+        casualLoc ideoTag = case casualName tag of
+            Nothing -> return Nothing
+            Just name
+                | form `elem` ["getname", "getflag", "getnamewithflag"] ->
+                    return (Just name)
+                | form == "getnamedef" -> do
+                    mkey <- keyNaming name
+                        (ideoTag : tag : map (\i -> tag <> "_" <> i) ideologies)
+                    case mkey of
+                        Nothing -> return (Just name)
+                        Just key -> Just . fromMaybe name
+                                        <$> firstLoc [key <> "_DEF"]
+                | otherwise -> return Nothing
+        keyNaming _ [] = return Nothing
+        keyNaming name (key:rest) = do
+            mloc <- S.getGameL10nIfPresent key
+            if mloc == Just name
+                then return (Just key)
+                else keyNaming name rest
         -- The raw lookup is used throughout, since filling one name in is no
         -- reason to go looking for another inside it.
         firstLoc [] = return Nothing
@@ -249,18 +285,49 @@ countryLoc tag cmd
             Just (c, rest) -> T.cons (toUpper c) rest
             Nothing -> t
 
--- | The key a country's name is written under, which is the one the party ruling
--- it at the start of the game gives if there is such a key, and the tag itself
--- otherwise.
+-- | The party keys a country's names may be written under, one per ideology.
+ideologies :: [Text]
+ideologies = ["democratic", "neutrality", "fascism", "communism"]
+
+-- | The name to put to a country where the text is ours rather than the
+-- game's: a flag template, a heading over a tree. The wiki's table has the
+-- first word; a tag it has no entry for goes by the name it starts the game
+-- under.
+getCountryName :: (HOI4Info g, Monad m) => Text -> PPT g m Text
+getCountryName tag = case casualName tag of
+    Just name -> return name
+    Nothing -> S.getGameL10n =<< getCoHi tag
+
+-- | The key a country's name is written under at the start of the game.
+--
+-- A country whose history gives it a cosmetic tag goes by the name that tag
+-- names -- the Dutch East Indies rather than Indonesia -- and either that name
+-- or the country's own may vary by the party in power, so the party's key is
+-- tried before the plain one on both. What is left is the tag itself.
 getCoHi :: (Monad m, HOI4Info g) =>
     Text -> PPT g m Text
 getCoHi name = do
     chistories <- getCountryHistory
-    let mchistories = HM.lookup name chistories
-    case mchistories of
+    case HM.lookup name chistories of
         Nothing -> return name
-        Just chistory -> do
-            rulLoc <- S.getGameL10nIfPresent (chRulingTag chistory)
-            case rulLoc of
-                Just rulingTag -> return $ chRulingTag chistory
-                Nothing -> return name
+        Just chistory -> firstNamed (candidates chistory)
+    where
+        firstNamed [] = return name
+        firstNamed (key:rest) = do
+            mloc <- S.getGameL10nIfPresent key
+            case mloc of
+                Just loc | not (T.null loc) -> return key
+                _ -> firstNamed rest
+        candidates chistory = concat
+            [ [ cosmetic <> party | cosmetic <- cosmetics ]
+            , cosmetics
+            -- A history that sets no ruling party leaves us with none to ask
+            -- for, and a cosmetic name is often written under one party alone.
+            -- Whichever of them the game files spell out, a name the tag was
+            -- given is nearer the mark than the country's own.
+            , [ cosmetic <> "_" <> ideology | cosmetic <- cosmetics, ideology <- ideologies ]
+            , [ chRulingTag chistory ]
+            ]
+            where
+                cosmetics = maybe [] (:[]) (chCosmeticTag chistory)
+                party = fromMaybe "" (T.stripPrefix name (chRulingTag chistory))

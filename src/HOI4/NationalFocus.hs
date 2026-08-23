@@ -451,13 +451,13 @@ ppNationalFocus nf = setCurrentFile (nf_path nf) $ do
     -- The wiki heads each column with the country the tree is for, standing
     -- outside the list as the scope everything under it is read in. A focus
     -- shared between trees has no one country to name, and a column with
-    -- nothing in it gets no heading of its own. The heading names the country
-    -- itself, not whatever it is called under the party in power at the start,
-    -- so the tag is localized on its own rather than through 'getCoHi'.
+    -- nothing in it gets no heading of its own. Nothing here asks for the
+    -- name in any particular form, so the heading is whatever the wiki calls
+    -- the country day to day.
     countryHeading <- case nf_country nf of
         Nothing -> return []
         Just tag -> do
-            name <- getGameL10n tag
+            name <- getCountryName tag
             return [Doc.strictText name, ":", PP.line]
     let headed col
             | T.all isSpace (Doc.doc2text (mconcat col)) = col
