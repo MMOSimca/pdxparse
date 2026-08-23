@@ -210,6 +210,7 @@ handlersRhsIrrelevant = Tr.fromList
         ,("retire"                  , rhsAlwaysYes MsgRetire)
         ,("retire_country_leader"   , rhsAlwaysYes MsgRetireCountryLeader)
         ,("set_country_leader_description" , rhsIgnored MsgSetLeaderDescription)
+        ,("set_faction_leader"      , rhsAlwaysYes MsgSetFactionLeader)
         ,("set_portraits"            , rhsIgnored MsgSetPortraits)
         ]
 
@@ -713,6 +714,7 @@ handlersYesNo = Tr.fromList
         ,("impassable"                  , withBool MsgIsImpassable)
         ,("has_any_power_balance"       , withBool MsgHasAnyPowerBalance)
         ,("set_demilitarized_zone"      , withBool MsgSetDemilitarizedZone)
+        ,("set_major"                   , withBool MsgSetMajor)
         ]
 
 -- | Handlers for statements that may be numeric or a tag

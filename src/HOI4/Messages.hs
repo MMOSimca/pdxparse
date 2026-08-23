@@ -599,6 +599,8 @@ data ScriptMessage
     | MsgSaveGlobalEventTargetAs {scriptMessageName :: Text}
     | MsgDismantleFaction
     | MsgDropCosmeticTag
+    | MsgSetFactionLeader
+    | MsgSetMajor {scriptMessageYn :: Bool}
     | MsgSetCompliance {scriptMessageAmt :: Double}
     | MsgSetPoliticalPower {scriptMessageAmt :: Double}
     | MsgSetResistance {scriptMessageAmt :: Double}
@@ -3748,6 +3750,14 @@ instance RenderMessage Script ScriptMessage where
             -> "Dismantle faction"
         MsgDropCosmeticTag
             -> "Remove cosmetic tag"
+        MsgSetFactionLeader
+            -> "Set as leader of [ROOT.GetFactionName] Faction."
+        MsgSetMajor {scriptMessageYn = _yn}
+            -> mconcat
+                [ "Our country will "
+                , toMessage (ifThenElseT _yn "receive" "lose")
+                , " default major status in the world."
+                ]
         MsgSetCompliance {scriptMessageAmt = _amt}
             -> mconcat
                 [ "Set compliance to "
