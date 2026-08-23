@@ -72,7 +72,7 @@ import qualified Data.HashMap.Strict as HM
 
 
 import Data.Char (chr, isDigit, toUpper)
-import Data.List (foldl', sortOn, elemIndex, find)
+import Data.List (foldl', groupBy, sortOn, elemIndex, find)
 import Data.Maybe
 
 import Control.Applicative ((<|>))
@@ -88,6 +88,7 @@ import MessageTools (iquotes
 import QQ -- everything
 -- everything
 import SettingsTypes ( PPT, IsGameData (..), GameData (..), IsGameState (..), GameState (..)
+                     , scope
                      , indentUp, getCurrentIndent, withCurrentIndent, withCurrentIndentCustom
                      , LocArg (..)
                      , concatMapM
@@ -1704,10 +1705,60 @@ data ScriptChunk
     | IdeaSlotChunk GenericStatement [GenericStatement]
       -- ^ The tooltip announcing that a slot's ideas change, and the
       --   @show_ideas_tooltip@ statements naming the ideas it announces.
+    | StateChunk Text IndentedMessages
+      -- ^ The states a run of scopes names, written out as one, and what the
+      --   block every one of them holds comes to.
 
 -- | Split a script into the chunks that are shown as a whole.
 chunkScript :: (HOI4Info g, Monad m) => GenericScript -> PPT g m [ScriptChunk]
-chunkScript scr = chunkIdeaSlots <$> chunkDynModVars scr
+chunkScript scr = chunkStates =<< chunkIdeaSlots <$> chunkDynModVars scr
+
+-- | Group each run of consecutive state scopes that come to the same thing, so
+-- that what befalls all of them is said once with the states named together,
+-- the way the game says it.
+--
+-- What is compared is what the blocks come to, not how script writes them:
+-- script often says a thing of several states in wording that differs in some
+-- part the wiki does not show, and two states the wiki says the very same thing
+-- of are worth naming together however differently they were written. Each
+-- block is written out the once, here, and the run keeps what it came to.
+--
+-- A state scope standing on its own is left as the plain statement it was.
+chunkStates :: (HOI4Info g, Monad m) => [ScriptChunk] -> PPT g m [ScriptChunk]
+chunkStates chunks = do
+    quiet <- traverse saysNothing chunks
+    concat <$> traverse chunkRun (groupBy alongside (zip chunks quiet))
+    where
+        -- What says nothing stands between two states without parting them:
+        -- script spaces its blocks out with tooltips whose text is empty, and
+        -- a run the game shows as one should not be broken up by a blank line
+        -- that the wiki does not draw in the first place.
+        alongside (one, _) (two, quiettwo) =
+            isJust (stateScope one) && (quiettwo || isJust (stateScope two))
+        chunkRun run = case mapMaybe (stateScope . fst) run of
+            states@(_:_:_) -> traverse together . groupBy sameSaid =<< traverse said states
+            _ -> return (map fst run)
+        said (n, block) = do
+            block_pp <- scope HOI4ScopeState (ppMany block)
+            saidas <- imsg2doc block_pp
+            return (n, Doc.doc2text saidas, block_pp)
+        sameSaid (_, one, _) (_, two, _) = one == two
+        together shared = do
+            heading <- case [n | (n, _, _) <- shared] of
+                [n] -> getStateLoc n
+                ns -> return (Doc.doc2text (template "states" (map (T.pack . show) ns)))
+            return (StateChunk heading (said_pp (head shared)))
+        said_pp (_, _, block_pp) = block_pp
+        stateScope (PlainStmt (Statement (IntLhs n) OpEq (CompoundRhs block))) = Just (n, block)
+        stateScope _ = Nothing
+
+-- | Whether a chunk comes to nothing a reader sees. Only the tooltips are asked,
+-- since a tooltip with no text is how script spaces its blocks out and is the
+-- one thing written to be seen and yet show nothing.
+saysNothing :: (HOI4Info g, Monad m) => ScriptChunk -> PPT g m Bool
+saysNothing (PlainStmt stmt@[pdx| custom_effect_tooltip = %_ |]) = null <$> ppOne stmt
+saysNothing (PlainStmt stmt@[pdx| tooltip = %_ |]) = null <$> ppOne stmt
+saysNothing _ = return False
 
 -- | Group each tooltip saying that ideas become available in (or leave) an
 -- advisor or company slot with the @show_ideas_tooltip@ statements it heads, so

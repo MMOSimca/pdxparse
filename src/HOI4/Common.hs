@@ -74,6 +74,9 @@ ppChunk :: (HOI4Info g, Monad m) => ScriptChunk -> PPT g m IndentedMessages
 ppChunk (PlainStmt stmt) = ppOne stmt
 ppChunk (DynModChunk dmod isSet mods) = ppDynModChunk dmod isSet mods
 ppChunk (IdeaSlotChunk tt ideas) = ppIdeaSlotChunk tt ideas
+ppChunk (StateChunk states block_pp) = do
+    header <- msgToPP (MsgState states)
+    return (header ++ block_pp)
 
 -- | Write out what a block in a character's scope comes to. Script says who it
 -- is about once and then everything it does to them, and where that comes to a
