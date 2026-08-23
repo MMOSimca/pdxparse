@@ -325,15 +325,15 @@ handlersNumericCompare = Tr.fromList
 -- | Handlers for numeric statements with icons
 handlersNumericIcons :: (HOI4Info g, Monad m) => Trie (StatementHandler g m)
 handlersNumericIcons = Tr.fromList
-        [("add_manpower"             , numericIconLoc "manpower" "MANPOWER" MsgGainLosePosIcon MsgGainLoseLocIconVar)
+        [("add_manpower"             , numericIconLoc "Manpower" "MANPOWER" MsgGainLosePosIcon MsgGainLoseLocIconVar)
         ,("add_extra_state_shared_building_slots", numericIcon "building slot" MsgAddExtraStateSharedBuildingSlots MsgAddExtraStateSharedBuildingSlotsVar)
-        ,("add_political_power"      , numericIconLoc "political power" "POLITICAL_POWER" MsgGainLosePosIcon MsgGainLoseLocIconVar)
-        ,("add_command_power"        , numericIconLoc "command power" "COMMAND_POWER" MsgGainLosePosIcon MsgGainLoseLocIconVar)
-        ,("add_stability"            , numericIconLoc "stability" "STABILITY" MsgGainLocPC MsgGainLoseLocIconVar)
-        ,("add_war_support"          , numericIconLoc "war support" "WAR_SUPPORT" MsgGainLocPC MsgGainLoseLocIconVar)
-        ,("air_experience"           , numericIconLoc "air exp" "AIR_EXPERIENCE" MsgGainLosePosIcon MsgGainLoseLocIconVar)
-        ,("army_experience"          , numericIconLoc "army exp" "ARMY_EXPERIENCE" MsgGainLosePosIcon MsgGainLoseLocIconVar)
-        ,("navy_experience"          , numericIconLoc "navy exp" "NAVY_EXPERIENCE" MsgGainLosePosIcon MsgGainLoseLocIconVar)
+        ,("add_political_power"      , numericIconLoc "Political Power" "POLITICAL_POWER" MsgGainLosePosIcon MsgGainLoseLocIconVar)
+        ,("add_command_power"        , numericIconLoc "Command Power" "COMMAND_POWER" MsgGainLosePosIcon MsgGainLoseLocIconVar)
+        ,("add_stability"            , numericIconLoc "Stability" "STABILITY" MsgGainLocPC MsgGainLoseLocIconVar)
+        ,("add_war_support"          , numericIconLoc "War Support" "WAR_SUPPORT" MsgGainLocPC MsgGainLoseLocIconVar)
+        ,("air_experience"           , numericIconLoc "Air Exp" "AIR_EXPERIENCE" MsgGainLosePosIcon MsgGainLoseLocIconVar)
+        ,("army_experience"          , numericIconLoc "Army Exp" "ARMY_EXPERIENCE" MsgGainLosePosIcon MsgGainLoseLocIconVar)
+        ,("navy_experience"          , numericIconLoc "Navy Exp" "NAVY_EXPERIENCE" MsgGainLosePosIcon MsgGainLoseLocIconVar)
         ]
 
 -- | Handlers for statements pertaining to modifiers

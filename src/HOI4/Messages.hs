@@ -1398,18 +1398,17 @@ instance RenderMessage Script ScriptMessage where
             -> "<!-- Change in portrait -->"
         MsgGainLosePosIcon {scriptMessageIcon = _icon, scriptMessageAmt = _amt}
             -> mconcat
-                [ gainOrLose _amt
-                , " "
-                , toMessage $ templateColor (colourNum True _amt)
-                , " "
-                , _icon
+                [ _icon
+                , ": "
+                , toMessage $ templateColor (colourNumSign True _amt)
                 ]
+        -- A variable says nothing about which way it goes, so there is no sign
+        -- to write and nothing to colour; the name still leads, as above.
         MsgGainLoseLocIconVar {scriptMessageIcon = _icon, scriptMessageAmtText = _amtT}
             -> mconcat
-                [ "Gain or Lose "
+                [ _icon
+                , ": "
                 , typewriterText _amtT
-                , " "
-                , _icon
                 ]
         MsgAddExtraStateSharedBuildingSlots {scriptMessageIcon = _icon, scriptMessageAmt = _amt}
             -> mconcat
@@ -1428,11 +1427,10 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgGainLocPC {scriptMessageIcon = _icon, scriptMessageAmt = _amt}
             -> mconcat
-                [ gainOrLose _amt
-                , " "
-                , toMessage $ templateColor (reducedNum (colourPc True) _amt)
-                , " "
+                [ "Gain Base "
                 , _icon
+                , ": "
+                , toMessage $ templateColor (reducedNum (colourPcSignPrec (Just 2) True) _amt)
                 ]
         MsgCreateFaction {scriptMessageWhat = _what}
             -> mconcat
