@@ -33,7 +33,7 @@ import SettingsTypes ( PPT, Settings (..){-, Game (..)-}
                      {-, IsGame (..)-}, IsGameData (..), IsGameState (..), GameState (..)
                      , setCurrentFile, withCurrentFile, withCurrentIndent
                      , hoistErrors, hoistExceptions
-                     , getGameInterface)
+                     , getGameInterfaceNamed)
 import HOI4.Types -- everything
 import HOI4.Localization
 import HOI4.Common (extractStmt, matchExactText, ppMany, HOI4OpinionModifier (HOI4OpinionModifier))
@@ -351,7 +351,7 @@ writeHOI4DynamicModifiers = do
         pp_dynamic_modifier mod = do
             req <- imsg2doc =<< ppMany (dmodEnable mod)
             icon <- maybe (return mempty) (\i -> do
-                icond <- getGameInterface "idea_unknown" i
+                icond <- getGameInterfaceNamed i
                 return $ "[[File:" <> icond <> ".png|22px]]") (dmodIcon mod)
             loc <- do
                 mloc <- fmap wikifyLocColours <$> getGameL10nIfPresent (dmodName mod <> "_desc")

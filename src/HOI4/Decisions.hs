@@ -45,7 +45,7 @@ import SettingsTypes ( PPT, Settings (..)
                      , IsGame (..), IsGameData (..), IsGameState (..)
                      , setCurrentFile, withCurrentFile
                      , hoistErrors, hoistExceptions
-                     , getGameInterface, getGameInterfaceIfPresent)
+                     , getGameInterface, getGameInterfaceNamed, getGameInterfaceIfPresent)
 import HOI4.Common -- everything
 import HOI4.Localization
 
@@ -796,7 +796,7 @@ ppDecisionSource (HOI4DecSrcIdeaOnAdd id loc icon categ) = do
         iconname <- do
             micon <- getGameInterfaceIfPresent ("GFX_idea_" <> id)
             case micon of
-                Nothing -> getGameInterface "idea_unknown" icon
+                Nothing -> getGameInterfaceNamed icon
                 Just idicon -> return idicon
         return $ "[[File:" <> iconname <> ".png|28px]]"
     catloc <- getGameL10n categ
@@ -815,7 +815,7 @@ ppDecisionSource (HOI4DecSrcIdeaOnRemove id loc icon categ) = do
         iconname <- do
             micon <- getGameInterfaceIfPresent ("GFX_idea_" <> id)
             case micon of
-                Nothing -> getGameInterface "idea_unknown" icon
+                Nothing -> getGameInterfaceNamed icon
                 Just idicon -> return idicon
         return $ "[[File:" <> iconname <> ".png|28px]]"
     catloc <- getGameL10n categ

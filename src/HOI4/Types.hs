@@ -614,6 +614,9 @@ data HOI4Character = HOI4Character
     ,   cha_leader_traits :: Maybe [Text]
     ,   cha_leader_ideology :: Maybe Text
     ,   cha_advisor :: Maybe [HOI4Advisor]
+    -- | The military posts the character is written for, innermost first. A
+    -- character has one as a rule, and a handful are written for two.
+    ,   cha_unit_roles :: [Text]
     ,   cha_path         :: FilePath -- ^ Source file
     } deriving (Show)
 

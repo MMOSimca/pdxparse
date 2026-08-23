@@ -23,6 +23,7 @@ module SettingsTypes (
     ,   getGameL10nDefault
     ,   getGameL10nIfPresent
     ,   getGameInterface
+    ,   getGameInterfaceNamed
     ,   getGameInterfaceIfPresent
     ,   setCurrentFile, withCurrentFile
     ,   getLangs
@@ -619,6 +620,14 @@ getGameInterface :: (IsGameData (GameData g), Monad m) => Text -> Text -> PPT g 
 getGameInterface def key = do
     gfx <- gets (gameInterface . getSettings)
     return $ HM.findWithDefault def key gfx
+
+-- | As 'getGameInterface', falling back on what the image would have been
+-- called. A key the game defines no sprite for is script asking for a picture
+-- the game does not have, and naming the picture it asked for points at what is
+-- missing; a stand-in picture only hides it. The game names a sprite for its
+-- image with @GFX_@ on the front, so taking that off gives the image back.
+getGameInterfaceNamed :: (IsGameData (GameData g), Monad m) => Text -> PPT g m Text
+getGameInterfaceNamed key = getGameInterface (fromMaybe key (T.stripPrefix "GFX_" key)) key
 
 -- | Get the image name for a given key, if it exists.
 getGameInterfaceIfPresent :: (IsGameData (GameData g), Monad m) => Text -> PPT g m (Maybe Text)

@@ -37,7 +37,15 @@ import HOI4.Messages (wikifyLocColours)
 ----------------
 
 newHOI4Character :: Text -> Text -> FilePath -> HOI4Character
-newHOI4Character chatag locname = HOI4Character chatag chatag locname Nothing Nothing Nothing Nothing
+newHOI4Character chatag locname = HOI4Character chatag chatag locname Nothing Nothing Nothing Nothing []
+
+-- | Note a military post the character is written for. A character whose entry
+-- differs between DLCs is written out once per DLC, each with the same posts,
+-- so a post already noted is not noted again.
+addUnitRole :: Text -> HOI4Character -> HOI4Character
+addUnitRole role hChar
+    | role `elem` cha_unit_roles hChar = hChar
+    | otherwise = hChar { cha_unit_roles = cha_unit_roles hChar ++ [role] }
 
 parseHOI4Characters :: (HOI4Info g, IsGameData (GameData g), Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap Text HOI4Character, HashMap Text HOI4Advisor)
@@ -128,11 +136,11 @@ characterAddSection hChar stmt
             let port = getSmallPortrait scr in
             return hChar { cha_portrait = port }
         characterAddSection' hChar [pdx| corps_commander = %_ |] =
-            return hChar
+            return (addUnitRole "corps_commander" hChar)
         characterAddSection' hChar [pdx| field_marshal = %_ |] =
-            return hChar
+            return (addUnitRole "field_marshal" hChar)
         characterAddSection' hChar [pdx| navy_leader = %_ |] =
-            return hChar
+            return (addUnitRole "navy_leader" hChar)
         characterAddSection' hChar [pdx| scientist = %_ |] =
             return hChar
         characterAddSection' hChar [pdx| gender = %_ |] =

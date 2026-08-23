@@ -46,7 +46,7 @@ import SettingsTypes ( PPT, Settings (..)
                      , IsGame (..), IsGameData (..)
                      , setCurrentFile, withCurrentFile
                      , hoistErrors, hoistExceptions
-                     , getGameInterface, getGameInterfaceIfPresent)
+                     , getGameInterface, getGameInterfaceNamed, getGameInterfaceIfPresent)
 import HOI4.Handlers (flagText)
 
 -- | Empty event value. Starts off Nothing/empty everywhere.
@@ -686,7 +686,7 @@ ppEventSource (HOI4EvtSrcIdeaOnAdd id loc icon categ) = do
         iconname <- do
             micon <- getGameInterfaceIfPresent ("GFX_idea_" <> id)
             case micon of
-                Nothing -> getGameInterface "idea_unknown" icon
+                Nothing -> getGameInterfaceNamed icon
                 Just idicon -> return idicon
         return $ "[[File:" <> iconname <> ".png|28px]]"
     catloc <- getGameL10n categ
@@ -705,7 +705,7 @@ ppEventSource (HOI4EvtSrcIdeaOnRemove id loc icon categ) = do
         iconname <- do
             micon <- getGameInterfaceIfPresent ("GFX_idea_" <> id)
             case micon of
-                Nothing -> getGameInterface "idea_unknown" icon
+                Nothing -> getGameInterfaceNamed icon
                 Just idicon -> return idicon
         return $ "[[File:" <> iconname <> ".png|28px]]"
     catloc <- getGameL10n categ

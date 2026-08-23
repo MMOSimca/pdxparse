@@ -292,7 +292,7 @@ data ScriptMessage
     | MsgAddSkill {scriptMessageWhat :: Text, scriptMessageAmt :: Double}
     | MsgTooltip {scriptMessageWhat :: Text}
     | MsgCustomEffectTooltip {scriptMessageWhat :: Text}
-    | MsgShowUnitLeader {scriptMessageLoc :: Text, scriptMessageKey :: Text}
+    | MsgShowUnitLeader {scriptMessageLoc :: Text, scriptMessageKey :: Text, scriptMessageWhat :: Text}
     | MsgShowMio {scriptMessageLoc :: Text, scriptMessageKey :: Text}
     | MsgUnlockMio {scriptMessageLoc :: Text, scriptMessageKey :: Text}
     | MsgUnlockMioTrait {scriptMessageLoc :: Text, scriptMessageKey :: Text}
@@ -1560,10 +1560,11 @@ instance RenderMessage Script ScriptMessage where
         -- The game's own tooltip for a commander is their name and nothing else:
         -- script writes it next to a hidden effect that has just given the
         -- country that commander.
-        MsgShowUnitLeader {scriptMessageLoc = _loc, scriptMessageKey = _key}
+        MsgShowUnitLeader {scriptMessageLoc = _loc, scriptMessageKey = _key, scriptMessageWhat = _what}
             -> mconcat
                 [ boldText _loc
                 , "<!-- ", _key, " -->"
+                , if T.null _what then "" else " becomes " <> _what <> "."
                 ]
         MsgShowMio {scriptMessageLoc = _loc, scriptMessageKey = _key}
             -> mconcat

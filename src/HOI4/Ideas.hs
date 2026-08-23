@@ -85,7 +85,11 @@ parseHOI4Idea :: (HOI4Info g, Monad m) =>
 parseHOI4Idea [pdx| $ideaName = %rhs |] category = case rhs of
     CompoundRhs parts -> do
         idName_loc <- wikifyLocColours <$> getGameL10n ideaName
-        let idPicture = "GFX_idea_" <> ideaName
+        -- The picture an idea is shown by where it names none of its own: the
+        -- game looks for one under the idea's own name, and a name that already
+        -- opens with @idea_@ wants no second one.
+        let idPicture | "idea_" `T.isPrefixOf` ideaName = "GFX_" <> ideaName
+                      | otherwise = "GFX_idea_" <> ideaName
         idDesc <- fmap wikifyLocColours <$> getGameL10nIfPresent (ideaName <> "_desc")
         withCurrentFile $ \sourcePath ->
             foldM ideaAddSection
@@ -114,8 +118,14 @@ ideaAddSection iidea stmt
     where
         ideaAddSection' iidea stmt@[pdx| $lhs = %rhs |] = case T.map toLower lhs of
             "picture"   -> case rhs of
+                -- Script names the picture in any of three ways: the sprite's
+                -- whole name, that name without the @GFX_@ on the front, or
+                -- what is left after @GFX_idea_@. Each names the same sprite
+                -- once the missing front of the name is put back.
                 GenericRhs txt [] ->
-                    let txtd = if "GFX_idea_" `T.isPrefixOf` txt then txt else "GFX_idea_" <> txt in
+                    let txtd | "GFX_idea_" `T.isPrefixOf` txt = txt
+                             | "idea_" `T.isPrefixOf` txt = "GFX_" <> txt
+                             | otherwise = "GFX_idea_" <> txt in
                     iidea { id_picture = txtd }
                 _-> trace "bad idea picture" iidea
             "name"      -> case rhs of

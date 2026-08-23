@@ -91,7 +91,7 @@ import SettingsTypes ( PPT, IsGameData (..), GameData (..), IsGameState (..), Ga
                      , indentUp, getCurrentIndent, withCurrentIndent, withCurrentIndentCustom
                      , LocArg (..)
                      , concatMapM
-                     , getGameInterface, getGameInterfaceIfPresent)
+                     , getGameInterface, getGameInterfaceNamed, getGameInterfaceIfPresent)
 import {-# SOURCE #-} HOI4.Common (ppMany, ppOne, extractStmt, matchLhsText)
 import HOI4.Types -- everything
 import HOI4.Localization
@@ -244,7 +244,7 @@ getIdeaIcon :: (HOI4Info g, Monad m) => HOI4Idea -> PPT g m Text
 getIdeaIcon iidea = do
     micon <- getGameInterfaceIfPresent ("GFX_idea_" <> id_id iidea)
     case micon of
-        Nothing -> getGameInterface "idea_unknown" (id_picture iidea)
+        Nothing -> getGameInterfaceNamed (id_picture iidea)
         Just idicon -> return idicon
 
 -- | What an idea named by a @show_ideas_tooltip@ grants. An idea in the idea
@@ -1658,7 +1658,7 @@ resolveDynModEffects effects = do
 
 -- | The image a dynamic modifier is shown by, or the empty text if it has none.
 dynModIcon :: (HOI4Info g, Monad m) => HOI4DynamicModifier -> PPT g m Text
-dynModIcon dmod = maybe (return "") (getGameInterface "idea_unknown") (dmodIcon dmod)
+dynModIcon dmod = maybe (return "") getGameInterfaceNamed (dmodIcon dmod)
 
 -- | Present a dynamic modifier as an effect box: its name and image as the
 -- heading, and what it grants listed under that.
@@ -2108,6 +2108,25 @@ getCharacterName idn = do
     case HM.lookup idn characters of
         Just charid -> return $ cha_loc_name charid
         _ -> getGameL10n idn
+
+-- | The post a character is commissioned into, worded as the game words it
+-- where it gives a country that commander: @becomes a General@ and the like.
+-- A character written for no military post has nothing to say here, and one
+-- written for two is named for both, there being nothing in the script to say
+-- which of them a tooltip has in mind.
+getCharacterRole :: (Monad m, HOI4Info g) =>
+    Text -> PPT g m Text
+getCharacterRole idn = do
+    characters <- getCharacters
+    return $ case HM.lookup idn characters of
+        Just charid -> T.intercalate " and " (mapMaybe roleName (cha_unit_roles charid))
+        _ -> ""
+    where
+        roleName = \case
+            "field_marshal" -> Just "a Field Marshal"
+            "corps_commander" -> Just "a General"
+            "navy_leader" -> Just "an Admiral"
+            _ -> Nothing
 
 ----------------------------------------
 -- Handlers for the doctrine mastery  --
@@ -2917,7 +2936,8 @@ locArgValue val
 showUnitLeader :: (HOI4Info g, Monad m) => StatementHandler g m
 showUnitLeader [pdx| %_ = ?token |] = do
     nameloc <- getCharacterName token
-    msgToPP (MsgShowUnitLeader (Doc.oneLine nameloc) token)
+    role <- getCharacterRole token
+    msgToPP (MsgShowUnitLeader (Doc.oneLine nameloc) token role)
 showUnitLeader stmt = preStatement stmt
 
 -- | Handlers for the tooltips that name a military industrial organization, one
