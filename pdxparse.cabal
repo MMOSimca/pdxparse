@@ -45,6 +45,7 @@ executable pdxparse
                        HOI4.Events,
                        HOI4.Handlers,
                        HOI4.Ideas,
+                       HOI4.CountryNames,
                        HOI4.Localization,
                        HOI4.IO,
                        HOI4.Messages,

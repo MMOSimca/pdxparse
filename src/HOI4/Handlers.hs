@@ -343,9 +343,8 @@ allowPronoun expectedScope getLoc name =
 -- it's a pronoun.
 flag :: (HOI4Info g, Monad m) =>
     Maybe HOI4Scope -> Text -> PPT g m Doc
-flag expectscope = allowPronoun expectscope $ \name -> do
-                    nameIdeo <- getCoHi name
-                    template "flag" . (:[]) <$> getGameL10n nameIdeo
+flag expectscope = allowPronoun expectscope $ \name ->
+                    template "flag" . (:[]) <$> getCountryName name
 
 -- | Emit an appropriate phrase for a pronoun.
 -- If a scope is passed, that is the type the current command expects. If they
