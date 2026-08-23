@@ -740,7 +740,7 @@ tryLocAndIconTitle t = tryLocAndIcon (t <> "_title")
 handlersTextValue :: (HOI4Info g, Monad m) => Trie (StatementHandler g m)
 handlersTextValue = Tr.fromList
         [("add_offsite_building"        , textValue "type" "level" MsgAddOffsiteBuilding MsgAddOffsiteBuildingVar tryLocAndIcon)
-        ,("add_popularity"              , textValue "ideology" "popularity" MsgAddPopularity MsgAddPopularityVar tryLocAndIcon)
+        ,("add_popularity"              , textValue "ideology" "popularity" MsgAddPopularity MsgAddPopularityVar ideologyIconLoc)
         ,("add_power_balance_value"     , textValueKey "id" "value" MsgAddPowerBalanceValue MsgAddPowerBalanceValueVar)
         ,("core_compliance"             , textValueCompare "occupied_country_tag" "value" "more than" "less than" MsgCoreCompliance MsgCoreComplianceVar flagTextMaybe)
         ,("core_resistance"             , textValueCompare "occupied_country_tag" "value" "more than" "less than" MsgCoreResistance MsgCoreResistanceVar flagTextMaybe)

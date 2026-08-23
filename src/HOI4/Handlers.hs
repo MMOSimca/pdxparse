@@ -80,6 +80,7 @@ module HOI4.Handlers (
     ,   boolIconLoc
     ,   tryLoc
     ,   tryLocAndIcon
+    ,   ideologyIconLoc
     ,   tryLocMaybe
     ,   textValue
     ,   textValueKey
@@ -1626,6 +1627,21 @@ tryLocAndIcon atom = do
     loc <- tryLoc atom
     return (fromMaybe mempty (Just (iconText atom)),
             fromMaybe ("<tt>" <> atom <> "</tt>") loc)
+
+-- | Icon and localization for an ideology whose popularity is changing. The
+-- wiki writes the ideology as its icon with the name after it, under the key
+-- the icon template capitalizes. A scope pronoun in the ideology's place means
+-- whichever party rules the country in question, which has no one icon to
+-- show, so none is given and the message says so in words.
+ideologyIconLoc :: (HOI4Info g, Monad m) => Text -> PPT g m (Text,Text)
+ideologyIconLoc atom = do
+    (_, what) <- tryLocAndIcon atom
+    return (if isPronoun atom then mempty else ideoIcon, what)
+    where
+        ideoIcon = Doc.doc2text (template "icon" [ideoKey, "1"])
+        ideoKey = case T.uncons atom of
+            Just (c, rest) -> T.cons (toUpper c) rest
+            Nothing -> atom
 
 
 -- | Get localization for the atom given. Return atom

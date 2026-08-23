@@ -4714,20 +4714,17 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgAddPopularity {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageAmt = _amt}
             -> mconcat
-                [ gainOrLose _amt
-                , " "
-                , toMessage $ bold (reducedNum plainPc _amt)
-                , " "
-                , _icon
-                , " party popularity"
+                [ "Change in popularity of "
+                , if T.null _icon then "our current ruling party" else _icon
+                , ": "
+                , toMessage $ templateColor (reducedNum (colourPcSignPrec (Just 2) True) _amt)
                 ]
         MsgAddPopularityVar {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageAmtText = _amtT}
             -> mconcat
-                [ "Gain or Lose "
+                [ "Change in popularity of "
+                , if T.null _icon then "our current ruling party" else _icon
+                , ": "
                 , typewriterText _amtT
-                , " "
-                , _icon
-                , " party popularity"
                 ]
         MsgAddPowerBalanceValue { scriptMessageLoc = _loc, scriptMessageKey = _key, scriptMessageAmt = _amt }
             -> mconcat
@@ -4901,41 +4898,33 @@ instance RenderMessage Script ScriptMessage where
                 , "'"
                 , " "
                 , _surname
-                , " becomes a flying Ace"
+                , " becomes a flying Ace."
                 ]
         MsgAddAiStrategy
             -> "Adds AI strategy<!-- check game script if you want more info -->"
         MsgAddAutonomyRatio {scriptMessageWhat = _what, scriptMessageAmt = _amt}
             -> mconcat
-                [ gainOrLose _amt
+                [ "Add {{icon|Autonomy|1}}: "
+                , toMessage $ templateColor (reducedNum (colourPcSignPrec (Just 2) True) _amt)
                 , if T.null _what then "" else " (" <> italicText _what <> ")"
-                , " "
-                , toMessage (bold (reducedNum plainPc _amt))
-                , " {{icon|autonomy|1}} progress"
                 ]
         MsgAddAutonomyRatioVar {scriptMessageWhat = _what, scriptMessageAmtText = _amtT}
             -> mconcat
-                [ "Gain or Lose"
-                , if T.null _what then "" else " (" <> italicText _what <> ")"
-                , " "
+                [ "Add {{icon|Autonomy|1}}: "
                 , typewriterText _amtT
-                , " {{icon|autonomy|1}} progress"
+                , if T.null _what then "" else " (" <> italicText _what <> ")"
                 ]
         MsgAddAutonomyScore {scriptMessageWhat = _what, scriptMessageAmt = _amt}
             -> mconcat
-                [ gainOrLose _amt
+                [ "Add {{icon|Autonomy|1}}: "
+                , toMessage $ templateColor (colourNumSignPrec (Just 2) True _amt)
                 , if T.null _what then "" else " (" <> italicText _what <> ")"
-                , " "
-                , toMessage (bold (plainNum _amt))
-                , " {{icon|autonomy|1}} progress"
                 ]
         MsgAddAutonomyScoreVar {scriptMessageWhat = _what, scriptMessageAmtText = _amtT}
             -> mconcat
-                [ "Gain or Lose"
-                , if T.null _what then "" else " (" <> italicText _what <> ")"
-                , " "
+                [ "Add {{icon|Autonomy|1}}: "
                 , typewriterText _amtT
-                , " {{icon|autonomy|1}} progress"
+                , if T.null _what then "" else " (" <> italicText _what <> ")"
                 ]
         MsgAddFieldMarshalRole {scriptMessageWho = _who}
             -> mconcat
