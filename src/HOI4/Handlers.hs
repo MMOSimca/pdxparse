@@ -807,6 +807,8 @@ negateClause t
             then word <> " ''not''" <> rest
             else doForm <> " ''not'' have" <> rest
     | lower `elem` negatable = Just (word <> " ''not''" <> rest)
+    | Just plain <- lookup lower thirdPerson =
+        Just $ capsLike "Does" <> " ''not'' " <> plain <> rest
     | otherwise = Nothing
     where
         word = T.takeWhile isAlpha t
@@ -821,6 +823,11 @@ negateClause t
             [ "is", "are", "was", "were"
             , "does", "do", "did", "can", "could", "will", "would"
             , "may", "might", "must", "shall" ]
+        -- A condition written with the verb itself takes a "does not" and gives
+        -- the verb back its plain form. Only the verbs a condition of ours is
+        -- known to open with are listed: an ordinary word ending in an S would
+        -- otherwise be read as one of these and negated as though it were.
+        thirdPerson = [("gives", "give")]
 
 -- | Whether a clause goes on with a past participle, an adverb in front of one
 -- not counting. Regular participles are told by their @-ed@; the irregular ones
@@ -2037,11 +2044,21 @@ data AddOpinion = AddOpinion {
 newAddOpinion :: AddOpinion
 newAddOpinion = AddOpinion Nothing Nothing Nothing
 
+-- | Handler for the effects that hand a country an opinion modifier towards
+-- another, or take one away again.
+--
+-- An opinion modifier marked @trade@ moves how the two trade with one another
+-- rather than what they think of one another, and the game says so in words of
+-- its own. Which of the two an effect comes to is settled by the modifier it
+-- names, not by the effect, so the modifier is looked up to tell them apart.
+-- The trade wording says nothing of how long it lasts, so it is used however
+-- long script asks for.
 opinion :: (HOI4Info g, Monad m) =>
     (Text -> Text -> Text -> ScriptMessage)
         -> (Text -> Text -> Text -> Double -> ScriptMessage)
+        -> (Text -> Text -> Text -> ScriptMessage)
         -> StatementHandler g m
-opinion msgIndef msgDur stmt@[pdx| %_ = @scr |]
+opinion msgIndef msgDur msgTrade stmt@[pdx| %_ = @scr |]
     = msgToPP =<< pp_add_opinion (foldl' addLine newAddOpinion scr)
     where
         addLine :: AddOpinion -> GenericStatement -> AddOpinion
@@ -2058,12 +2075,16 @@ opinion msgIndef msgDur stmt@[pdx| %_ = @scr |]
             (Just ewhom, Just modifier) -> do
                 mwhomflag <- eflag (Just HOI4Country) ewhom
                 mod_loc <- getGameL10n modifier
+                omods <- getOpinionModifiers
+                let isTrade = maybe False (fromMaybe False . omodTrade)
+                                    (HM.lookup modifier omods)
                 case (mwhomflag, op_years op) of
+                    (Just whomflag, _) | isTrade -> return $ msgTrade modifier mod_loc whomflag
                     (Just whomflag, Nothing) -> return $ msgIndef modifier mod_loc whomflag
                     (Just whomflag, Just years) -> return $ msgDur modifier mod_loc whomflag years
                     _ -> return (preMessage stmt)
             _ -> trace ("opinion: who or modifier missing: " ++ show stmt) $ return (preMessage stmt)
-opinion _ _ stmt = preStatement stmt
+opinion _ _ _ stmt = preStatement stmt
 
 -- | Handler for @has_resources_in_country@, which asks how much of a resource a
 -- country has to hand.

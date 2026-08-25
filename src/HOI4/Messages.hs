@@ -258,7 +258,6 @@ data ScriptMessage
     -- other messages to be sorted
     | MsgKillCountryLeader
     | MsgLeaveFaction
-    | MsgMarkFocusTreeLayoutDirty
     | MsgRetire
     | MsgRetireCountryLeader
     | MsgSetLeaderDescription
@@ -400,6 +399,7 @@ data ScriptMessage
     | MsgHasBorderWarWith {scriptMessageWhom :: Text, scriptMessageWhat :: Text}
     | MsgHasGuaranteed {scriptMessageWhom :: Text, scriptMessageWhat :: Text}
     | MsgHasMilitaryAccessTo {scriptMessageWhom :: Text, scriptMessageWhat :: Text}
+    | MsgGivesMilitaryAccessTo {scriptMessageWhom :: Text, scriptMessageWhat :: Text}
     | MsgHasNonAggressionPactWith {scriptMessageWhom :: Text, scriptMessageWhat :: Text}
     | MsgHasOffensiveWarWith {scriptMessageWhom :: Text, scriptMessageWhat :: Text}
     | MsgHasSubject {scriptMessageWhom :: Text, scriptMessageWhat :: Text}
@@ -458,6 +458,9 @@ data ScriptMessage
     | MsgIsSubject {scriptMessageYn :: Bool}
     | MsgHasAutonomyState {scriptMessageIcon :: Text, scriptMessageWhat :: Text}
     | MsgAddOpinion {scriptMessageModid :: Text, scriptMessageWhat :: Text, scriptMessageWhom :: Text}
+    | MsgAddTradeOpinion {scriptMessageModid :: Text, scriptMessageWhat :: Text, scriptMessageWhom :: Text}
+    | MsgReverseAddTradeOpinion {scriptMessageModid :: Text, scriptMessageWhat :: Text, scriptMessageWho :: Text}
+    | MsgRemoveTradeOpinion {scriptMessageModid :: Text, scriptMessageWhat :: Text, scriptMessageWhom :: Text}
     | MsgReverseAddOpinion {scriptMessageModid :: Text, scriptMessageWhat :: Text, scriptMessageWho :: Text}
     | MsgAddOpinionDur {scriptMessageModid :: Text, scriptMessageWhat :: Text, scriptMessageWhom :: Text, scriptMessageYears :: Double}
     | MsgReverseAddOpinionDur {scriptMessageModid :: Text, scriptMessageWhat :: Text, scriptMessageWho :: Text, scriptMessageYears :: Double}
@@ -1389,8 +1392,6 @@ instance RenderMessage Script ScriptMessage where
             -> "Kill the current country leader"
         MsgLeaveFaction
             -> "Leave faction"
-        MsgMarkFocusTreeLayoutDirty
-            -> "Refresh the focus tree restarting the checks in allow_branch"
         MsgRetire
             -> "Retires"
         MsgRetireCountryLeader
@@ -2391,6 +2392,12 @@ instance RenderMessage Script ScriptMessage where
                 , _whom
                 , ifThenElseT (T.null _what) "" "<!-- ",_what," -->"
                 ]
+        MsgGivesMilitaryAccessTo {scriptMessageWhom = _whom, scriptMessageWhat = _what}
+            -> mconcat
+                [ "Gives military access to "
+                , _whom
+                , ifThenElseT (T.null _what) "" ("<!-- " <> _what <> " -->")
+                ]
         MsgHasMilitaryAccessTo {scriptMessageWhom = _whom, scriptMessageWhat = _what}
             -> mconcat
                 [ "Has military access to "
@@ -2862,38 +2869,49 @@ instance RenderMessage Script ScriptMessage where
                 , _what
                 , " ideas"
                 ]
+        MsgAddTradeOpinion {scriptMessageModid = _modid, scriptMessageWhat = _what, scriptMessageWhom = _whom}
+            -> mconcat
+                [ "Trade relations with "
+                , _whom
+                , " changed by {{opinion|", _modid, "|1}}."
+                ]
+        MsgRemoveTradeOpinion {scriptMessageModid = _modid, scriptMessageWhat = _what, scriptMessageWhom = _whom}
+            -> mconcat
+                [ "Trade relations with "
+                , _whom
+                , " changed by {{opinion|", _modid, "|1}}."
+                ]
+        MsgReverseAddTradeOpinion {scriptMessageModid = _modid, scriptMessageWhat = _what, scriptMessageWho = _who}
+            -> mconcat
+                [ _who
+                , "'s trade relations with them changed by {{opinion|", _modid, "|1}}."
+                ]
         MsgAddOpinion {scriptMessageModid = _modid, scriptMessageWhat = _what, scriptMessageWhom = _whom}
             -> mconcat
-                [ "Gains opinion modifier {{opinion|"
-                , _modid
-                , "}} towards "
+                [ "Gains {{opinion|", _modid, "|0}} ({{icon|Opinion|1}} of "
                 , _whom
+                , " {{opinion|", _modid, "|1}}.)"
                 ]
         MsgReverseAddOpinion {scriptMessageModid = _modid, scriptMessageWhat = _what, scriptMessageWho = _who}
             -> mconcat
                 [ _who
-                , " gains opinion modifier {{opinion|"
-                , _modid
-                , "}} towards this country"
+                , " gains {{opinion|", _modid, "|0}}"
+                , " ({{icon|Opinion|1}} of them changed by {{opinion|", _modid, "|1}}.)"
                 ]
         MsgAddOpinionDur {scriptMessageModid = _modid, scriptMessageWhat = _what, scriptMessageWhom = _whom, scriptMessageYears = _years}
             -> mconcat
-                [ "Gain opinion modifier {{opinion|"
-                , _modid
-                , "}} towards "
-                , _whom
-                , " for "
+                [ "Gains {{opinion|", _modid, "|0}} for "
                 , toMessage (plainNumMin _years)
-                , " years"
+                , " years ({{icon|Opinion|1}} of "
+                , _whom
+                , " {{opinion|", _modid, "|1}}.)"
                 ]
         MsgReverseAddOpinionDur {scriptMessageModid = _modid, scriptMessageWhat = _what, scriptMessageWho = _who, scriptMessageYears = _years}
             -> mconcat
                 [ _who
-                , " gains opinion modifier {{opinion|"
-                , _modid
-                , "}} towards this country for "
+                , " gains {{opinion|", _modid, "|0}} for "
                 , toMessage (plainNumMin _years)
-                , " years"
+                , " years ({{icon|Opinion|1}} of them changed by {{opinion|", _modid, "|1}}.)"
                 ]
         MsgHasDynamicMod {scriptMessageModid = _modid}
             -> mconcat
@@ -2923,10 +2941,9 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgRemoveOpinionMod {scriptMessageModid = _modid, scriptMessageWhat = _what, scriptMessageWhom = _whom}
             -> mconcat
-                [ "Lose opinion modifier {{opinion|"
-                , _modid
-                , "}} towards "
+                [ "Loses {{opinion|", _modid, "|0}} ({{icon|Opinion|1}} of "
                 , _whom
+                , " {{opinion|", _modid, "|1}}.)"
                 ]
         -- These name the kind of event a trigger_event message is about.
         MsgCountryEvent

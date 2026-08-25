@@ -209,7 +209,6 @@ handlersRhsIrrelevant = Tr.fromList
         ,("drop_cosmetic_tag"       , rhsAlwaysYes MsgDropCosmeticTag)
         ,("kill_country_leader"     , rhsAlwaysYes MsgKillCountryLeader)
         ,("leave_faction"           , rhsAlwaysYes MsgLeaveFaction)
-        ,("mark_focus_tree_layout_dirty" , rhsAlwaysYes MsgMarkFocusTreeLayoutDirty)
         ,("retire"                  , rhsAlwaysYes MsgRetire)
         ,("retire_country_leader"   , rhsAlwaysYes MsgRetireCountryLeader)
         ,("set_country_leader_description" , rhsIgnored MsgSetLeaderDescription)
@@ -616,6 +615,7 @@ handlersSimpleFlag = Tr.fromList
         ,("has_border_war_with"     , withFlag MsgHasBorderWarWith)
         ,("has_guaranteed"          , withFlag MsgHasGuaranteed)
         ,("has_military_access_to" , withFlag MsgHasMilitaryAccessTo)
+        ,("gives_military_access_to" , withFlag MsgGivesMilitaryAccessTo)
         ,("has_non_aggression_pact_with" , withFlag MsgHasNonAggressionPactWith)
         ,("has_offensive_war_with"  , withFlag MsgHasOffensiveWarWith)
         ,("has_subject"             , withFlag MsgHasSubject)
@@ -787,7 +787,7 @@ handlersSpecialComplex = Tr.fromList
         ,("remove_province_modifier"     , addProvinceModifier False)
         ,("add_equipment_to_stockpile"   , addEquipment)
         ,("add_named_threat"             , addNamedThreat)
-        ,("add_opinion_modifier"         , opinion MsgAddOpinion MsgAddOpinionDur)
+        ,("add_opinion_modifier"         , opinion MsgAddOpinion MsgAddOpinionDur MsgAddTradeOpinion)
         ,("add_relation_modifier"        , relationModifier MsgAddRelationModifier True)
         ,("add_relation_rule_override"   , addRelationRuleOverride)
         ,("add_mastery"                  , addMastery False)
@@ -807,7 +807,7 @@ handlersSpecialComplex = Tr.fromList
         ,("add_breakthrough_points"      , addBreakthrough MsgAddBreakthroughPoints MsgBreakthroughPoints)
         ,("add_to_war"                   , addToWar)
         ,("annex_country"                , annexCountry)
-        ,("reverse_add_opinion_modifier" , opinion MsgReverseAddOpinion MsgReverseAddOpinionDur)
+        ,("reverse_add_opinion_modifier" , opinion MsgReverseAddOpinion MsgReverseAddOpinionDur MsgReverseAddTradeOpinion)
         ,("build_railway"                , buildRailway)
         ,("can_build_railway"            , canBuildRailway)
         ,("create_equipment_variant"     , createEquipmentVariant)
@@ -829,12 +829,12 @@ handlersSpecialComplex = Tr.fromList
         ,("has_opinion"                  , hasOpinion MsgHasOpinion)
         ,("has_country_leader"           , hasCountryLeader)
         ,("is_power_balance_in_range"    , powerBalanceRange)
-        ,("add_opinion_modifier"         , opinion MsgAddOpinion (\modid what who _years -> MsgAddOpinion modid what who))
+        ,("add_opinion_modifier"         , opinion MsgAddOpinion (\modid what who _years -> MsgAddOpinion modid what who) MsgAddTradeOpinion)
         ,("load_focus_tree"              , loadFocusTree)
         ,("modify_building_resources"    , modifyBuildingResources)
         ,("naval_strength_comparison"    , navalStrengthComparison)
         ,("release_autonomy"             , setAutonomy MsgReleaseAutonomy)
-        ,("remove_opinion_modifier"      , opinion MsgRemoveOpinionMod (\modid what who _years -> MsgRemoveOpinionMod modid what who))
+        ,("remove_opinion_modifier"      , opinion MsgRemoveOpinionMod (\modid what who _years -> MsgRemoveOpinionMod modid what who) MsgRemoveTradeOpinion)
         ,("set_autonomy"                 , setAutonomy MsgSetAutonomy)
         ,("set_building_level"           , setBuildingLevel)
         ,("set_politics"                 , setPolitics)
@@ -1036,6 +1036,9 @@ handlersIgnored = Tr.fromList
         ,("log"           , return $ return [])
         ,("required_personality", return $ return[]) -- From the 1.30 patch notes: "The required_personality field will now be ignored"
         ,("highlight"     , return $ return [])
+        -- Redraws the focus tree so that the branches it allows are worked out
+        -- again. Nothing of the country changes by it.
+        ,("mark_focus_tree_layout_dirty", return $ return [])
         ,("picture"       , return $ return []) -- Some modifiers have custom pictures
         ]
 
