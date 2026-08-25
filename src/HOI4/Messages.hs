@@ -6224,11 +6224,61 @@ capitalise t = case T.uncons t of
     Nothing -> t
 
 imsg2doc :: (IsGameData (GameData g), Monad m) => IndentedMessages -> PPT g m Doc
-imsg2doc msgs = PP.vsep <$>
-                mapM (\(i,rm) -> do
-                        m <- message rm
-                        return (PP.hsep [Doc.strictText (T.replicate i "*"),  m]))
-                     msgs
+imsg2doc msgs = do
+    said <- mapM (\(i, rm) -> (,) i <$> messageText rm) msgs
+    return . PP.vsep $
+        [ PP.hsep [Doc.strictText (T.replicate i "*"), Doc.strictText line]
+        | (i, line) <- rollUpStates said ]
+
+-- | Draw together a run of lines that each say the very same thing of a single
+-- state, so that the states are named in one go rather than a line apiece.
+-- Script writes such a run out state by state, where the game names them
+-- together, and a column of lines alike but for the state in them is a column
+-- the reader has to go down to find what little differs.
+--
+-- Only lines with nothing written under them are drawn together. A line with a
+-- list of its own under it is a heading, and two headings saying the same need
+-- not head the same thing; those are 'HOI4.SpecialHandlers.chunkStates' to draw
+-- together, where what stands under them can be seen.
+rollUpStates :: [(Int, Text)] -> [(Int, Text)]
+rollUpStates said = map rejoin (groupBy alike (zip said standalone))
+    where
+        -- A line is a heading if the line after it is written deeper than it is.
+        standalone = zipWith (\(i, _) mnext -> maybe True (<= i) mnext)
+                             said
+                             (map (Just . fst) (drop 1 said) ++ [Nothing])
+        alike ((i, one), aloneone) ((j, two), alonetwo) =
+            aloneone && alonetwo && i == j && case (oneState one, oneState two) of
+                (Just (beforeone, _, afterone), Just (beforetwo, _, aftertwo)) ->
+                    beforeone == beforetwo && afterone == aftertwo
+                _ -> False
+        rejoin run@(((i, line), _) : _ : _)
+            | Just (before, _, after) <- oneState line
+            = (i, mconcat
+                [ before
+                , Doc.doc2text (template "states" (mapMaybe stateOf run))
+                , after
+                ])
+        rejoin (((i, line), _) : _) = (i, line)
+        rejoin [] = (0, "")
+        stateOf ((_, line), _) = (\(_, sid, _) -> sid) <$> oneState line
+
+-- | A line that names a single state, split into what it says before that state,
+-- the state's id, and what it says after. A line naming no state, or naming
+-- more than one, is none of these: what such a line says of each of them is not
+-- said by naming them together.
+oneState :: Text -> Maybe (Text, Text, Text)
+oneState line = case T.breakOn stateOpen line of
+    (before, rest) | not (T.null rest) ->
+        case T.breakOn "}}" (T.drop (T.length stateOpen) rest) of
+            (sid, closing)
+                | not (T.null sid), T.all isDigit sid, not (T.null closing)
+                , let after = T.drop 2 closing
+                , not (stateOpen `T.isInfixOf` after)
+                -> Just (before, sid, after)
+            _ -> Nothing
+    _ -> Nothing
+    where stateOpen = "{{state|"
 
 -- | As 'imsg2doc', but use HTML to format the messages instead of wiki markup.
 -- This behaves better with <pre> blocks but doesn't play well with idea

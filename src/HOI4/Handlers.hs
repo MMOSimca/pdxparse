@@ -669,9 +669,13 @@ prioritize stmt@[pdx| %_ = @arr |] = do
                     stateFromArray stmt = trace ("Unknown in prioritize array statement: " ++ show stmt) Nothing
                 -- The wiki has a template for a run of states, which names
                 -- them all in the one go, so the ids go to it as they are
-                -- rather than being localized one at a time.
-                msgToPP $ MsgPrioritize $ Doc.doc2text $
-                    template "states" (map (T.pack . show) states)
+                -- rather than being localized one at a time. It wants a run
+                -- though: given a single state it looks for a second and says
+                -- so where the name belongs, and one state is the wiki's other
+                -- template.
+                msgToPP $ MsgPrioritize $ Doc.doc2text $ case states of
+                    [one] -> template "state" [T.pack (show one)]
+                    _ -> template "states" (map (T.pack . show) states)
 prioritize stmt = preStatement stmt
 
 -- | Generic handler for a compound statement that picks out one thing to work
