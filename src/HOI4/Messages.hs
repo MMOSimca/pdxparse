@@ -760,6 +760,7 @@ data ScriptMessage
     | MsgHasFocusTree {scriptMessageWhat :: Text}
     | MsgAddAce {scriptMessageName :: Text, scriptMessageCallsign :: Text, scriptMessageSurname :: Text}
     | MsgAddAiStrategy {scriptMessageWhat :: Text, scriptMessageWhom :: Text, scriptMessageAmt :: Double}
+    | MsgAddAiStrategyUnweighted {scriptMessageWhat :: Text, scriptMessageWhom :: Text}
     | MsgAddAutonomyRatio {scriptMessage_icon :: Text, scriptMessageWhat :: Text, scriptMessageAmt :: Double}
     | MsgAddAutonomyRatioVar {scriptMessage_icon :: Text, scriptMessageWhat :: Text, scriptMessageAmtText :: Text}
     | MsgAddAutonomyScore {scriptMessage_icon :: Text, scriptMessageWhat :: Text, scriptMessageAmt :: Double}
@@ -4926,6 +4927,12 @@ instance RenderMessage Script ScriptMessage where
                 , _whom
                 , ": "
                 , toMessage (bold (plainNumMin _amt))
+                ]
+        MsgAddAiStrategyUnweighted {scriptMessageWhat = _what, scriptMessageWhom = _whom}
+            -> mconcat
+                [ "AI strategy "
+                , toMessage (italicText _what)
+                , _whom
                 ]
         MsgAddAutonomyRatio {scriptMessageWhat = _what, scriptMessageAmt = _amt}
             -> mconcat

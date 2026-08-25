@@ -1472,34 +1472,44 @@ numericOrTagIcon _ _ _ stmt = preStatement stmt -- CHECK FOR USEFULNESS
 -- how heavily to garrison, what to hold factories back for -- is about the
 -- country's own doings, and is said on its own.
 addAiStrategy :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
-addAiStrategy stmt@[pdx| %_ = @scr |] = case (aiKind, aiValue) of
-    (Just kind, Just value) -> do
-        about <- aiAbout kind aiId
-        msgToPP $ MsgAddAiStrategy (named kind <> targeted) about value
+addAiStrategy stmt@[pdx| %_ = @scr |] = case aiKind of
+    Just kind -> do
+        about <- aiAbout kind aiAbout'
+        msgToPP $ case aiValue of
+            Just value -> MsgAddAiStrategy (named kind <> targeted) about value
+            Nothing -> MsgAddAiStrategyUnweighted (named kind <> targeted) about
     _ -> preStatement stmt
     where
         (aiKind, aiTarget, aiId, aiValue) =
             foldl' addLine (Nothing, Nothing, Nothing, Nothing) scr
         addLine (k, t, i, v) [pdx| type   = $kind |] = (Just kind, t, i, v)
         addLine (k, t, i, v) [pdx| target = $tgt  |] = (k, Just tgt, i, v)
-        addLine (k, t, i, v) [pdx| id     = $who  |] = (k, t, Just who, v)
-        addLine (k, t, i, v) [pdx| id     = ?who  |] = (k, t, Just who, v)
+        addLine (k, t, i, v) [pdx| id     = $vartag:$var |] = (k, t, Just (Right (vartag, var)), v)
+        addLine (k, t, i, v) [pdx| id     = $who  |] = (k, t, Just (Left who), v)
+        addLine (k, t, i, v) [pdx| id     = ?who  |] = (k, t, Just (Left who), v)
         addLine (k, t, i, v) [pdx| value  = !n    |] = (k, t, i, Just n)
         addLine acc _ = acc
+        -- Script names the country under either key: where there is no id, the
+        -- target is the country the leaning is about. Where there is one, the
+        -- target instead says which dealing is meant, the kind on its own saying
+        -- only that it is one.
+        aiAbout' = case aiId of
+            Just ewho -> Just ewho
+            Nothing -> Left <$> aiTarget
+        targeted = case (aiId, aiTarget) of
+            (Just _, Just tgt) -> " (" <> named tgt <> ")"
+            _ -> ""
         -- These two name a thing the country builds or keeps; every other kind
         -- names a country.
         aboutAThing = ["building_target", "save_equipment"]
         aiAbout _ Nothing = return ""
-        aiAbout kind (Just who)
-            | kind `elem` aboutAThing = do
+        aiAbout kind (Just ewho)
+            | kind `elem` aboutAThing, Left who <- ewho = do
                 loc <- getGameL10n who
                 return (" for " <> boldText loc)
             | otherwise = do
-                flagged <- flagText (Just HOI4Country) who
-                return (" towards " <> flagged)
-        -- A diplomatic leaning says which dealing it is about, the kind on its
-        -- own saying only that it is one.
-        targeted = maybe "" (\tgt -> " (" <> named tgt <> ")") aiTarget
+                mflag <- eflag (Just HOI4Country) ewho
+                return (maybe "" (" towards " <>) mflag)
         -- Script writes these as ids; a name is those words with the underscores
         -- taken back out.
         named theid = case T.uncons (T.replace "_" " " theid) of
