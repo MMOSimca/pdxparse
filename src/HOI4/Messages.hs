@@ -41,13 +41,13 @@ import Data.Monoid ((<>))
 
 import Control.Monad.State (gets)
 
-import Data.Char (isAlphaNum, isSpace, toUpper)
+import Data.Char (isAlphaNum, isDigit, isSpace, toUpper)
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
 import Data.HashSet (HashSet)
 import qualified Data.HashSet as HS
-import Data.List (sortOn)
-import Data.Maybe (catMaybes)
+import Data.List (groupBy, sortOn)
+import Data.Maybe (catMaybes, mapMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
 
@@ -894,6 +894,7 @@ data ScriptMessage
     | MsgReleaseOnControlled {scriptMessageWho :: Text, scriptMessageWhat :: Text}
     | MsgEndPuppet {scriptMessageWho :: Text, scriptMessageWhat :: Text}
     | MsgSendEmbargo {scriptMessageWho :: Text, scriptMessageWhat :: Text}
+    | MsgBreakEmbargo {scriptMessageWho :: Text, scriptMessageWhat :: Text}
     | MsgAddContestedOwner {scriptMessageWho :: Text, scriptMessageWhat :: Text}
     | MsgAddContestedOwnerState {scriptMessageWhat :: Text}
     | MsgRemoveResourceRights {scriptMessageWhat :: Text}
@@ -4970,7 +4971,7 @@ instance RenderMessage Script ScriptMessage where
             -> mconcat
                 [ _who
                 , ifThenElseT (T.null _who) "Becomes" " becomes"
-                , " the leader for the "
+                , " leader for the "
                 , boldText _what
                 , " party."
                 ]
@@ -4978,7 +4979,7 @@ instance RenderMessage Script ScriptMessage where
             -> mconcat
                 [ _who
                 , ifThenElseT (T.null _who) "Becomes" " becomes"
-                , " the leader for their party<!-- check game script for which ideology-->"
+                , " country leader"
                 ]
         MsgCreateOperativeLeader {scriptMessageWho = _who, scriptMessageWhat = _what, scriptMessageYn = _yn, scriptMessageYn2 = _yn2}
             -> mconcat
@@ -5785,18 +5786,25 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgSendEmbargo {scriptMessageWho = _who, scriptMessageWhat = _what}
             -> mconcat
-                [ "Place an embargo on "
+                [ "Embargo "
+                , _who
+                ]
+        MsgBreakEmbargo {scriptMessageWho = _who, scriptMessageWhat = _what}
+            -> mconcat
+                [ "Breaks the embargo with "
                 , _who
                 ]
         MsgAddContestedOwner {scriptMessageWho = _who, scriptMessageWhat = _what}
             -> mconcat
-                [ _who
-                , " also lays claim to this state"
+                [ _what
+                , ifThenElseT (T.null _what) "Becomes" " becomes"
+                , ifThenElseT (T.null _who) " a contested state" " a contested state of "
+                , _who
                 ]
         MsgAddContestedOwnerState {scriptMessageWhat = _what}
             -> mconcat
-                [ "Also lay claim to "
-                , _what
+                [ _what
+                , " becomes a contested state"
                 ]
         MsgRemoveResourceRights {scriptMessageWhat = _what}
             -> mconcat

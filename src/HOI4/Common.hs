@@ -650,6 +650,7 @@ handlersSimpleFlag = Tr.fromList
         ,("release_on_controlled"   , withFlag MsgReleaseOnControlled)
         ,("end_puppet"              , withFlag MsgEndPuppet)
         ,("send_embargo"            , withFlag MsgSendEmbargo)
+        ,("break_embargo"           , withFlag MsgBreakEmbargo)
         ,("add_civil_war_target"    , withFlag MsgAddCivilWarTarget)
         ,("set_state_owner_to"      , withFlag MsgSetStateOwnerTo)
         ,("original_tag"            , withFlag MsgOriginalTag)
