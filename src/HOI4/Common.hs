@@ -970,7 +970,7 @@ handlersIdeas = Tr.fromList
 handlersMisc :: (HOI4Info g, Monad m) => Trie (StatementHandler g m)
 handlersMisc = Tr.fromList
         [("add_ace"                     , addAce)
-        ,("add_ai_strategy"             , rhsIgnored MsgAddAiStrategy)
+        ,("add_ai_strategy"             , addAiStrategy)
         ,("add_autonomy_ratio"          , addAutonomyRatio MsgAddAutonomyRatio MsgAddAutonomyRatioVar)
         ,("add_autonomy_score"          , addAutonomyRatio MsgAddAutonomyScore MsgAddAutonomyScoreVar)
         ,("add_field_marshal_role"      , addFieldMarshalRole MsgAddFieldMarshalRole)

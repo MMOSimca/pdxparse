@@ -759,7 +759,7 @@ data ScriptMessage
     | MsgHasCosmeticTag {scriptMessageWhat :: Text}
     | MsgHasFocusTree {scriptMessageWhat :: Text}
     | MsgAddAce {scriptMessageName :: Text, scriptMessageCallsign :: Text, scriptMessageSurname :: Text}
-    | MsgAddAiStrategy
+    | MsgAddAiStrategy {scriptMessageWhat :: Text, scriptMessageWhom :: Text, scriptMessageAmt :: Double}
     | MsgAddAutonomyRatio {scriptMessage_icon :: Text, scriptMessageWhat :: Text, scriptMessageAmt :: Double}
     | MsgAddAutonomyRatioVar {scriptMessage_icon :: Text, scriptMessageWhat :: Text, scriptMessageAmtText :: Text}
     | MsgAddAutonomyScore {scriptMessage_icon :: Text, scriptMessageWhat :: Text, scriptMessageAmt :: Double}
@@ -4915,8 +4915,18 @@ instance RenderMessage Script ScriptMessage where
                 , _surname
                 , " becomes a flying Ace."
                 ]
-        MsgAddAiStrategy
-            -> "Adds AI strategy<!-- check game script if you want more info -->"
+        -- What the AI is being leaned towards, what the leaning is about, and
+        -- how hard it leans. The number is a weight the AI reckons with against
+        -- everything else pulling at it, not an amount of anything, so it is
+        -- left as the bare figure script gives.
+        MsgAddAiStrategy {scriptMessageWhat = _what, scriptMessageWhom = _whom, scriptMessageAmt = _amt}
+            -> mconcat
+                [ "AI strategy "
+                , toMessage (italicText _what)
+                , _whom
+                , ": "
+                , toMessage (bold (plainNumMin _amt))
+                ]
         MsgAddAutonomyRatio {scriptMessageWhat = _what, scriptMessageAmt = _amt}
             -> mconcat
                 [ "Add {{icon|Autonomy|1}}: "

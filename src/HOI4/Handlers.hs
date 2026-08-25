@@ -148,6 +148,7 @@ module HOI4.Handlers (
     ,   startCivilWar
     ,   createEquipmentVariant
     ,   setRule
+    ,   addAiStrategy
     ,   addDoctrineCostReduction
     ,   doctrinePage
     ,   freeBuildingSlots
@@ -1460,6 +1461,51 @@ numericOrTagIcon icon numMsg tagMsg stmt@[pdx| %_ = %rhs |] = msgToPP =<<
                 return $ tagMsg (iconText icon) (Doc.doc2text tflag)
             Nothing -> return (preMessage stmt)
 numericOrTagIcon _ _ _ stmt = preStatement stmt -- CHECK FOR USEFULNESS
+
+-- | Handler for @add_ai_strategy@, which leans the AI towards something or away
+-- from it. Nothing of the world changes by it and the game draws none of it, so
+-- there is no wording of the game's own to keep to: what script writes is the
+-- kind of leaning, what it is about, and how strongly, and all three are said.
+--
+-- The thing it is about is a country for all but a couple of kinds, which name a
+-- building or a kind of equipment instead. A kind that names nothing at all --
+-- how heavily to garrison, what to hold factories back for -- is about the
+-- country's own doings, and is said on its own.
+addAiStrategy :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+addAiStrategy stmt@[pdx| %_ = @scr |] = case (aiKind, aiValue) of
+    (Just kind, Just value) -> do
+        about <- aiAbout kind aiId
+        msgToPP $ MsgAddAiStrategy (named kind <> targeted) about value
+    _ -> preStatement stmt
+    where
+        (aiKind, aiTarget, aiId, aiValue) =
+            foldl' addLine (Nothing, Nothing, Nothing, Nothing) scr
+        addLine (k, t, i, v) [pdx| type   = $kind |] = (Just kind, t, i, v)
+        addLine (k, t, i, v) [pdx| target = $tgt  |] = (k, Just tgt, i, v)
+        addLine (k, t, i, v) [pdx| id     = $who  |] = (k, t, Just who, v)
+        addLine (k, t, i, v) [pdx| id     = ?who  |] = (k, t, Just who, v)
+        addLine (k, t, i, v) [pdx| value  = !n    |] = (k, t, i, Just n)
+        addLine acc _ = acc
+        -- These two name a thing the country builds or keeps; every other kind
+        -- names a country.
+        aboutAThing = ["building_target", "save_equipment"]
+        aiAbout _ Nothing = return ""
+        aiAbout kind (Just who)
+            | kind `elem` aboutAThing = do
+                loc <- getGameL10n who
+                return (" for " <> boldText loc)
+            | otherwise = do
+                flagged <- flagText (Just HOI4Country) who
+                return (" towards " <> flagged)
+        -- A diplomatic leaning says which dealing it is about, the kind on its
+        -- own saying only that it is one.
+        targeted = maybe "" (\tgt -> " (" <> named tgt <> ")") aiTarget
+        -- Script writes these as ids; a name is those words with the underscores
+        -- taken back out.
+        named theid = case T.uncons (T.replace "_" " " theid) of
+            Just (c, rest) -> T.cons (toUpper c) rest
+            Nothing -> theid
+addAiStrategy stmt = preStatement stmt
 
 -- | Handler for a statement referring to a country. Use a flag.
 withFlag :: (HOI4Info g, Monad m) =>
