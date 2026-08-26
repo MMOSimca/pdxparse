@@ -726,6 +726,8 @@ data ScriptMessage
     | MsgDemocraticCompareVar {scriptMessageAmtText :: Text, scriptMessageCompare :: Text}
     | MsgCommunismCompare {scriptMessageAmt :: Double, scriptMessageCompare :: Text}
     | MsgCommunismCompareVar {scriptMessageAmtText :: Text, scriptMessageCompare :: Text}
+    | MsgNumFactionMembers {scriptMessageAmt :: Double, scriptMessageCompare :: Text}
+    | MsgNumFactionMembersVar {scriptMessageAmtText :: Text, scriptMessageCompare :: Text}
     | MsgNeutralityCompare {scriptMessageAmt :: Double, scriptMessageCompare :: Text}
     | MsgNeutralityCompareVar {scriptMessageAmtText :: Text, scriptMessageCompare :: Text}
     | MsgAnnexCountry {scriptMessageWhom :: Text, scriptMessageWhat :: Text}
@@ -4620,6 +4622,22 @@ instance RenderMessage Script ScriptMessage where
                 , _comp
                 , " "
                 , typewriterText _amtT
+                ]
+        MsgNumFactionMembers {scriptMessageAmt = _amt, scriptMessageCompare = _comp}
+            -> mconcat
+                [ "Faction has "
+                , _comp
+                , " "
+                , toMessage (bold (plainNumMin _amt))
+                , plural _amt " member" " members"
+                ]
+        MsgNumFactionMembersVar {scriptMessageAmtText = _amtT, scriptMessageCompare = _comp}
+            -> mconcat
+                [ "Faction has "
+                , _comp
+                , " "
+                , typewriterText _amtT
+                , " members"
                 ]
         MsgNeutralityCompare {scriptMessageAmt = _amt, scriptMessageCompare = _comp}
             -> mconcat

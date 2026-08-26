@@ -297,6 +297,7 @@ handlersNumericCompare = Tr.fromList
         ,("democratic"                       , numericCompare "more than" "less than" MsgDemocraticCompare MsgDemocraticCompareVar)
         ,("communism"                        , numericCompare "more than" "less than" MsgCommunismCompare MsgCommunismCompareVar)
         ,("neutrality"                       , numericCompare "more than" "less than" MsgNeutralityCompare MsgNeutralityCompareVar)
+        ,("num_faction_members"              , numericCompare "more than" "fewer than" MsgNumFactionMembers MsgNumFactionMembersVar)
         -- A building's own name is a trigger for how many levels of it a state
         -- has. The ones above have a message of their own; the rest are named by
         -- their icon. See 'HOI4.Messages.buildingKeys'.
