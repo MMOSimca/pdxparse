@@ -120,20 +120,35 @@ scopeName mroot depth inner = case T.stripPrefix "." cmdrest of
     Nothing -> scriptedLocDefault mroot depth inner
     -- A state is named by the id it is scripted under, and has only the one
     -- name: no ruling party to vary it and no article to put in front of it.
+    -- Anything else asked of a state is a scripted localization worked out in
+    -- it, as it is for a country.
     Just cmd | not (T.null target), T.all isDigit target ->
         if T.toLower cmd `elem` ["getname", "getnamecap", "getnamedef", "getnamedefcap"]
             then S.getGameL10nIfPresent ("STATE_" <> target)
-            else return Nothing
+            else scriptedLocDefault mroot depth (slocNamed cmd)
     Just cmd -> do
         mtag <- countryTag target
-        case mtag of
+        named <- case mtag of
             Just tag -> countryLoc tag cmd
             -- Every other pronoun means whichever country the text happens to
             -- be drawn for, which nothing outside the game can say.
             Nothing | T.toLower target == "root" ->
                         maybe (return Nothing) (`countryLoc` cmd) mroot
                     | otherwise -> return Nothing
-    where (target, cmdrest) = T.breakOn "." inner
+        -- What is asked of the scope may be a scripted localization rather
+        -- than a name: @[THIS.GetAntiSovietFocusName]@ works its text out in
+        -- the scope written in front of it. Which scope that is settles which
+        -- of the texts the game picks, not what any of them says, so the one
+        -- it settles on can be given whether or not we know the scope.
+        case named of
+            Just name -> return (Just name)
+            Nothing -> scriptedLocDefault mroot depth (slocNamed cmd)
+    where
+        (target, cmdrest) = T.breakOn "." inner
+        -- Script steps through a scope or two on the way to what it asks for
+        -- -- @[THIS.OWNER.X]@ -- and no scripted localization is named with a
+        -- dot in it, so the name is whatever follows the last one.
+        slocNamed = snd . T.breakOnEnd "."
 
 -- | The text a scripted localization settles on -- the one the game shows when
 -- none of the conditions written for the others hold.
@@ -145,16 +160,26 @@ scriptedLocDefault mroot depth name
         slocs <- getScriptedLoc
         case scriptedLocFallback =<< HM.lookup name slocs of
             Nothing -> return Nothing
-            Just txt -> traverse (fillLocScopesTo mroot (depth - 1))
-                            =<< S.getGameL10nIfPresent (sloc_key txt)
+            -- A text written with no key of its own is the game showing nothing
+            -- where it stands: the words around it are meant to be read with
+            -- the gap, not with the name of the lookup sitting in it.
+            Just txt | T.null (sloc_key txt) -> return (Just "")
+                     | otherwise -> traverse (fillLocScopesTo mroot (depth - 1))
+                                        =<< S.getGameL10nIfPresent (sloc_key txt)
 
 -- | Which of a scripted localization's texts is the one it settles on: the
--- first that names no conditions of its own, or failing that the last written,
--- which is where the game ends up once it has tried the rest.
+-- first that names no conditions of its own, since the game reads them in the
+-- order they are written and stops at the first whose conditions hold.
+--
+-- Where every one of them names conditions, the game shows nothing at all
+-- unless a set of them holds, and script is written with the ordinary case
+-- first: @GetTheUSSRName@ asks whether the Soviets are communist before it
+-- asks whether they are not, and they are, at the start of every game. So the
+-- first is the one to give.
 scriptedLocFallback :: [HOI4ScriptedLocText] -> Maybe HOI4ScriptedLocText
 scriptedLocFallback texts = case filter (isNothing . sloc_trigger) texts of
     (txt:_) -> Just txt
-    [] -> listToMaybe (reverse texts)
+    [] -> listToMaybe texts
 
 -- | The texts a piece of localization can come to besides the one it settles
 -- on, each with the conditions the game uses it under. A piece of localization
@@ -167,7 +192,11 @@ scriptedLocVariants mroot key = do
     raw <- S.getGameL10n key
     case T.stripSuffix "]" =<< T.stripPrefix "[" (T.strip raw) of
         Nothing -> return []
-        Just name -> do
+        -- Script writes the scope it is worked out in before the name where it
+        -- writes one at all, and no scripted localization is named with a dot
+        -- in it, so whatever follows the last one is the name.
+        Just inner -> do
+            let name = snd (T.breakOnEnd "." inner)
             slocs <- getScriptedLoc
             let conditional = mapMaybe withTrigger (HM.lookupDefault [] name slocs)
             mapMaybe sequenceLoc <$> traverse localize conditional

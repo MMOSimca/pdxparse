@@ -2365,7 +2365,7 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgGiveGuarantee {scriptMessageWhom = _whom, scriptMessageWhat = _what}
             -> mconcat
-                [ "Grants guarantee of independence for "
+                [ "Guarantee "
                 , _whom
                 , ifThenElseT (T.null _what) "" "<!-- ",_what," -->"
                 ]
@@ -2462,7 +2462,7 @@ instance RenderMessage Script ScriptMessage where
                ]
         MsgIsGuaranteedBy { scriptMessageWho = _who, scriptMessageWhat = _what }
             -> mconcat
-                [ "Is guaranteed independence by "
+                [ "Is guaranteed by "
                 , _who
                 , ifThenElseT (T.null _what) "" "<!-- ",_what," -->"
                ]

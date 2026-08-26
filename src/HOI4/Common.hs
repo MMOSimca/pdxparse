@@ -1039,6 +1039,11 @@ handlersIgnored = Tr.fromList
         -- Redraws the focus tree so that the branches it allows are worked out
         -- again. Nothing of the country changes by it.
         ,("mark_focus_tree_layout_dirty", return $ return [])
+        -- Keeps the tooltip of a scope showing even where the scope catches
+        -- nothing, so that a reader is told the effect is there rather than
+        -- shown a gap. The wiki works no conditions out and so lists what a
+        -- scope does whatever it catches, which is what this asks for anyway.
+        ,("visible_when_empty", return $ return [])
         ,("picture"       , return $ return []) -- Some modifiers have custom pictures
         ]
 
