@@ -3115,7 +3115,7 @@ createWargoal stmt@[pdx| %_ = @scr |] =
         pp_create_wg cwg =
             let states = case wg_generator cwg of
                     Just (WGGeneratorArr arr) -> T.pack $ concat [" for the ", T.unpack $ plural (length arr) "state " "states " , intercalate ", " $ map T.unpack (wg_states cwg)]
-                    Just (WGGeneratorVar var) -> T.pack (" for" ++ T.unpack var)
+                    Just (WGGeneratorVar var) -> " for the states in " <> typewriterText var
                     _ -> ""
             in case (wg_type cwg, wg_type_loc cwg,
                      wg_target_flag cwg,

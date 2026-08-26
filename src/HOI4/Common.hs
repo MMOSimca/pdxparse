@@ -209,6 +209,7 @@ handlersRhsIrrelevant = Tr.fromList
         ,("drop_cosmetic_tag"       , rhsAlwaysYes MsgDropCosmeticTag)
         ,("kill_country_leader"     , rhsAlwaysYes MsgKillCountryLeader)
         ,("leave_faction"           , rhsAlwaysYes MsgLeaveFaction)
+        ,("reserve_dynamic_country" , rhsAlwaysYes MsgReserveDynamicCountry)
         ,("retire"                  , rhsAlwaysYes MsgRetire)
         ,("retire_country_leader"   , rhsAlwaysYes MsgRetireCountryLeader)
         ,("set_country_leader_description" , rhsIgnored MsgSetLeaderDescription)
@@ -487,6 +488,9 @@ handlersCompound = Tr.fromList
         ,("hidden_trigger"          ,                      compoundMessage MsgHiddenTriggers)
         ,("custom_trigger_tooltip"  ,                      compoundMessage MsgCustomTriggerTooltip)
         ,("hidden_effect"           ,                      compoundMessage MsgHiddenEffect)
+        -- What follows is done to the country made up here, not to the one the
+        -- script was about.
+        ,("create_dynamic_country"  , scope HOI4Country . compoundMessageExtractTag "original_tag" MsgCreateDynamicCountry)
         ,("else"                    ,                      compoundMessage MsgElse)
         ,("else_if"                 ,                      compoundMessageCondition MsgElseIf)
         ,("if"                      ,                      compoundMessageCondition MsgIf)
@@ -588,6 +592,7 @@ handlersTypewriter = Tr.fromList
         ,("has_event_target"    , withNonlocAtom MsgHasEventTarget)
         ,("clear_global_event_target" , withNonlocAtom MsgClearGlobalEventTarget)
         ,("clear_array"         , withNonlocAtom MsgClearArray)
+        ,("clear_temp_array"    , withNonlocAtom MsgClearTempArray)
         ,("has_faction_template" , withNonlocAtom MsgHasFactionTemplate)
         ,("has_opinion_modifier"  , withNonlocAtom MsgHasOpinionMod)
         ]
@@ -846,6 +851,9 @@ handlersSpecialComplex = Tr.fromList
         ,("any_province_building_level"  , anyProvinceBuildingLevel)
         ,("compare_autonomy_state"       , compareAutonomyState)
         ,("add_to_array"                 , arrayValue MsgAddToArray)
+        -- The array is named on the left in the short form, so any name at all
+        -- may stand there: @temp_states = THIS@ names no effect of the game's.
+        ,("add_to_temp_array"            , arrayValue MsgAddToTempArray)
         ,("is_in_array"                  , arrayValue MsgIsInArray)
         ,("create_ship"                  , createShip)
         ,("transfer_ship"                , transferShip)

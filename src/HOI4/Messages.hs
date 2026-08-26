@@ -894,6 +894,10 @@ data ScriptMessage
     | MsgAnyProvinceBuildingLevel {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageCompare :: Text, scriptMessageAmt :: Double, scriptMessageWhere :: Text}
     | MsgCompareAutonomyState {scriptMessageCompare :: Text, scriptMessageWhat :: Text}
     | MsgIsInArray {scriptMessageVar1 :: Text, scriptMessageVar2 :: Text}
+    | MsgAddToTempArray {scriptMessageVar1 :: Text, scriptMessageVar2 :: Text}
+    | MsgClearTempArray {scriptMessageWhat :: Text}
+    | MsgCreateDynamicCountry {scriptMessageWhom :: Text}
+    | MsgReserveDynamicCountry
     | MsgAddToArray {scriptMessageVar1 :: Text, scriptMessageVar2 :: Text}
     | MsgClearArray {scriptMessageWhat :: Text}
     | MsgLoadOob {scriptMessageWhat :: Text}
@@ -5771,6 +5775,31 @@ instance RenderMessage Script ScriptMessage where
                 , " contains "
                 , typewriterText _var2
                 ]
+        -- A temporary array is one the game keeps only while it works something
+        -- out and throws away after, which is worth saying: nothing a reader
+        -- can look up later comes of it.
+        MsgAddToTempArray {scriptMessageVar1 = _var1, scriptMessageVar2 = _var2}
+            -> mconcat
+                [ "Add "
+                , ifThenElseT (T.null _var2) "the current scope" (typewriterText _var2)
+                , " to the temporary array "
+                , typewriterText _var1
+                ]
+        MsgClearTempArray {scriptMessageWhat = _what}
+            -> mconcat
+                [ "Empty the temporary array "
+                , typewriterText _what
+                ]
+        -- A country the game makes up as it goes, with a tag of its own, taking
+        -- what it starts with from a country already in play.
+        MsgCreateDynamicCountry {scriptMessageWhom = _whom}
+            -> mconcat
+                [ "Create a new country in the likeness of "
+                , _whom
+                , ":"
+                ]
+        MsgReserveDynamicCountry
+            -> "Keep this country in play rather than letting the game do away with it"
         MsgAddToArray {scriptMessageVar1 = _var1, scriptMessageVar2 = _var2}
             -> mconcat
                 [ "Add "
