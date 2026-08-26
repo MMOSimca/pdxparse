@@ -133,6 +133,9 @@ data HOI4State = HOI4State {
     -- the statement in hand, innermost first, so that one that comes round to
     -- invoking itself can be cut off.
     ,   hoi4expandedBlocks :: [Text]
+    -- | The character a statement is about, where the script it stands in has
+    -- scoped to one by name.
+    ,   hoi4currentCharacter :: Maybe Text
     } deriving (Show)
 
 -- | Interface for HOI4 feature handlers. Most of the methods just get data

@@ -3595,10 +3595,19 @@ noloc txt = return Nothing
 -- Handler for set_nationality --
 ---------------------------------
 
+-- | Handler for @set_nationality@, which moves a character to another country.
+-- Script writes the country on its own where the character is the scope the
+-- effect stands in, and names both where it is not -- and it writes the block
+-- form with only the country in it as well, which says the same as the bare
+-- one.
 setNationality :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
-setNationality stmt@[pdx| %_ = $txt |] = withFlag MsgSetNationality stmt
-setNationality stmt@[pdx| %_ = @scr |] = taTypeFlag "character" "target_country" MsgSetNationalityChar stmt
-setNationality stmt = preStatement stmt
+setNationality stmt@[pdx| %_ = @scr |] =
+    case extractStmt (matchLhsText "target_country") scr of
+        (Just target, rest) | not (any (matchLhsText "character") rest) ->
+            withFlag MsgSetNationality target
+        _ -> taTypeFlag "character" "target_country" MsgSetNationalityChar stmt
+-- Whatever else names the country -- a tag, a pronoun, a variable holding one.
+setNationality stmt = withFlag MsgSetNationality stmt
 
 hasWarGoalAgainst :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
 hasWarGoalAgainst stmt@[pdx| %_ = $txt |] = withFlag MsgHasWargoalAgainst stmt

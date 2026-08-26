@@ -25,6 +25,7 @@ module SettingsTypes (
     ,   getGameInterface
     ,   getGameInterfaceNamed
     ,   getGameInterfaceIfPresent
+    ,   formatLocNumber
     ,   setCurrentFile, withCurrentFile
     ,   getLangs
     ,   unfoldM, concatMapM
@@ -194,6 +195,15 @@ class IsGame g where
     -- | The named blocks currently being written out, innermost first.
     getExpandedBlocks :: Monad m => PPT g m [Text]
     getExpandedBlocks = return []
+    -- | Note which character the script in hand is about, for the length of the
+    -- given action. Script scopes to a person by name and then says what
+    -- happens to them without naming them again, so a statement inside has only
+    -- the scope to tell it who is meant.
+    withCurrentCharacter :: Monad m => Text -> PPT g m a -> PPT g m a
+    withCurrentCharacter _ = id
+    -- | The character the script in hand is about, if it is about one.
+    getCurrentCharacter :: Monad m => PPT g m (Maybe Text)
+    getCurrentCharacter = return Nothing
 -- Example game. Define your game and its 'IsGame' instance in your game's
 -- 'Settings' module. Do NOT define it in Types. Instead, have game-specific
 -- code be polymorphic over Game.

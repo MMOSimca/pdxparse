@@ -2038,6 +2038,24 @@ parseAdvisor stmt@[pdx| %_ = @scr |] = do
     return (slotloc, traitmsg ++ modmsg ++ resmsg)
 parseAdvisor stmt = return ("<!-- Check Script -->", [])
 
+-- | The party a character is written to lead or belong to, as the wiki's icon
+-- for it. Script writes the sub-ideology a leader is filed under -- despotism,
+-- leninism -- and the party is named for the ideology that belongs to.
+partyIcon :: (Monad m, HOI4Info g) => Text -> PPT g m Text
+partyIcon subideo = do
+    subideos <- getIdeology
+    return $ maybe "<!-- Check Script -->" iconText (HM.lookup subideo subideos)
+
+-- | The party the character the script has scoped to is written to lead, or
+-- nothing where the script is not about a character or their entry names no
+-- party.
+scopeParty :: (Monad m, HOI4Info g) => PPT g m (Maybe Text)
+scopeParty = do
+    chas <- getCharacters
+    inscope <- getCurrentCharacter
+    let msub = cha_leader_ideology =<< (flip HM.lookup chas =<< inscope)
+    traverse partyIcon msub
+
 addLeaderRole :: (Monad m, HOI4Info g) => StatementHandler g m
 addLeaderRole stmt@[pdx| %_ = @scr |] = do
         let (name, rest) = extractStmt (matchLhsText "character") scr
@@ -2070,11 +2088,7 @@ parseLeader stmt@[pdx| %_ = @scr |] = do
             concatMapM ppHt traitbare
         _-> return []
     ideoloc <- maybe (return "") (\case
-        [pdx| %_ = $ideotype|] -> do
-            subideos <- getIdeology
-            case HM.lookup ideotype subideos of
-                Just ideo -> getGameL10n ideo
-                _-> return "<!-- Check Script -->"
+        [pdx| %_ = $ideotype|] -> partyIcon ideotype
         _->return "<!-- Check Script -->") ideo
     return (ideoloc, traitmsg)
 parseLeader stmt = return ("<!-- Check Script -->", [])
@@ -2094,11 +2108,7 @@ createLeader stmt@[pdx| %_ = @scr |] = do
                 concatMapM ppHt traitbare
             _-> return []
         ideoloc <- maybe (return "") (\case
-            [pdx| %_ = $ideotype|] -> do
-                subideos <- getIdeology
-                case HM.lookup ideotype subideos of
-                    Just ideo -> getGameL10n ideo
-                    _-> return "<!-- Check Script -->"
+            [pdx| %_ = $ideotype|] -> partyIcon ideotype
             _-> return "<!-- Check Script -->") ideo
         basemsg <- msgToPP $ MsgAddCountryLeaderRole nameloc ideoloc
         return $ basemsg ++ traitmsg
@@ -2113,7 +2123,11 @@ promoteCharacter stmt@[pdx| %_ = @scr |] =
             (_, Just atom) -> promomessage "" atom stmt
             _ -> preStatement stmt
 promoteCharacter stmt@[pdx| %_ = $txt |]
-    | txt == "yes" = msgToPP $ MsgPromoteCharacter ""
+    -- The character is whoever the script has scoped to, who the scope names
+    -- already, so the line says only what becomes of them.
+    | txt == "yes" = do
+        mparty <- scopeParty
+        msgToPP $ maybe (MsgPromoteCharacter "") (MsgAddCountryLeaderRolePromoted "") mparty
     | otherwise = do
         chas <- getCharacters
         subideos <- getIdeology
@@ -2128,25 +2142,27 @@ promomessage :: (Monad m, HOI4Info g) => Text
     -> Text-> StatementHandler g m
 promomessage what atom stmt = do
     chas <- getCharacters
-    subideos <- getIdeology
-    ideoloc <- maybe (return "") getGameL10n (HM.lookup atom subideos)
-    case HM.lookup what chas of
+    let mcha = HM.lookup what chas
+    -- The party the character comes to lead: the one the statement names, or
+    -- failing that the one their own entry writes them for.
+    party <- case (atom, cha_leader_ideology =<< mcha) of
+        (a, _) | not (T.null a) -> partyIcon a
+        (_, Just own) -> partyIcon own
+        _ -> return ""
+    case mcha of
         Just ccha -> do
             let nameloc = cha_loc_name ccha
-                ideolocd = if T.null ideoloc
-                    then fromMaybe "" (cha_leader_ideology ccha)
-                    else ideoloc
             traitmsg <- case cha_leader_traits ccha of
                 Just trts -> do
                     concatMapM ppHt trts
                 _-> return []
-            basemsg <- if not (T.null ideoloc)
-                then msgToPP $ MsgAddCountryLeaderRolePromoted nameloc ideolocd
-                else msgToPP $ MsgPromoteCharacter nameloc
+            basemsg <- if T.null party
+                then msgToPP $ MsgPromoteCharacter nameloc
+                else msgToPP $ MsgAddCountryLeaderRolePromoted nameloc party
             return $ basemsg ++ traitmsg
         _-> if not (T.null what)
             then preStatement stmt
-            else msgToPP $ MsgAddCountryLeaderRolePromoted "" ideoloc
+            else msgToPP $ MsgAddCountryLeaderRolePromoted "" party
 
 ppHt :: (Monad m, HOI4Info g) => Text -> PPT g m IndentedMessages
 ppHt trait = do
@@ -3389,7 +3405,7 @@ removeCountryLeaderRole :: forall g m. (HOI4Info g, Monad m) => StatementHandler
 removeCountryLeaderRole stmt@[pdx| %_ = @scr |] =
     case foldl' addLine (Nothing, Nothing) scr of
         (mchar, Just ideo) -> do
-            ideoloc <- getGameL10n ideo
+            ideoloc <- partyIcon ideo
             charloc <- traverse getCharacterName mchar
             msgToPP (MsgRemoveCountryLeaderRole (fromMaybe "" charloc) ideoloc)
         _ -> preStatement stmt

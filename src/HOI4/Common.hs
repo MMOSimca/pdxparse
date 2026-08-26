@@ -1077,7 +1077,8 @@ ppOne' stmt lhs rhs = case lhs of
                     characters <- getCharacters
                     case HM.lookup label characters of
                         Just charid -> withCurrentIndent $ \_ -> do  -- force indent level at least 1
-                            scriptMsgs <- scope HOI4ScopeCharacter $ ppMany scr
+                            scriptMsgs <- withCurrentCharacter label $
+                                            scope HOI4ScopeCharacter $ ppMany scr
                             foldCharacter (cha_loc_name charid) scriptMsgs
                         _
                             | any (`T.isSuffixOf` label) [".owner",".OWNER",".Owner"] -> withCurrentIndent $ \_ -> do -- force indent level at least 1

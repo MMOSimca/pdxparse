@@ -4974,7 +4974,7 @@ instance RenderMessage Script ScriptMessage where
                 [ _who
                 , ifThenElseT (T.null _who) "Becomes" " becomes"
                 , " a member of the "
-                , boldText _what
+                , _what
                 , " party."
                 ]
         MsgAddCountryLeaderRolePromoted {scriptMessageWho = _who, scriptMessageWhat = _what}
@@ -4982,7 +4982,7 @@ instance RenderMessage Script ScriptMessage where
                 [ _who
                 , ifThenElseT (T.null _who) "Becomes" " becomes"
                 , " leader for the "
-                , boldText _what
+                , _what
                 , " party."
                 ]
         MsgPromoteCharacter {scriptMessageWho = _who}
@@ -5173,12 +5173,15 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgSetPartyName {scriptMessageIcon = _icon, scriptMessageWho = _who, scriptMessageWhat = _what}
             -> mconcat
-                [ "Set the {{icon|"
+                [ "The {{icon|"
                 , _icon
-                , "|1}} party name to ("
-                , _who
-                , ") "
-                , _what
+                , "|1}} party will now be called &#39;"
+                , boldText _what
+                , "&#39;"
+                -- Script gives a party a full name and a short one, and where
+                -- the two differ the short one is worth having as well.
+                , ifThenElseT (_who == _what) "" (" (" <> boldText _who <> ")")
+                , "."
                 ]
         MsgIsInTechSharingGroup {scriptMessageWhat = _what}
             -> mconcat
@@ -5872,7 +5875,7 @@ instance RenderMessage Script ScriptMessage where
             -> mconcat
                 [ ifThenElseT (T.null _who) "Stops" (boldText _who <> " stops")
                 , " leading the "
-                , toMessage (italic (Doc.strictText _what))
+                , _what
                 , " party"
                 ]
         MsgSetDivisionTemplateCap {scriptMessageWhat = _what, scriptMessageAmt = _amt}

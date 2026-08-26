@@ -24,19 +24,20 @@ module HOI4.Localization (
     ,   getCountryName
     ) where
 
-import Data.Char (isAlpha, isDigit, toUpper)
+import Data.Char (isAlpha, isAlphaNum, isDigit, toUpper)
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
 import Data.Maybe (fromMaybe, isJust, isNothing, listToMaybe, mapMaybe)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Text.Read as T
 
 import Abstract (GenericScript)
 import SettingsTypes (PPT, LocArg (..))
 import qualified SettingsTypes as S
 import qualified Doc
-import MessageTools (template)
+import MessageTools (ifThenElseT, template)
 import HOI4.CountryNames (casualName)
 import HOI4.Types -- everything
 
@@ -91,8 +92,55 @@ fillLocScopes = fillLocScopesFor Nothing
 -- written out. A country can be made to go by another name while keeping the
 -- same tree, but only late and rarely, and a name from the wrong end of that is
 -- still plainly the same country -- which the pronoun on its own is not.
+--
+-- The icons the text draws from a sprite are settled here too, the two being
+-- the same kind of thing: something the game fills in for itself as it draws,
+-- which is no use to a reader left as written.
 fillLocScopesFor :: (HOI4Info g, Monad m) => Maybe Text -> Text -> PPT g m Text
-fillLocScopesFor mroot = fillLocScopesTo mroot 4
+fillLocScopesFor mroot text = fillIconFrames <$> fillLocScopesTo mroot 4 text
+
+-- | The resource each frame of the game's resource sprite stands for, from the
+-- @icon_frame@ each is given in @common/resources@.
+resourceFrames :: HashMap Text Text
+resourceFrames = HM.fromList
+    [("1", "oil")
+    ,("2", "aluminium")
+    ,("3", "rubber")
+    ,("4", "tungsten")
+    ,("5", "steel")
+    ,("6", "chromium")
+    ,("7", "coal")
+    ]
+
+-- | Fill in the icons a piece of text draws from a sprite. Localization points
+-- at one frame of a strip -- @£resources_strip|3@, where the third frame is
+-- rubber -- and the wiki has an icon of its own for the thing the frame shows.
+-- A sprite or a frame we know nothing about is left as it is written.
+fillIconFrames :: Text -> Text
+fillIconFrames = go
+    where
+        go t = case T.breakOn marker t of
+            (before, rest) | T.null rest -> before
+            (before, rest) ->
+                let body = T.drop 1 rest
+                    sprite = T.takeWhile isNameChar body
+                    -- The frame is written after the sprite's name and is a
+                    -- number, so whatever follows the digits is the text going
+                    -- on around the reference rather than part of it.
+                    (frame, after) = case T.stripPrefix "|" (T.drop (T.length sprite) body) of
+                        Just digits -> T.span isDigit digits
+                        Nothing -> ("", T.drop (T.length sprite) body)
+                in before <> named sprite frame <> go after
+        marker = T.singleton '\xa3'
+        isNameChar c = isAlphaNum c || c `elem` ("._-" :: String)
+        named sprite frame
+            -- Script writes the sprite's name with or without the @GFX_@ the
+            -- game files give it.
+            | fromMaybe sprite (T.stripPrefix "GFX_" sprite) == "resources_strip"
+            , Just res <- HM.lookup frame resourceFrames
+                = Doc.doc2text (template "icon" [res, "1"])
+            | otherwise = marker <> sprite
+                            <> ifThenElseT (T.null frame) "" ("|" <> frame)
 
 -- | As 'fillLocScopesFor', counting down how many times a text filled in may
 -- name a scripted localization of its own. Script nests them a level or two -- a
@@ -113,6 +161,16 @@ fillLocScopesTo mroot depth text = case T.breakOn "[" text of
 -- | What one bracketed scope command comes to, or 'Nothing' for one we cannot
 -- work out. See 'fillLocScopes'.
 scopeName :: (HOI4Info g, Monad m) => Maybe Text -> Int -> Text -> PPT g m (Maybe Text)
+scopeName mroot depth inner
+    -- A bracket opening with @?@ names a value the game works out as it draws
+    -- the text, which nothing outside the game can say -- except where what is
+    -- named is a number written out in the script itself, which is the same
+    -- number however it is read. The format after the @|@ says how the game
+    -- writes it: @[?-5|%%-]@ is five percent off.
+    | Just asked <- T.stripPrefix "?" inner
+    , (value, fmt) <- T.breakOn "|" asked
+    , Just n <- readNumber value
+    = return . Just . S.formatLocNumber (T.drop 1 fmt) $ n
 scopeName mroot depth inner = case T.stripPrefix "." cmdrest of
     -- Nothing is being asked of a scope, so the brackets may instead name a
     -- scripted localization: the game picking between several texts as it draws
@@ -149,6 +207,12 @@ scopeName mroot depth inner = case T.stripPrefix "." cmdrest of
         -- -- @[THIS.OWNER.X]@ -- and no scripted localization is named with a
         -- dot in it, so the name is whatever follows the last one.
         slocNamed = snd . T.breakOnEnd "."
+
+-- | The number a piece of text spells out, if the whole of it is one.
+readNumber :: Text -> Maybe Double
+readNumber t = case T.signed T.double t of
+    Right (n, rest) | T.null rest -> Just n
+    _ -> Nothing
 
 -- | The text a scripted localization settles on -- the one the game shows when
 -- none of the conditions written for the others hold.
