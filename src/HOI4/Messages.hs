@@ -2784,15 +2784,15 @@ instance RenderMessage Script ScriptMessage where
             -> _what
         MsgActivateAdvisor {scriptMessageWho = _who}
             -> mconcat
-                [ "Hire "
+                [ "Appoint advisor '''"
                 , _who
-                , " as an advisor"
+                , "'''"
                 ]
         MsgDeactivateAdvisor {scriptMessageWho = _who}
             -> mconcat
-                [ "Dismiss "
+                [ "Dismiss advisor '''"
                 , _who
-                , " from their advisor post"
+                , "'''"
                 ]
         MsgIsHiredAsAdvisor {scriptMessageYn = _yn}
             -> mconcat
