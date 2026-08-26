@@ -66,8 +66,14 @@ parseHOI4IdeaGroup :: (HOI4Info g, Monad m) =>
     GenericStatement -> PPT g (ExceptT Text m) [Either Text (Maybe HOI4Idea)]
 parseHOI4IdeaGroup stmt@(StatementBare _) = throwError "bare statement at top level"
 parseHOI4IdeaGroup [pdx| $left = @scr |]
-    = forM scr $ \stmt -> (Right <$> parseHOI4Idea stmt left)
+    = forM scr $ \stmt -> (Right <$> parseHOI4Idea stmt left isLaw)
                             `catchError` (return . Left)
+    where
+        -- A slot says once, for all the ideas in it, that what it holds are the
+        -- country's laws rather than ideas it picks up and puts down.
+        isLaw = any lawMarker scr
+        lawMarker [pdx| law = yes |] = True
+        lawMarker _ = False
 parseHOI4IdeaGroup [pdx| %check = %_ |] = case check of
     AtLhs _ -> return [Right Nothing]
     _-> throwError "unrecognized form for idea block (LHS)"
@@ -77,12 +83,12 @@ parseHOI4IdeaGroup _ = withCurrentFile $ \file ->
 -- | Empty idea. Starts off Nothing everywhere, except id and name
 -- (should get filled in immediately).
 newIdea :: HOI4Idea
-newIdea = HOI4Idea undefined undefined "<!-- Check Script -->" undefined "GFX_idea_unknown" Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing undefined undefined
+newIdea = HOI4Idea undefined undefined "<!-- Check Script -->" undefined "GFX_idea_unknown" Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing False undefined undefined
 
 -- | Parse one idea script into a idea data structure.
 parseHOI4Idea :: (HOI4Info g, Monad m) =>
-    GenericStatement -> Text -> PPT g (ExceptT Text m) (Maybe HOI4Idea)
-parseHOI4Idea [pdx| $ideaName = %rhs |] category = case rhs of
+    GenericStatement -> Text -> Bool -> PPT g (ExceptT Text m) (Maybe HOI4Idea)
+parseHOI4Idea [pdx| $ideaName = %rhs |] category isLaw = case rhs of
     CompoundRhs parts -> do
         idName_loc <- wikifyLocColours <$> getGameL10n ideaName
         -- The picture an idea is shown by where it names none of its own: the
@@ -99,14 +105,15 @@ parseHOI4Idea [pdx| $ideaName = %rhs |] category = case rhs of
                               , id_desc_loc = idDesc
                               , id_picture = idPicture
                               , id_path = sourcePath </> T.unpack category -- so ideas are divided into maps for the cateogry, should I loc or not?
+                              , id_law = isLaw
                               , id_category = category}))
                   parts
     GenericRhs txt [] -> if ideaName == "designer" || ideaName == "use_list_view" || ideaName == "law" then return Nothing else throwError "unrecognized form for idea (RHS) "
     _ -> throwError "unrecognized form for idea (RHS)"
-parseHOI4Idea [pdx| %check = %_ |] _ = case check of
+parseHOI4Idea [pdx| %check = %_ |] _ _ = case check of
     AtLhs _ -> return Nothing
     _-> throwError "unrecognized form for idea block (LHS)"
-parseHOI4Idea _ _ = throwError "unrecognized form for idea (LHS)"
+parseHOI4Idea _ _ _ = throwError "unrecognized form for idea (LHS)"
 
 -- | Interpret one section of an opinion modifier. If understood, add it to the
 -- event data. If not understood, throw an exception.

@@ -3011,46 +3011,28 @@ instance RenderMessage Script ScriptMessage where
                 [ "Has the "
                 , _what
                 , " "
-                , ifThenElseT (T.null _icon) "" ("[[File:" <> _icon <> ".png|28px]] ")
-                , "<!-- "
-                , _key
-                , " -->"
-                , toMessage (iquotes _loc)
+                , namedIdea _icon _key _loc
                 ]
         MsgAddIdea {scriptMessageWhat = _what, scriptMessageIcon = _icon, scriptMessageKey = _key, scriptMessageLoc = _loc}
             -> mconcat
                 [ "Gets the "
                 , _what
                 , " "
-                , ifThenElseT (T.null _icon) "" ("[[File:" <> _icon <> ".png|28px]] ")
-                , "<!-- "
-                , _key
-                , " -->"
-                , toMessage (iquotes _loc)
+                , namedIdea _icon _key _loc
                 ]
         MsgRemoveIdea {scriptMessageWhat = _what, scriptMessageIcon = _icon, scriptMessageKey = _key, scriptMessageLoc = _loc}
             -> mconcat
                 [ "Remove the "
                 , _what
                 , " "
-                , ifThenElseT (T.null _icon) "" ("[[File:" <> _icon <> ".png|28px]] ")
-                , "<!-- "
-                , _key
-                , " -->"
-                , toMessage (iquotes _loc)
+                , namedIdea _icon _key _loc
                 ]
         MsgAddTimedIdea {scriptMessageWhat = _what, scriptMessageIcon = _icon, scriptMessageKey = _key, scriptMessageLoc = _loc, scriptMessageDays = _days}
             -> mconcat
                 [ "Gets the "
                 , _what
                 , " "
-                , "[[File:"
-                , _icon
-                ,".png|28px]]"
-                , " <!-- "
-                , _key
-                ,  " -->"
-                , toMessage (iquotes _loc)
+                , namedIdea _icon _key _loc
                 ," for "
                 , toMessage (formatDays _days)
                 ]
@@ -3059,13 +3041,7 @@ instance RenderMessage Script ScriptMessage where
                 [ "Extend the "
                 , _what
                 , " "
-                , "[[File:"
-                , _icon
-                ,".png|28px]]"
-                , " <!-- "
-                , _key
-                ,  " -->"
-                , toMessage (iquotes _loc)
+                , namedIdea _icon _key _loc
                 ," by "
                 , toMessage (formatDays _days)
                 ]
@@ -3077,36 +3053,18 @@ instance RenderMessage Script ScriptMessage where
                 ,  " -->"
                 , _cat2
                 , " "
-                , "[[File:"
-                , _icon2
-                ,".png|28px]]"
-                , " <!-- "
-                , _key2
-                ,  " -->"
-                , toMessage (iquotes _loc2)
+                , namedIdea _icon2 _key2 _loc2
                 ]
         MsgReplaceIdea { scriptMessageCategory = _cat, scriptMessageIcon = _icon, scriptMessageKey = _key, scriptMessageLoc = _loc, scriptMessageCategory2 = _cat2, scriptMessageIcon2 = _icon2, scriptMessageKey2 = _key2, scriptMessageLoc2 = _loc2}
             -> mconcat
                 [ "Replace the "
                 , _cat
                 , " "
-                , "[[File:"
-                , _icon
-                ,".png|28px]]"
-                , " <!-- "
-                , _key
-                ,  " -->"
-                , toMessage (iquotes _loc)
+                , namedIdea _icon _key _loc
                 ," with the "
                 , _cat2
                 , " "
-                , "[[File:"
-                , _icon2
-                ,".png|28px]]"
-                , " <!-- "
-                , _key2
-                ,  " -->"
-                , toMessage (iquotes _loc2)
+                , namedIdea _icon2 _key2 _loc2
                 ]
         MsgEffectBox {scriptMessageLoc = _loc, scriptMessageKey = _key, scriptMessageIcon = _icon, scriptMessageDesc = _desc}
             -> mconcat
@@ -4665,14 +4623,14 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgNeutralityCompare {scriptMessageAmt = _amt, scriptMessageCompare = _comp}
             -> mconcat
-                [ "{{icon|neutrality|1}} popularity is "
+                [ "{{icon|Non-Aligned|1}} popularity is "
                 , _comp
                 , " "
                 , toMessage (bold (reducedNum plainPcMin _amt))
                 ]
         MsgNeutralityCompareVar {scriptMessageAmtText = _amtT, scriptMessageCompare = _comp}
             -> mconcat
-                [ "{{icon|neutrality|1}} popularity is "
+                [ "{{icon|Non-Aligned|1}} popularity is "
                 , _comp
                 , " "
                 , typewriterText _amtT
@@ -6101,6 +6059,22 @@ buildingNames l10n = HS.fromList
             Just (stem, 'y') | maybe True (`notElem` ("aeiou" :: String)) (snd <$> T.unsnoc stem)
                 -> stem <> "ies"
             _ -> name <> "s"
+
+-- | How a line names an idea: the picture the game shows it by, the key script
+-- keeps it under so that a wiki editor can find it again, and its name.
+--
+-- The country's laws are shown through the wiki's icon template, which writes
+-- the name itself; every other idea is shown by its picture with the name in
+-- quotes after it. Which of the two an idea gets is settled where the line is
+-- put together, and reaches here as either a finished template or a bare file
+-- name.
+namedIdea :: Text -> Text -> Text -> Text
+namedIdea shown key loc = mconcat
+    [ ifThenElseT (T.null shown) "" (shown <> " ")
+    , "<!-- ", key, " -->"
+    , ifThenElseT (byTemplate shown) "" (Doc.doc2text (iquotes loc))
+    ]
+    where byTemplate = T.isPrefixOf "{{icon|"
 
 -- | Replace coloured building names with the building's icon. The game gives
 -- building names a colour wherever they turn up in its localization; the wiki

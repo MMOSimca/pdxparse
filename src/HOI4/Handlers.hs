@@ -307,7 +307,7 @@ icon what = case HM.lookup what scriptIconFileTable of
         else
             -- The "1" parameter makes the wiki template append its localized
             -- term for the icon, so callers must not add the name themselves.
-            template "icon" [HM.findWithDefault what what scriptIconTable, "1"]
+            template "icon" [iconTerm what, "1"]
 iconText :: Text -> Text
 iconText = Doc.doc2text . icon
 
@@ -1238,7 +1238,17 @@ scriptIconTable = HM.fromList
     -- autonomy
     ,("autonomy_dominion"   , "dominion")
     ,("autonomy_satellite"  , "satellite")
+    -- ideologies. Script keeps the non-aligned under a word neither the game
+    -- nor the wiki shows a reader: the files say "neutrality" where both say
+    -- "Non-Aligned".
+    ,("neutrality"          , "Non-Aligned")
     ]
+
+-- | The term the wiki's icon template knows a script atom by, for the messages
+-- that write the template themselves rather than going through 'icon'. An atom
+-- the table says nothing about is its own term.
+iconTerm :: Text -> Text
+iconTerm atom = HM.findWithDefault atom atom scriptIconTable
 
 -- | Table of script atom -> file. For things that don't have icons and should instead just
 -- show an image. An empty string can be used as a short hand for just appending ".png".
@@ -1707,9 +1717,11 @@ ideologyIconLoc atom = do
     return (if isPronoun atom then mempty else ideoIcon, what)
     where
         ideoIcon = Doc.doc2text (template "icon" [ideoKey, "1"])
-        ideoKey = case T.uncons atom of
-            Just (c, rest) -> T.cons (toUpper c) rest
-            Nothing -> atom
+        ideoKey | termed /= atom = termed
+                | otherwise = case T.uncons atom of
+                    Just (c, rest) -> T.cons (toUpper c) rest
+                    Nothing -> atom
+        termed = iconTerm atom
 
 
 -- | Get localization for the atom given. Return atom
@@ -3561,7 +3573,7 @@ foldCompound "setPartyName" "SetPartyName" "spn"
         let long_name = fromMaybe "" _long_name
         long_loc <- getGameL10n long_name
         short_loc <- getGameL10n _name
-        return $ MsgSetPartyName _ideology short_loc long_loc
+        return $ MsgSetPartyName (iconTerm _ideology) short_loc long_loc
     |]
 
 ---------------------------------
@@ -4133,10 +4145,10 @@ setPopularities [pdx| %_ = @scr |] = do
     where
         getpops stmt@[pdx| $ideo = !num |] = do
             ideoloc <- getGameL10n ideo
-            msgToPP $ MsgSetPopularity ideo ideoloc num
+            msgToPP $ MsgSetPopularity (iconTerm ideo) ideoloc num
         getpops stmt@[pdx| $ideo = ?txt |] = do
             ideoloc <- getGameL10n ideo
-            msgToPP $ MsgSetPopularityVar ideo ideoloc txt
+            msgToPP $ MsgSetPopularityVar (iconTerm ideo) ideoloc txt
         getpops stmt = preStatement stmt
 setPopularities stmt = preStatement stmt
 

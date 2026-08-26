@@ -227,7 +227,14 @@ handleIdea' always addIdea ide = do
             effectbox <- modmessage iidea idea_loc ideaKey ideaIcon
             effectboxNS <- if addIdea && (always || id_category iidea == "country")
                               then return $ Just effectbox else return Nothing
-            return $ Just (category, ideaIcon, ideaKey, idea_loc, effectboxNS)
+            -- The wiki has an icon of its own for each of the country's laws,
+            -- keyed by the law's name, and shows a law by that rather than by
+            -- the picture the game draws it with. Every other idea has no such
+            -- icon and is shown by its picture.
+            let shown | id_law iidea = iconText idea_loc
+                      | T.null ideaIcon = ""
+                      | otherwise = "[[File:" <> ideaIcon <> ".png|28px]]"
+            return $ Just (category, shown, ideaKey, idea_loc, effectboxNS)
         Nothing -> case HM.lookup ide charto of
             Nothing -> return Nothing
             Just cchat -> do

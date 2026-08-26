@@ -411,6 +411,7 @@ data HOI4Idea = HOI4Idea
     ,   id_do_effect :: Maybe GenericScript -- ^ requirements for the idea's modifiers to work
     ,   id_allowed_civil_war :: Maybe GenericScript
     ,   id_traits :: Maybe GenericScript
+    ,   id_law :: Bool -- ^ whether the slot holding it is one of the country's laws
     ,   id_category :: Text
     ,   id_path :: FilePath -- ^ Source file
     } deriving (Show)
