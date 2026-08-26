@@ -275,16 +275,16 @@ data ScriptMessage
     | MsgOccupationLaw {scriptMessageWhat :: Text}
     | MsgDiplomaticRelation {scriptMessageWhat :: Text, scriptMessageWhom :: Text}
     | MsgGiveResourceRights {scriptMessageWho :: Text, scriptMessageWhere :: Text, scriptMessageWhat :: Text}
-    | MsgTrait {scriptMessageYn :: Bool}
-    | MsgTraitIdeo {scriptMessageYn :: Bool, scriptMessageWhat :: Text}
-    | MsgTraitChar {scriptMessageWho :: Text, scriptMessageYn :: Bool}
-    | MsgTraitCharIdeo {scriptMessageWho :: Text, scriptMessageYn :: Bool, scriptMessageWhat :: Text}
-    | MsgAddCountryLeaderTrait
-    | MsgRemoveCountryLeaderTrait
+    | MsgTrait {scriptMessageYn :: Bool, scriptMessageLoc :: Text}
+    | MsgTraitIdeo {scriptMessageYn :: Bool, scriptMessageWhat :: Text, scriptMessageLoc :: Text}
+    | MsgTraitChar {scriptMessageWho :: Text, scriptMessageYn :: Bool, scriptMessageLoc :: Text}
+    | MsgTraitCharIdeo {scriptMessageWho :: Text, scriptMessageYn :: Bool, scriptMessageWhat :: Text, scriptMessageLoc :: Text}
+    | MsgAddCountryLeaderTrait {scriptMessageLoc :: Text}
+    | MsgRemoveCountryLeaderTrait {scriptMessageLoc :: Text}
     | MsgModifyCountryLeaderTrait
     | MsgReplaceCountryLeaderTrait {scriptMessageWhat :: Text}
-    | MsgAddUnitLeaderTrait
-    | MsgRemoveUnitLeaderTrait
+    | MsgAddUnitLeaderTrait {scriptMessageLoc :: Text}
+    | MsgRemoveUnitLeaderTrait {scriptMessageLoc :: Text}
     | MsgAddTimedUnitLeaderTrait {scriptMessageWhat :: Text, scriptMessageAmt :: Double}
     | MsgAddTimedUnitLeaderTraitVar {scriptMessageWhat :: Text, scriptMessageAmtText :: Text}
     | MsgHasTrait {scriptMessageWhat :: Text}
@@ -1486,34 +1486,36 @@ instance RenderMessage Script ScriptMessage where
                 , " rights to the ", _what ,"resources in "
                 ,  _where
                 ]
-        MsgTrait {scriptMessageYn = _yn}
+        MsgTrait {scriptMessageYn = _yn, scriptMessageLoc = _loc}
             -> mconcat
-                [ ifThenElseT _yn "Gains" "Loses"
+                [ ifThenElseT _yn "Gains " "Loses "
+                , boldText _loc
                 ]
-        MsgTraitIdeo {scriptMessageYn = _yn, scriptMessageWhat = _what}
+        MsgTraitIdeo {scriptMessageYn = _yn, scriptMessageWhat = _what, scriptMessageLoc = _loc}
             -> mconcat
-                [ ifThenElseT _yn "Gains" "Loses"
+                [ ifThenElseT _yn "Gains " "Loses "
+                , boldText _loc
                 , " if character's ideology is "
                 , _what
                 ]
-        MsgTraitChar {scriptMessageWho = _who, scriptMessageYn = _yn}
+        MsgTraitChar {scriptMessageWho = _who, scriptMessageYn = _yn, scriptMessageLoc = _loc}
             -> mconcat
                 [ _who
-                , " "
-                , ifThenElseT _yn "gains" "loses"
+                , ifThenElseT _yn " gains " " loses "
+                , boldText _loc
                 ]
-        MsgTraitCharIdeo {scriptMessageWho = _who, scriptMessageYn = _yn, scriptMessageWhat = _what}
+        MsgTraitCharIdeo {scriptMessageWho = _who, scriptMessageYn = _yn, scriptMessageWhat = _what, scriptMessageLoc = _loc}
             -> mconcat
                 [ _who
-                , " "
-                , ifThenElseT _yn "gains" "loses"
+                , ifThenElseT _yn " gains " " loses "
+                , boldText _loc
                 , " if character's ideology is "
                 , boldText _what
                 ]
-        MsgAddCountryLeaderTrait
-            -> "Country leader gains trait:"
-        MsgRemoveCountryLeaderTrait
-            -> "Country leader loses trait:"
+        MsgAddCountryLeaderTrait {scriptMessageLoc = _loc}
+            -> "Country leader gains " <> boldText _loc
+        MsgRemoveCountryLeaderTrait {scriptMessageLoc = _loc}
+            -> "Country leader loses " <> boldText _loc
         MsgModifyCountryLeaderTrait
             -> "Modify country leader trait:"
         MsgReplaceCountryLeaderTrait {scriptMessageWhat = _what}
@@ -1522,10 +1524,10 @@ instance RenderMessage Script ScriptMessage where
                 , boldText _what
                 , " with:"
                 ]
-        MsgAddUnitLeaderTrait
-            -> "Unit leader gains trait:"
-        MsgRemoveUnitLeaderTrait
-            -> "Unit leader loses trait:"
+        MsgAddUnitLeaderTrait {scriptMessageLoc = _loc}
+            -> "Unit leader gains " <> boldText _loc
+        MsgRemoveUnitLeaderTrait {scriptMessageLoc = _loc}
+            -> "Unit leader loses " <> boldText _loc
         MsgAddTimedUnitLeaderTrait {scriptMessageWhat = _what, scriptMessageAmt = _amt}
             -> mconcat
                 [ "Unit leader gains "

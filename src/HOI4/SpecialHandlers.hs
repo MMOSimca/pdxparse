@@ -2640,36 +2640,28 @@ handleTrait addremove stmt@[pdx| %_ = @scr |] =
         addLine ht [pdx| slot = %_ |] = ht
         addLine ht stmt = trace ("Unknown in handleTrait: " ++ show stmt) ht
         pp_ht addremove ht = do
-            traitloc <- getGameL10n $ ht_trait ht
-            namemsg <- indentUp $ plainMsg' ("'''" <> traitloc <> "'''")
-            traitmsg' <- indentUp $ indentUp $ getLeaderTraits (ht_trait ht)
-            let traitmsg = namemsg : traitmsg'
-            case (ht_character ht, ht_ideology ht) of
+            traitloc <- Doc.oneLine <$> getGameL10n (ht_trait ht)
+            traitmsg <- indentUp $ getLeaderTraits (ht_trait ht)
+            baseMsg <- case (ht_character ht, ht_ideology ht) of
                 (Just char, Just ideo) -> do
                     charloc <- getCharacterName char
                     ideoloc <- getGameL10n ideo
-                    baseMsg <- msgToPP $ MsgTraitCharIdeo charloc addremove ideoloc
-                    return $ baseMsg ++ traitmsg
+                    msgToPP $ MsgTraitCharIdeo charloc addremove ideoloc traitloc
                 (Just char, _) -> do
                     charloc <- getCharacterName char
-                    baseMsg <- msgToPP $ MsgTraitChar charloc addremove
-                    return $ baseMsg ++ traitmsg
+                    msgToPP $ MsgTraitChar charloc addremove traitloc
                 (_, Just ideo) -> do
                     ideoloc <- getGameL10n ideo
-                    baseMsg <- msgToPP $ MsgTraitIdeo addremove ideoloc
-                    return $ baseMsg ++ traitmsg
-                _ -> do
-                    baseMsg <- msgToPP $ MsgTrait addremove
-                    return $ baseMsg ++ traitmsg
+                    msgToPP $ MsgTraitIdeo addremove ideoloc traitloc
+                _ -> msgToPP $ MsgTrait addremove traitloc
+            return $ baseMsg ++ traitmsg
 handleTrait _ stmt = preStatement stmt
 
-addRemoveLeaderTrait :: (Monad m, HOI4Info g) => ScriptMessage -> StatementHandler g m
+addRemoveLeaderTrait :: (Monad m, HOI4Info g) => (Text -> ScriptMessage) -> StatementHandler g m
 addRemoveLeaderTrait msg stmt@[pdx| %_ = $trait |] = do
-    traitloc <- getGameL10n trait
-    namemsg <- indentUp $ plainMsg' ("'''" <> traitloc <> "'''")
-    traitmsg' <- indentUp $ indentUp $ getLeaderTraits trait
-    let traitmsg = namemsg : traitmsg'
-    baseMsg <- msgToPP msg
+    traitloc <- Doc.oneLine <$> getGameL10n trait
+    traitmsg <- indentUp $ getLeaderTraits trait
+    baseMsg <- msgToPP (msg traitloc)
     return $ baseMsg ++ traitmsg
 -- The block form names the trait under @trait@, and may say which of the
 -- country's leaders it belongs to under @ideology@. The trait is the part that
@@ -2680,13 +2672,11 @@ addRemoveLeaderTrait msg stmt@[pdx| %_ = @scr |] =
         [] -> preStatement stmt
 addRemoveLeaderTrait _ stmt = preStatement stmt
 
-addRemoveUnitTrait :: (Monad m, HOI4Info g) => ScriptMessage -> StatementHandler g m
+addRemoveUnitTrait :: (Monad m, HOI4Info g) => (Text -> ScriptMessage) -> StatementHandler g m
 addRemoveUnitTrait msg stmt@[pdx| %_ = $trait |] = do
-    traitloc <- getGameL10n trait
-    namemsg <- indentUp $ plainMsg' ("'''" <> traitloc <> "'''")
-    traitmsg' <- indentUp $ indentUp $ getUnitTraits trait
-    let traitmsg = namemsg : traitmsg'
-    baseMsg <- msgToPP msg
+    traitloc <- Doc.oneLine <$> getGameL10n trait
+    traitmsg <- indentUp $ getUnitTraits trait
+    baseMsg <- msgToPP (msg traitloc)
     return $ baseMsg ++ traitmsg
 addRemoveUnitTrait _ stmt = preStatement stmt
 
