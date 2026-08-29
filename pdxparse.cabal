@@ -52,6 +52,7 @@ executable pdxparse
                        QQ,
                        Settings,
                        SettingsTypes,
+                       StatementUtils,
                        Yaml
 
   default-extensions:  DeriveGeneric,

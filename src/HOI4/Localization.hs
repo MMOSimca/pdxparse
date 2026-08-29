@@ -37,7 +37,7 @@ import Abstract (GenericScript)
 import SettingsTypes (PPT, LocArg (..))
 import qualified SettingsTypes as S
 import qualified Doc
-import MessageTools (ifThenElseT, template)
+import MessageTools (boldText, ifThenElseT, plainNum, template)
 import HOI4.CountryNames (casualName)
 import HOI4.Types -- everything
 

@@ -36,7 +36,8 @@ import SettingsTypes ( PPT, Settings (..){-, Game (..)-}
                      , getGameInterfaceNamed)
 import HOI4.Types -- everything
 import HOI4.Localization
-import HOI4.Common (extractStmt, matchExactText, ppMany, HOI4OpinionModifier (HOI4OpinionModifier))
+import HOI4.Common (ppMany, HOI4OpinionModifier (HOI4OpinionModifier))
+import StatementUtils (extractStmt, matchExactText)
 import FileIO (Feature (..), writeFeatures)
 import Text.PrettyPrint.Leijen.Text (Doc)
 import qualified Text.PrettyPrint.Leijen.Text as PP

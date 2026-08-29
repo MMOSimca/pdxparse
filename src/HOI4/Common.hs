@@ -10,7 +10,6 @@ module HOI4.Common (
     ,   ppMany
     ,   AIWillDo (..), AIModifier (..)
     ,   ppAiWillDo, ppAiMod
-    ,   extractStmt, matchLhsText, matchExactText
     ,   module HOI4.Types
     ) where
 
@@ -41,6 +40,7 @@ import qualified Doc -- everything
 import HOI4.Messages -- everything
 import QQ (pdx)
 import SettingsTypes -- everything
+import StatementUtils -- everything
 import HOI4.Handlers -- everything
 import HOI4.SpecialHandlers -- everything
 import HOI4.Types -- everything

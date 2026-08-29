@@ -6193,57 +6193,9 @@ substColoured names = go
         isWordChar c = isAlphaNum c || c == '_'
 
 
--- | Rewrite the colour templates that a localization's @§@ codes turn into the
--- way the wiki writes the same emphasis. The game's green and red for good and
--- bad news have templates of their own, and the yellow it picks a term out of a
--- sentence with is bold on the wiki. Its highlight is green as well: the wiki
--- writes in green some of what the game highlights. Any other colour is left as
--- it was.
-wikifyLocColours :: Text -> Text
-wikifyLocColours = go
-    where
-        go t = case T.breakOn "{{color|" t of
-            (before, rest)
-                | T.null rest -> before
-                | otherwise -> case splitTemplate (T.drop 8 rest) of
-                    -- Unterminated template: nothing sensible to do, leave it.
-                    Nothing -> before <> rest
-                    Just (code, body, after) ->
-                        before <> recoloured code (go body) <> go after
-        -- A colour arrives either as the letter the game writes it with or,
-        -- from 'templateColor'', as its name spelled out.
-        recoloured code body = case T.toUpper code of
-            "G" -> "{{green|" <> body <> "}}"
-            "H" -> "{{green|" <> body <> "}}"
-            "GREEN" -> "{{green|" <> body <> "}}"
-            "R" -> "{{red|" <> body <> "}}"
-            "RED" -> "{{red|" <> body <> "}}"
-            -- Green and red are the game saying whether something is good news
-            -- or bad, which the wiki says the same way. Every other colour is
-            -- the game picking a term out of a sentence against its own dark
-            -- background -- yellow and white for the most part, but the rest of
-            -- the palette turns up too. None of those carry over to a light
-            -- background, where white in particular is next to invisible, so
-            -- they all come out as the emphasis they were meant to be.
-            _ -> "'''" <> body <> "'''"
 
--- | Split the innards of a template, given the text just after its @{{name|@,
--- into its first argument, the rest of it, and whatever follows the template.
-splitTemplate :: Text -> Maybe (Text, Text, Text)
-splitTemplate t = do
-    let (arg, rest) = T.breakOn "|" t
-    body <- T.stripPrefix "|" rest
-    (inside, after) <- takeToClose (1::Int) "" body
-    return (arg, inside, after)
-    where
-        takeToClose n acc s =
-            let (before, close) = T.breakOn "}}" s
-                n' = n - 1 + T.count "{{" before
-            in if T.null close
-                then Nothing
-                else if n' <= 0
-                    then Just (acc <> before, T.drop 2 close)
-                    else takeToClose n' (acc <> before <> "}}") (T.drop 2 close)
+
+
 
 -- | Select correct icon for balance of power
 bopicon :: Double -> Text

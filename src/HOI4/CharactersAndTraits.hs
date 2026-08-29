@@ -30,6 +30,7 @@ import SettingsTypes ( PPT
                      , setCurrentFile, withCurrentFile
                      , hoistErrors, hoistExceptions)
 import HOI4.Common -- everything
+import StatementUtils -- everything
 import HOI4.Localization
 import HOI4.Messages (wikifyLocColours)
 ----------------

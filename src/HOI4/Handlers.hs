@@ -234,7 +234,8 @@ import SettingsTypes ( PPT, IsGameData (..), GameData (..), IsGameState (..), Ga
                      , LocArg (..) )
 import HOI4.Templates
 import HOI4.Localization
-import {-# SOURCE #-} HOI4.Common (ppScript, ppMany, ppOne, extractStmt, matchLhsText)
+import StatementUtils -- everything
+import {-# SOURCE #-} HOI4.Common (ppScript, ppMany, ppOne)
 import HOI4.Types -- everything
 
 import Debug.Trace

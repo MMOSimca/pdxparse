@@ -2,8 +2,6 @@ module HOI4.Common (
         ppScript
     ,   ppMany
     ,   ppOne
-    ,   extractStmt
-    ,   matchLhsText
     ) where
 
 import Abstract (GenericScript, GenericStatement)
@@ -16,5 +14,3 @@ import Data.Text (Text)
 ppScript :: (HOI4Info g, Monad m) => GenericScript -> PPT g m Doc
 ppMany :: (HOI4Info g, Monad m) => GenericScript -> PPT g m IndentedMessages
 ppOne :: (HOI4Info g, Monad m) => StatementHandler g m
-extractStmt :: (a -> Bool) -> [a] -> (Maybe a, [a])
-matchLhsText :: Text -> GenericStatement -> Bool

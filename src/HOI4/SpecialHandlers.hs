@@ -68,8 +68,6 @@ import qualified Data.Text as T
 
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
---import Data.Set (Set)
-
 
 import Data.Char (chr, isDigit, toUpper)
 import Data.List (foldl', groupBy, sortOn, elemIndex, find)
@@ -86,14 +84,14 @@ import MessageTools (iquotes
                     , plainNum
                     , formatDays)
 import QQ -- everything
--- everything
 import SettingsTypes ( PPT, IsGameData (..), GameData (..), IsGameState (..), GameState (..)
                      , scope
                      , indentUp, getCurrentIndent, withCurrentIndent, withCurrentIndentCustom
                      , LocArg (..)
                      , concatMapM
                      , getGameInterface, getGameInterfaceNamed, getGameInterfaceIfPresent)
-import {-# SOURCE #-} HOI4.Common (ppMany, ppOne, extractStmt, matchLhsText)
+import StatementUtils -- everything
+import {-# SOURCE #-} HOI4.Common (ppMany, ppOne)
 import HOI4.Types -- everything
 import HOI4.Localization
 import Debug.Trace

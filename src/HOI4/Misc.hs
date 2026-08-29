@@ -45,6 +45,7 @@ import SettingsTypes ( PPT
                      , hoistErrors, hoistExceptions)
 import HOI4.Common -- everything
 import HOI4.SpecialHandlers ( modifiersTable)
+import StatementUtils -- everything
 import HOI4.Messages (ScriptMessage (..), ModifierDisplay, modYesNo, modNoYes)
 
 newHOI4CountryHistory :: Maybe Text -> Text -> HOI4CountryHistory
