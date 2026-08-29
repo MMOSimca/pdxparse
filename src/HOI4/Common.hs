@@ -214,7 +214,9 @@ handlersRhsIrrelevant = Tr.fromList
         ,("retire_country_leader"   , rhsAlwaysYes MsgRetireCountryLeader)
         ,("set_country_leader_description" , rhsIgnored MsgSetLeaderDescription)
         ,("set_faction_leader"      , rhsAlwaysYes MsgSetFactionLeader)
-        ,("set_portraits"            , rhsIgnored MsgSetPortraits)
+        ,("promote_leader"          , rhsAlwaysYes MsgPromoteToFieldMarshal)
+        ,("remove_unit_leader_role" , rhsAlwaysYes MsgRemoveUnitLeaderRole)
+        ,("set_portraits"           , rhsIgnored MsgSetPortraits)
         ]
 
 -- | Handlers for numeric statements
@@ -240,6 +242,9 @@ handlersNumeric = Tr.fromList
         ,("add_faction_initiative"           , numeric MsgAddFactionInitiative)
         ,("add_faction_influence_ratio"      , numeric MsgAddFactionInfluenceRatio)
         ,("add_mio_research_bonus"           , numeric MsgAddMioResearchBonus)
+        ,("add_mio_size"                     , numeric MsgAddMioSize)
+        ,("add_mio_funds"                    , numeric MsgAddMioFunds)
+        ,("add_mio_funds_gain_factor"        , numeric MsgAddMioFundsGainFactor)
         ,("add_cic"                          , numeric MsgAddCic)
         ,("controls_province"                , numeric MsgControlsProvince)
         ,("random_select_amount"             , numeric MsgRandomSelectAmount)
@@ -345,23 +350,23 @@ handlersNumericIcons = Tr.fromList
 -- | Handlers for statements pertaining to modifiers
 handlersModifiers :: (HOI4Info g, Monad m) => Trie (StatementHandler g m)
 handlersModifiers = Tr.fromList
-        [("add_dynamic_modifier"        , addDynamicModifier)
-        ,("remove_dynamic_modifier"     , removeDynamicModifier)
-        ,("has_dynamic_modifier"        , hasDynamicModifier)
-        ,("modifier"                    , handleModifier)
-        ,("add_state_modifier"          , plainmodifiermsg MsgAddStateModifier)
-        ,("add_power_balance_modifier"  , addPowerBalanceModifier)
+        [("add_dynamic_modifier"          , addDynamicModifier)
+        ,("remove_dynamic_modifier"       , removeDynamicModifier)
+        ,("has_dynamic_modifier"          , hasDynamicModifier)
+        ,("modifier"                      , handleModifier)
+        ,("add_state_modifier"            , plainmodifiermsg MsgAddStateModifier)
+        ,("add_power_balance_modifier"    , addPowerBalanceModifier)
         ,("remove_power_balance_modifier" , textAtomKey "id" "modifier" MsgRemovePowerBalanceModifier tryLoc)
-        ,("has_power_balance_modifier"  , textAtomKey "id" "modifier" MsgHasPowerBalanceModifier tryLoc)
-        ,("research_bonus"              , handleResearchBonus)
-        ,("targeted_modifier"           , handleTargetedModifier)
-        ,("equipment_bonus"             , handleEquipmentBonus)
-        ,("hidden_modifier"             , handleHiddenModifier)
+        ,("has_power_balance_modifier"    , textAtomKey "id" "modifier" MsgHasPowerBalanceModifier tryLoc)
+        ,("research_bonus"                , handleResearchBonus)
+        ,("targeted_modifier"             , handleTargetedModifier)
+        ,("equipment_bonus"               , handleEquipmentBonus)
+        ,("hidden_modifier"               , handleHiddenModifier)
 
-        ,("non_shared_modifier"         , handleModifier)
-        ,("corps_commander_modifier"    , handleModifier)
-        ,("field_marshal_modifier"      , handleModifier)
-        ,("sub_unit_modifiers"          , handleEquipmentBonus)
+        ,("non_shared_modifier"           , handleModifier)
+        ,("corps_commander_modifier"      , handleModifier)
+        ,("field_marshal_modifier"        , handleModifier)
+        ,("sub_unit_modifiers"            , handleEquipmentBonus)
         ]
 
 -- | Handlers for simple compound statements
@@ -474,8 +479,8 @@ handlersCompound = Tr.fromList
         ,("owner"                       , compoundMessagePronoun)
         ,("controller"                  , scope HOI4Country   . compoundMessageScope MsgControllerSCOPE)
         ,("capital_scope"               , scope HOI4ScopeState  . compoundMessageScope MsgCapitalSCOPE)
-        ,("event_target"        , compoundMessageTagged MsgSCOPEEventTarget (Just HOI4Misc)) -- Tagged blocks
-        ,("var"                 , compoundMessageTagged MsgSCOPEVariable (Just HOI4Misc)) -- Tagged blocks
+        ,("event_target"                , compoundMessageTagged MsgSCOPEEventTarget (Just HOI4Misc)) -- Tagged blocks
+        ,("var"                         , compoundMessageTagged MsgSCOPEVariable (Just HOI4Misc)) -- Tagged blocks
         -- arrays
         ,("all_of_scopes"               , scope HOI4Misc . compoundMessageExtract "array" MsgAllOfScopes)
         ,("any_of_scopes"               , scope HOI4Misc . compoundMessageExtract "array" MsgAnyOfScopes)
@@ -485,21 +490,21 @@ handlersCompound = Tr.fromList
         ,("and"                         , compoundMessage MsgAnd) --AND
         ,("not"                         , compoundMessageNot) --NOT
         ,("or"                          , compoundMessage MsgOr) --OR
-        ,("count_triggers"          ,   compoundMessageExtractNum "amount" MsgCountTriggers)
-        ,("hidden_trigger"          ,                      compoundMessage MsgHiddenTriggers)
-        ,("custom_trigger_tooltip"  ,                      compoundMessage MsgCustomTriggerTooltip)
-        ,("hidden_effect"           ,                      compoundMessage MsgHiddenEffect)
+        ,("count_triggers"              , compoundMessageExtractNum "amount" MsgCountTriggers)
+        ,("hidden_trigger"              , compoundMessage MsgHiddenTriggers)
+        ,("custom_trigger_tooltip"      , compoundMessage MsgCustomTriggerTooltip)
+        ,("hidden_effect"               , compoundMessage MsgHiddenEffect)        ,("else"                    ,                      compoundMessage MsgElse)
+        ,("else_if"                     , compoundMessageCondition MsgElseIf)
+        ,("if"                          , compoundMessageCondition MsgIf)
+        ,("limit"                       , setIsInEffect False . compoundMessage MsgLimit) -- often needs editing
+        ,("prioritize"                  , prioritize) -- often needs editing
+        ,("while_loop_effect"           , compoundMessage MsgWhile) -- always needs editing
+        ,("for_loop_effect"             , compoundMessage MsgFor) -- always needs editing
+        -- random and random_list are also part of flow control but are more complicated
+
         -- What follows is done to the country made up here, not to the one the
         -- script was about.
         ,("create_dynamic_country"  , scope HOI4Country . compoundMessageExtractTag "original_tag" MsgCreateDynamicCountry)
-        ,("else"                    ,                      compoundMessage MsgElse)
-        ,("else_if"                 ,                      compoundMessageCondition MsgElseIf)
-        ,("if"                      ,                      compoundMessageCondition MsgIf)
-        ,("limit"                   , setIsInEffect False . compoundMessage MsgLimit) -- always needs editing
-        ,("prioritize"              ,                       prioritize) -- always needs editing
-        ,("while_loop_effect"       ,                       compoundMessage MsgWhile) -- always needs editing
-        ,("for_loop_effect"         ,                       compoundMessage MsgFor) -- always needs editing
-        -- random and random_list are also part of flow control but are more complicated
         ]
 
 -- | Handlers for simple statements where RHS is a localizable atom
@@ -508,7 +513,6 @@ handlersLocRhs = Tr.fromList
         [("create_faction"        , withLocAtom MsgCreateFaction)
         ,("set_state_name"        , withLocAtom MsgSetStateName)
         ,("set_state_category"    , withLocAtom MsgSetStateCategory)
-        ,("custom_effect_tooltip" , tooltipWith MsgCustomEffectTooltip)
         ,("has_country_leader_with_trait" , withLocAtom MsgHasCountryLeaderWithTrait)
         ,("has_decision"          , withLocAtomKey MsgHasDecision)
         ,("has_power_balance"     , withLocAtomCompound MsgHasPowerBalance)
@@ -529,48 +533,61 @@ handlersLocRhs = Tr.fromList
         ,("is_researching_technology" , withLocAtom MsgIsResearchingTechnology)
         ,("set_faction_name"      , withLocAtom MsgSetFactionName)
         ,("retire_ideology_leader" , withLocAtom MsgRetireIdeologyLeader)
+        ,("has_trait"             , withLocAtom MsgHasTrait)
+        ,("activate_mission_tooltip" , withLocAtom MsgActivateMissionTooltip)
+        ,("is_special_project_completed" , withLocAtom MsgIsSpecialProjectCompleted)
+        -- The tactic is named by a localization key of its own, kept apart from
+        -- the rest in tactics_l_english.yml.
+        ,("unlock_tactic"         , withLocAtom MsgUnlockTactic)
+        ,("unlock_decision_category_tooltip" , withLocAtom MsgUnlockDecisionCategoryTooltip)
         ,("tooltip"               , tooltipWith MsgTooltip)
+        ,("custom_effect_tooltip" , tooltipWith MsgCustomEffectTooltip)
         ]
 
 -- | Handlers for statements whose RHS is a state ID
 handlersState :: (HOI4Info g, Monad m) => Trie (StatementHandler g m)
 handlersState = Tr.fromList
-        [("add_state_claim"     , withState MsgAddStateClaim)
-        ,("add_state_core"      , withState MsgAddStateCore)
-        ,("controls_state"      , withState MsgControlsState)
+        [("add_state_claim"      , withState MsgAddStateClaim)
+        ,("add_state_core"       , withState MsgAddStateCore)
+        ,("controls_state"       , withState MsgControlsState)
         ,("has_full_control_of_state" , withState MsgHasFullControlOfState)
-        ,("owns_state"          , withState MsgOwnsState)
-        ,("remove_state_claim"  , withState MsgRemoveStateClaim)
-        ,("remove_state_core"   , withState MsgRemoveStateCore)
+        ,("owns_state"           , withState MsgOwnsState)
+        ,("remove_state_claim"   , withState MsgRemoveStateClaim)
+        ,("remove_state_core"    , withState MsgRemoveStateCore)
         ,("set_state_controller" , withState MsgSetStateController)
-        ,("set_state_owner"     , withState MsgSetStateOwner)
-        ,("state"               , withState MsgStateId)
+        ,("set_state_owner"      , withState MsgSetStateOwner)
+        ,("state"                , withState MsgStateId)
         ,("remove_resource_rights" , withState MsgRemoveResourceRights)
-        ,("transfer_state"      , withState MsgTransferState)
+        ,("transfer_state"       , withState MsgTransferState)
         ]
 
 -- | Simple statements whose RHS should be presented as is, in typewriter face
 --   or just need the RHS unmodified
 handlersTypewriter :: (HOI4Info g, Monad m) => Trie (StatementHandler g m)
 handlersTypewriter = Tr.fromList
-        [("clr_character_flag"  , withMaybelocAtom2 MsgCharacterFlag MsgClearFlag)
-        ,("clr_country_flag"    , withMaybelocAtom2 MsgCountryFlag MsgClearFlag)
-        ,("clr_global_flag"     , withMaybelocAtom2 MsgGlobalFlag MsgClearFlag)
-        ,("clr_state_flag"      , withMaybelocAtom2 MsgStateFlag MsgClearFlag)
+        [("clr_character_flag"   , withMaybelocAtom2 MsgCharacterFlag MsgClearFlag)
+        ,("clr_country_flag"     , withMaybelocAtom2 MsgCountryFlag MsgClearFlag)
+        ,("clr_global_flag"      , withMaybelocAtom2 MsgGlobalFlag MsgClearFlag)
+        ,("clr_state_flag"       , withMaybelocAtom2 MsgStateFlag MsgClearFlag)
         ,("clr_unit_leader_flag" , withMaybelocAtom2 MsgUnitLeaderFlag MsgClearFlag)
-        ,("has_focus_tree"        , withNonlocAtom MsgHasFocusTree)
-        ,("save_event_target_as", withNonlocAtom MsgSaveEventTargetAs)
+        ,("has_focus_tree"       , withNonlocAtom MsgHasFocusTree)
+        ,("save_event_target_as" , withNonlocAtom MsgSaveEventTargetAs)
         ,("save_global_event_target_as", withNonlocAtom MsgSaveGlobalEventTargetAs)
-        ,("set_cosmetic_tag"    , withNonlocAtom MsgSetCosmeticTag)
-        ,("has_cosmetic_tag"    , withNonlocAtom MsgHasCosmeticTag)
+        ,("set_cosmetic_tag"     , withNonlocAtom MsgSetCosmeticTag)
+        ,("has_cosmetic_tag"     , withNonlocAtom MsgHasCosmeticTag)
 
-        ,("load_oob"            , withNonlocAtom MsgLoadOob)
-        ,("has_event_target"    , withNonlocAtom MsgHasEventTarget)
+        ,("load_oob"             , withNonlocAtom MsgLoadOob)
+        ,("has_event_target"     , withNonlocAtom MsgHasEventTarget)
         ,("clear_global_event_target" , withNonlocAtom MsgClearGlobalEventTarget)
-        ,("clear_array"         , withNonlocAtom MsgClearArray)
-        ,("clear_temp_array"    , withNonlocAtom MsgClearTempArray)
+        ,("clear_array"          , withNonlocAtom MsgClearArray)
+        ,("clear_temp_array"     , withNonlocAtom MsgClearTempArray)
         ,("has_faction_template" , withNonlocAtom MsgHasFactionTemplate)
-        ,("has_opinion_modifier"  , withNonlocAtom MsgHasOpinionMod)
+        ,("has_opinion_modifier" , withNonlocAtom MsgHasOpinionMod)
+
+        ,("round_variable"       , withNonlocAtom MsgRoundVariable)
+        ,("round_temp_variable"  , withNonlocAtom MsgRoundTempVariable)
+        ,("clear_variable"       , withNonlocAtom MsgClearVariable)
+        ,("has_variable"         , withNonlocAtom MsgHasVariable)
         ]
 
 -- | Handlers for simple statements with icon
@@ -702,6 +719,8 @@ handlersTextValue = Tr.fromList
         [("add_offsite_building"        , textValue "type" "level" MsgAddOffsiteBuilding MsgAddOffsiteBuildingVar tryLocAndIcon)
         ,("add_popularity"              , textValue "ideology" "popularity" MsgAddPopularity MsgAddPopularityVar ideologyIconLoc)
         ,("add_power_balance_value"     , textValueKey "id" "value" MsgAddPowerBalanceValue MsgAddPowerBalanceValueVar)
+        ,("add_days_remove"             , textValueKey "decision" "days" MsgAddDaysRemove MsgAddDaysRemoveVar)
+        ,("add_days_mission_timeout"    , textValueKey "mission" "days" MsgAddDaysMissionTimeout MsgAddDaysMissionTimeoutVar)
         ,("core_compliance"             , textValueCompare "occupied_country_tag" "value" "more than" "less than" MsgCoreCompliance MsgCoreComplianceVar flagNoIcon)
         ,("core_resistance"             , textValueCompare "occupied_country_tag" "value" "more than" "less than" MsgCoreResistance MsgCoreResistanceVar flagNoIcon)
         ,("has_volunteers_amount_from"  , textValueCompare "tag" "count" "more than" "less than" MsgHasVolunteersAmountFrom MsgHasVolunteersAmountFromVar flagNoIcon)
@@ -767,17 +786,9 @@ handlersSpecialComplex = Tr.fromList
         ,("create_equipment_variant"     , createEquipmentVariant)
         ,("create_wargoal"               , createWargoal)
         ,("create_unit"                  , createUnit)
-        ,("custom_trigger_tooltip"       , customTriggerTooltip)
-        ,("custom_override_tooltip"      , customOverrideTooltip)
         ,("country_event"                , triggerEvent MsgCountryEvent)
         ,("declare_war_on"               , declareWarOn)
         ,("free_building_slots"          , freeBuildingSlots)
-        ,("has_completed_focus"          , handleFocus MsgHasCompletedFocus)
-        ,("complete_national_focus"      , handleFocus MsgCompleteNationalFocus)
-        ,("unlock_national_focus"        , handleFocus MsgUnlockNationalFocus)
-        ,("focus"                        , handleFocus MsgFocus) -- used in pre-requisite for focuses
-        ,("focus_progress"               , focusProgress MsgFocusProgress)
-        ,("uncomplete_national_focus"    , focusUncomplete MsgUncompleteNationalFocus)
         ,("has_army_size"                , hasArmySize)
         ,("has_navy_size"                , hasNavySize)
         ,("has_opinion"                  , hasOpinion MsgHasOpinion)
@@ -798,36 +809,44 @@ handlersSpecialComplex = Tr.fromList
         ,("has_resources_amount"         , hasResourcesAmount)
         ,("any_province_building_level"  , anyProvinceBuildingLevel)
         ,("compare_autonomy_state"       , compareAutonomyState)
-        ,("add_to_array"                 , arrayValue MsgAddToArray)
-        -- The array is named on the left in the short form, so any name at all
-        -- may stand there: @temp_states = THIS@ names no effect of the game's.
-        ,("add_to_temp_array"            , arrayValue MsgAddToTempArray)
-        ,("is_in_array"                  , arrayValue MsgIsInArray)
         ,("create_ship"                  , createShip)
         ,("transfer_ship"                , transferShip)
         ,("add_equipment_subsidy"        , addEquipmentSubsidy)
         ,("add_equipment_production"     , addEquipmentProduction)
         ,("create_production_license"    , createProductionLicense)
         ,("create_faction_from_template" , createFactionFromTemplate)
-        ,("add_units_to_division_template" , addUnitsToDivisionTemplate)
         ,("remove_country_leader_role"   , removeCountryLeaderRole)
-        ,("set_division_template_cap"    , setDivisionTemplateCap)
         ,("set_truce"                    , setTruce)
         ,("white_peace"                  , whitePeace)
         ,("puppet"                       , puppetCountry)
         ,("set_power_balance"            , setPowerBalance)
         ,("get_highest_scored_country"   , getHighestScoredCountry)
         ,("add_contested_owner"          , addContestedOwner)
-        ,("has_shine_effect_on_focus"    , handleFocus MsgHasShineEffectOnFocus)
         ,("is_military_industrial_organization" , withLookupAtomKey mioName MsgIsMio)
-        ,("has_doctrine"                  , hasDoctrine)
+        ,("has_doctrine"                 , hasDoctrine)
         ,("can_be_country_leader"        , canBeCountryLeader)
-        ,("remove_from_array"            , arrayValue MsgRemoveFromArray)
-        ,("activate_shine_on_focus"      , handleFocus MsgActivateShineOnFocus)
-        ,("remove_unit_leader_role"      , rhsAlwaysYes MsgRemoveUnitLeaderRole)
-        ,("complete_mio_trait"           , mioTooltip MsgCompleteMioTrait)
         ,("transfer_units_fraction"      , transferUnitsFraction)
         ,("add_resistance_target"        , addResistanceTarget)
+        ,("set_nationality"              , setNationality)
+
+        -- Arrays
+        -- The array is named on the left in the short form, so any name at all
+        -- may stand there: @temp_states = THIS@ names no effect of the game's.
+        ,("add_to_temp_array"            , arrayValue MsgAddToTempArray)
+        ,("add_to_array"                 , arrayValue MsgAddToArray)
+        ,("is_in_array"                  , arrayValue MsgIsInArray)
+        ,("remove_from_array"            , arrayValue MsgRemoveFromArray)
+
+        -- Focuses
+        ,("has_completed_focus"          , handleFocus MsgHasCompletedFocus)
+        ,("complete_national_focus"      , handleFocus MsgCompleteNationalFocus)
+        ,("unlock_national_focus"        , handleFocus MsgUnlockNationalFocus)
+        ,("focus"                        , handleFocus MsgFocus) -- used in pre-requisite for focuses
+        ,("activate_shine_on_focus"      , handleFocus MsgActivateShineOnFocus)
+        ,("has_shine_effect_on_focus"    , handleFocus MsgHasShineEffectOnFocus)
+        ,("focus_progress"               , focusProgress MsgFocusProgress)
+        ,("uncomplete_national_focus"    , focusUncomplete MsgUncompleteNationalFocus)
+        ,("reduce_focus_completion_cost" , reduceFocusCompletionCost)
 
         -- Events
         ,("news_event"                   , triggerEvent MsgNewsEvent)
@@ -847,11 +866,6 @@ handlersSpecialComplex = Tr.fromList
         ,("has_state_flag"               , hasFlag MsgStateFlag)
         ,("has_unit_leader_flag"         , hasFlag MsgUnitLeaderFlag)
 
-        ,("set_nationality"              , setNationality)
-
-        -- Effects
-        -- simpleEffectAtom and simpleEffectNum
-
         -- Variables
         ,("set_variable"                 , setVariable MsgSetVariable MsgSetVariableVal)
         ,("set_temp_variable"            , setVariable MsgSetTempVariable MsgSetTempVariableVal)
@@ -863,15 +877,11 @@ handlersSpecialComplex = Tr.fromList
         ,("multiply_temp_variable"       , setVariable MsgMulTempVariable MsgMulTempVariableVal)
         ,("divide_variable"              , setVariable MsgDivVariable MsgDivVariableVal)
         ,("divide_temp_variable"         , setVariable MsgDivTempVariable MsgDivTempVariableVal)
+        ,("is_variable_equal"            , setVariable MsgEquVariable MsgEquVariableVal)
         ,("check_variable"               , checkVariable MsgCheckVariable MsgCheckVariableVal)
         ,("clamp_variable"               , clampVariable MsgClampVariableValVal MsgClampVariableValVar MsgClampVariableVarVal MsgClampVariableVarVar)
         ,("clamp_temp_variable"          , clampVariable MsgClampTempVariableValVal MsgClampTempVariableValVar MsgClampTempVariableVarVal MsgClampTempVariableVarVar)
-        ,("is_variable_equal"            , setVariable MsgEquVariable MsgEquVariableVal)
         ,("export_to_variable"           , exportVariable)
-        ,("round_variable"              , withNonlocAtom MsgRoundVariable)
-        ,("round_temp_variable"         , withNonlocAtom MsgRoundTempVariable)
-        ,("clear_variable"              , withNonlocAtom MsgClearVariable)
-        ,("has_variable"                , withNonlocAtom MsgHasVariable)
 
         -- Decisions
         ,("activate_decision"            , locandid MsgActivateDecision)
@@ -881,37 +891,29 @@ handlersSpecialComplex = Tr.fromList
         ,("has_active_mission"           , locandid MsgHasActiveMission)
         ,("activate_targeted_decision"   , textAtomKey "target" "decision" MsgActivateTargetedDecision flagMaybeText)
         ,("remove_targeted_decision"     , textAtomKey "target" "decision" MsgRemoveTargetedDecision flagMaybeText)
-        -- The tactic is named by a localization key of its own, kept apart from
-        -- the rest in tactics_l_english.yml.
-        ,("unlock_tactic"                , withLocAtom MsgUnlockTactic)
-        ,("unlock_decision_category_tooltip" , withLocAtom MsgUnlockDecisionCategoryTooltip)
-        ,("unlock_decision_tooltip"       , unlockDecisionTooltip)
-        ,("add_days_remove"              , textValueKey "decision" "days" MsgAddDaysRemove MsgAddDaysRemoveVar)
-        ,("add_days_mission_timeout"     , textValueKey "mission" "days" MsgAddDaysMissionTimeout MsgAddDaysMissionTimeoutVar)
-        ,("activate_mission_tooltip"      , withLocAtom MsgActivateMissionTooltip)
+        ,("unlock_decision_tooltip"      , unlockDecisionTooltip)
 
         -- Tooltips
-        ,("show_unit_leaders_tooltip"     , showUnitLeader)
-        ,("character_list_tooltip"        , characterListTooltip)
-        ,("mio"                          , mioScope)
-        ,("add_mio_size"                 , numeric MsgAddMioSize)
-        ,("add_mio_funds"                , numeric MsgAddMioFunds)
-        ,("add_mio_funds_gain_factor"    , numeric MsgAddMioFundsGainFactor)
-        ,("reduce_focus_completion_cost" , reduceFocusCompletionCost)
+        ,("show_unit_leaders_tooltip"    , showUnitLeader)
+        ,("character_list_tooltip"       , characterListTooltip)
         ,("set_division_template_lock"   , setDivisionTemplateLock)
         ,("clear_division_template_cap"  , clearDivisionTemplateCap)
-        ,("is_special_project_completed" , withLocAtom MsgIsSpecialProjectCompleted)
-        ,("promote_leader"               , rhsAlwaysYes MsgPromoteToFieldMarshal)
-        ,("show_mio_tooltip"              , mioTooltip MsgShowMio)
+        ,("add_units_to_division_template" , addUnitsToDivisionTemplate)
+        ,("set_division_template_cap"    , setDivisionTemplateCap)
+        ,("mio"                          , mioScope)
+        ,("show_mio_tooltip"             , mioTooltip MsgShowMio)
         ,("unlock_military_industrial_organization_tooltip" , mioTooltip MsgUnlockMio)
-        ,("unlock_mio_trait_tooltip"      , mioTooltip MsgUnlockMioTrait)
-        ,("unlock_mio_policy_tooltip"     , mioTooltip MsgUnlockMioPolicy)
+        ,("unlock_mio_trait_tooltip"     , mioTooltip MsgUnlockMioTrait)
+        ,("unlock_mio_policy_tooltip"    , mioTooltip MsgUnlockMioPolicy)
+        ,("complete_mio_trait"           , mioTooltip MsgCompleteMioTrait)
         -- Written inside a modifier block, where 'modifierMSG' handles it; this
         -- is for anywhere else it may turn up.
-        ,("custom_modifier_tooltip"       , tooltipWith MsgCustomModifierTooltip)
+        ,("custom_modifier_tooltip"      , tooltipWith MsgCustomModifierTooltip)
         -- What one option of an event comes to, for an effect that will offer
         -- the player that event.
-        ,("event_option_tooltip"          , eventOptionTooltip)
+        ,("event_option_tooltip"         , eventOptionTooltip)
+        ,("custom_trigger_tooltip"       , customTriggerTooltip)
+        ,("custom_override_tooltip"      , customOverrideTooltip)
         ]
 
 -- | Handlers for "ideas", which include character traits, national spirits, laws, and more
@@ -959,7 +961,6 @@ handlersMisc = Tr.fromList
         ,("add_timed_unit_leader_trait" , addTimedTrait)
         ,("swap_ruler_traits"           , swapLeaderTrait)
         ,("swap_country_leader_traits"  , swapLeaderTrait)
-        ,("has_trait"                   , withLocAtom MsgHasTrait)
         ,("add_resource"                , addResource)
         ,("date"                        , handleDate "After" "Before")
         ,("has_start_date"              , handleDate "Game initially started after" "Game initially started before")
@@ -983,7 +984,7 @@ handlersMisc = Tr.fromList
         ,("set_rule"            , setRule MsgSetRule)
         ,("set_technology"      , setTechnology)
 
-        ,("effect_tooltip"        , customTriggerTooltip) -- shows the effects but doesn't execute them, don't know if I want it to show up in the parser
+        ,("effect_tooltip"      , customTriggerTooltip) -- shows the effects but doesn't execute them, don't know if I want it to show up in the parser
         ]
 
 -- | Handlers for ignored statements
