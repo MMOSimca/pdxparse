@@ -3423,16 +3423,14 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgSetPopularity {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageAmt = _amt}
             -> mconcat
-                [ "{{icon|"
-                , _icon
-                ,"|1}}: "
+                [ _icon
+                , ": "
                 , toMessage (bold (plainPcMin _amt))
                 ]
         MsgSetPopularityVar {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageAmtText = _amtT}
             -> mconcat
-                [ "{{icon|"
-                , _icon
-                ,"|1}}: "
+                [ _icon
+                , ": "
                 , typewriterText _amtT
                 ]
         MsgStateId {scriptMessageWhat = _what}
@@ -4590,42 +4588,42 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgFascismCompare {scriptMessageAmt = _amt, scriptMessageCompare = _comp}
             -> mconcat
-                [ "{{icon|fascism|1}} popularity is "
+                [ "{{icon|Fascism|1}} popularity is "
                 , _comp
                 , " "
                 , toMessage (bold (reducedNum plainPcMin _amt))
                 ]
         MsgFascismCompareVar {scriptMessageAmtText = _amtT, scriptMessageCompare = _comp}
             -> mconcat
-                [ "{{icon|fascism|1}} popularity is "
+                [ "{{icon|Fascism|1}} popularity is "
                 , _comp
                 , " "
                 , typewriterText _amtT
                 ]
         MsgDemocraticCompare {scriptMessageAmt = _amt, scriptMessageCompare = _comp}
             -> mconcat
-                [ "{{icon|democratic|1}} popularity is "
+                [ "{{icon|Democratic|1}} popularity is "
                 , _comp
                 , " "
                 , toMessage (bold (reducedNum plainPcMin _amt))
                 ]
         MsgDemocraticCompareVar {scriptMessageAmtText = _amtT, scriptMessageCompare = _comp}
             -> mconcat
-                [ "{{icon|democratic|1}} popularity is "
+                [ "{{icon|Democratic|1}} popularity is "
                 , _comp
                 , " "
                 , typewriterText _amtT
                 ]
         MsgCommunismCompare {scriptMessageAmt = _amt, scriptMessageCompare = _comp}
             -> mconcat
-                [ "{{icon|communism|1}} popularity is "
+                [ "{{icon|Communism|1}} popularity is "
                 , _comp
                 , " "
                 , toMessage (bold (reducedNum plainPcMin _amt))
                 ]
         MsgCommunismCompareVar {scriptMessageAmtText = _amtT, scriptMessageCompare = _comp}
             -> mconcat
-                [ "{{icon|communism|1}} popularity is "
+                [ "{{icon|Communism|1}} popularity is "
                 , _comp
                 , " "
                 , typewriterText _amtT
@@ -5180,9 +5178,9 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgSetPartyName {scriptMessageIcon = _icon, scriptMessageWho = _who, scriptMessageWhat = _what}
             -> mconcat
-                [ "The {{icon|"
+                [ "The "
                 , _icon
-                , "|1}} party will now be called &#39;"
+                , " party will now be called &#39;"
                 , boldText _what
                 , "&#39;"
                 -- Script gives a party a full name and a short one, and where

@@ -577,7 +577,7 @@ handlersSimpleIcon :: (HOI4Info g, Monad m) => Trie (StatementHandler g m)
 handlersSimpleIcon = Tr.fromList
         [("can_construct_building"  , withLocAtomIcon MsgCanConstructBuilding False)
         ,("has_autonomy_state"      , withLocAtomIcon MsgHasAutonomyState True)
-        ,("has_government"          , withLocAtomIcon MsgHasGovernment False)
+        ,("has_government"          , withPartyIcon MsgHasGovernment)
         ]
 
 -- | Handlers for simple statements with a flag or pronoun
@@ -722,7 +722,7 @@ handlersTextValue = Tr.fromList
         ,("modify_state_flag"           , withNonlocTextValue "flag" "value" MsgStateFlag MsgModifyFlag MsgModifyFlagVar) -- Localization/icon ignored
         ,("fighting_army_strength_ratio" , textValueCompare "tag" "ratio" "more than" "less than" MsgFightingArmyStrengthRatio MsgFightingArmyStrengthRatioVar flagTextMaybe)
         ,("distance_to"                 , textValueCompare "target" "value" "more than" "less than" MsgDistanceTo MsgDistanceToVar flagTextMaybe)
-        ,("set_political_party"         , textValue "ideology" "popularity" MsgSetPoliticalParty MsgSetPoliticalPartyVar tryLocAndIcon)
+        ,("set_political_party"         , textValue "ideology" "popularity" MsgSetPoliticalParty MsgSetPoliticalPartyVar partyIconLoc)
         ,("modify_unit_leader_flag"     , withNonlocTextValue "flag" "value" MsgUnitLeaderFlag MsgModifyFlag MsgModifyFlagVar) -- Localization/icon ignored
         ]
 

@@ -81,6 +81,10 @@ module HOI4.Handlers (
     ,   tryLoc
     ,   tryLocAndIcon
     ,   ideologyIconLoc
+    ,   partyIconLoc
+    ,   partyIconOf
+    ,   beliefIcon
+    ,   withPartyIcon
     ,   tryLocMaybe
     ,   textValue
     ,   textValueKey
@@ -1706,22 +1710,69 @@ tryLocAndIcon atom = do
     return (fromMaybe mempty (Just (iconText atom)),
             fromMaybe ("<tt>" <> atom <> "</tt>") loc)
 
+-- | The game keeps two words for every ideology: the one its party and the
+-- people in it go by -- Fascist, Communist -- and the one the belief itself
+-- goes by -- Fascism, Communism. Script writes neither, only the word it files
+-- the ideology under, so which of the two a line wants has to be said here.
+--
+-- This is the word for the belief, which is the wiki's own key for the icon
+-- rather than anything the game says: a capital on what script wrote, except
+-- where the wiki knows the ideology by another name altogether.
+beliefTerm :: Text -> Text
+beliefTerm atom
+    | termed /= atom = termed
+    | otherwise = case T.uncons atom of
+        Just (c, rest) -> T.cons (toUpper c) rest
+        Nothing -> atom
+    where termed = iconTerm atom
+
+-- | The wiki's icon for an ideology, named as the belief: what a change in
+-- popularity is about is the ideology, not the people who hold it.
+beliefIcon :: Text -> Text
+beliefIcon = iconText . beliefTerm
+
+-- | The wiki's icon for an ideology, named as the party: the word that belongs
+-- in "the ... party", which is the one the game itself localizes the ideology
+-- to. An atom that names no ideology at all can stand where one does -- a
+-- pronoun for whichever party rules, a country whose government is being
+-- matched -- and is left to the icon template as it is written.
+partyIconOf :: (HOI4Info g, Monad m) => Text -> PPT g m Text
+partyIconOf atom = do
+    subideos <- getIdeology
+    if atom `elem` HM.elems subideos
+        then iconText <$> getGameL10n atom
+        else return (iconText atom)
+
 -- | Icon and localization for an ideology whose popularity is changing. The
--- wiki writes the ideology as its icon with the name after it, under the key
--- the icon template capitalizes. A scope pronoun in the ideology's place means
--- whichever party rules the country in question, which has no one icon to
--- show, so none is given and the message says so in words.
+-- wiki writes the ideology as its icon with the name after it. A scope pronoun
+-- in the ideology's place means whichever party rules the country in question,
+-- which has no one icon to show, so none is given and the message says so in
+-- words.
 ideologyIconLoc :: (HOI4Info g, Monad m) => Text -> PPT g m (Text,Text)
 ideologyIconLoc atom = do
     (_, what) <- tryLocAndIcon atom
-    return (if isPronoun atom then mempty else ideoIcon, what)
-    where
-        ideoIcon = Doc.doc2text (template "icon" [ideoKey, "1"])
-        ideoKey | termed /= atom = termed
-                | otherwise = case T.uncons atom of
-                    Just (c, rest) -> T.cons (toUpper c) rest
-                    Nothing -> atom
-        termed = iconTerm atom
+    return (if isPronoun atom then mempty else beliefIcon atom, what)
+
+-- | As 'ideologyIconLoc', for a line about the party rather than the belief.
+partyIconLoc :: (HOI4Info g, Monad m) => Text -> PPT g m (Text,Text)
+partyIconLoc atom = do
+    (_, what) <- tryLocAndIcon atom
+    ico <- partyIconOf atom
+    return (if isPronoun atom then mempty else ico, what)
+
+-- | Handler for a statement whose RHS names the ideology of a party.
+withPartyIcon :: (HOI4Info g, Monad m) =>
+    (Text -> Text -> ScriptMessage) -> StatementHandler g m
+-- A variable holding the ideology names no one party, so there is no icon to
+-- show for it and the message says so in words.
+withPartyIcon msg stmt@[pdx| %_ = $vartag:$var |] = do
+    mtagloc <- tagged vartag var
+    maybe (preStatement stmt) (msgToPP . msg "") mtagloc
+withPartyIcon msg [pdx| %_ = ?key |] = do
+    what <- Doc.doc2text <$> allowPronoun Nothing (fmap Doc.strictText . getGameL10n) key
+    ico <- partyIconOf key
+    msgToPP $ msg ico what
+withPartyIcon _ stmt = preStatement stmt
 
 
 -- | Get localization for the atom given. Return atom
@@ -3573,7 +3624,8 @@ foldCompound "setPartyName" "SetPartyName" "spn"
         let long_name = fromMaybe "" _long_name
         long_loc <- getGameL10n long_name
         short_loc <- getGameL10n _name
-        return $ MsgSetPartyName (iconTerm _ideology) short_loc long_loc
+        ideoicon <- partyIconOf _ideology
+        return $ MsgSetPartyName ideoicon short_loc long_loc
     |]
 
 ---------------------------------
@@ -4154,10 +4206,10 @@ setPopularities [pdx| %_ = @scr |] = do
     where
         getpops stmt@[pdx| $ideo = !num |] = do
             ideoloc <- getGameL10n ideo
-            msgToPP $ MsgSetPopularity (iconTerm ideo) ideoloc num
+            msgToPP $ MsgSetPopularity (beliefIcon ideo) ideoloc num
         getpops stmt@[pdx| $ideo = ?txt |] = do
             ideoloc <- getGameL10n ideo
-            msgToPP $ MsgSetPopularityVar (iconTerm ideo) ideoloc txt
+            msgToPP $ MsgSetPopularityVar (beliefIcon ideo) ideoloc txt
         getpops stmt = preStatement stmt
 setPopularities stmt = preStatement stmt
 

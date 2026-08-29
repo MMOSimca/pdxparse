@@ -632,12 +632,8 @@ locprep :: Bool -> Text -> Text -> Text
 locprep hidden targ loc = (if hidden then "(Hidden)" else "") <> named
     where
         loc' = if ": " `T.isSuffixOf` loc then T.dropEnd 2 loc else loc
-        -- The country a targeted modifier applies to reads better after what the
-        -- modifier does than in front of it: a colon is written straight after
-        -- this, and a flag at the front puts the whole width of a name between
-        -- the reader and it.
         named | T.null targ = loc'
-              | otherwise = T.strip loc' <> " (" <> targ <> ")"
+              | otherwise = targ <> " " <> T.strip loc'
 
 handleResearchBonus :: forall g m. (HOI4Info g, Monad m) =>
         StatementHandler g m
@@ -2044,7 +2040,7 @@ parseAdvisor stmt = return ("<!-- Check Script -->", [])
 partyIcon :: (Monad m, HOI4Info g) => Text -> PPT g m Text
 partyIcon subideo = do
     subideos <- getIdeology
-    return $ maybe "<!-- Check Script -->" iconText (HM.lookup subideo subideos)
+    maybe (return "<!-- Check Script -->") partyIconOf (HM.lookup subideo subideos)
 
 -- | The party the character the script has scoped to is written to lead, or
 -- nothing where the script is not about a character or their entry names no
