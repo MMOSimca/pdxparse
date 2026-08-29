@@ -22,24 +22,60 @@ module HOI4.Localization (
     ,   fillLocScopesFor
     ,   scriptedLocVariants
     ,   getCountryName
+    -- * Script atoms: tags, flags, pronouns, icons
+    ,   constantValue
+    ,   icon
+    ,   iconText
+    ,   isTag
+    ,   isPronoun
+    ,   flag
+    ,   flagText
+    ,   eflag
+    ,   tagged
+    ,   allowPronoun
+    ,   pronoun
+    ,   getStateLoc
+    ,   getRegionLoc
+    ,   eGetState
+    ,   eGetStateText
+    ,   tryLoc
+    ,   tryLocAndIcon
+    ,   tryLocAndIconTitle
+    ,   tryLocMaybe
+    ,   flagMaybeText
+    ,   fillConstants
+    ,   getCharacterName
+    ,   getCharacterRole
+    ,   advisorName
+    ,   mioName
+    ,   mioKind
     ) where
 
-import Data.Char (isAlpha, isAlphaNum, isDigit, toUpper)
+import Control.Arrow (first)
+
+import Data.Char (isAlpha, isAlphaNum, isDigit, isUpper, toLower, toUpper)
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
 import Data.Maybe (fromMaybe, isJust, isNothing, listToMaybe, mapMaybe)
 import Data.Monoid ((<>))
+import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Read as T
+import qualified Data.Trie as Tr
+import Data.Trie (Trie)
 
 import Abstract (GenericScript)
-import SettingsTypes (PPT, LocArg (..))
+import SettingsTypes (PPT, LocArg (..), IsGame (..), withCurrentFile)
 import qualified SettingsTypes as S
+import Doc (Doc)
 import qualified Doc
 import MessageTools (boldText, ifThenElseT, plainNum, template)
 import HOI4.CountryNames (casualName)
+import HOI4.Messages (message, messageText, ScriptMessage (..))
 import HOI4.Types -- everything
+import HOI4.WikiTables (iconTerm, scriptIconFileTable)
 
 -- | As 'S.getGameL10n', with the names the text asks the game for filled in.
 getGameL10n :: (HOI4Info g, Monad m) => Text -> PPT g m Text
@@ -80,7 +116,7 @@ getGameL10nIfPresentFor mroot key =
 -- state id. A pronoun such as @ROOT@ means whichever country the text is drawn
 -- for, which nothing outside the game can say, so those are left alone -- as is
 -- any command we don't know, and the @[?constant:...]@ references that
--- 'HOI4.SpecialHandlers.fillConstants' deals with instead. Text with nothing of
+-- 'fillConstants' deals with instead. Text with nothing of
 -- ours in it comes back untouched, brackets and all, so this is safe to put in
 -- front of every lookup.
 fillLocScopes :: (HOI4Info g, Monad m) => Text -> PPT g m Text
@@ -424,3 +460,370 @@ getCoHi name = do
             where
                 cosmetics = maybe [] (:[]) (chCosmeticTag chistory)
                 party = fromMaybe "" (T.stripPrefix name (chRulingTag chistory))
+
+
+-------------------------------------------------------------
+-- Tags, flags, pronouns and other script-atom localization --
+-------------------------------------------------------------
+
+-- | The number script names by naming a script constant, or 'Nothing' if the name
+-- is not a constant holding one. An effect that documents a constant for one of
+-- its fields takes the name bare; anywhere a variable would go, script writes the
+-- @constant:@ prefix instead, and both name the same thing.
+constantValue :: (HOI4Info g, Monad m) => Text -> PPT g m (Maybe Double)
+constantValue name = HM.lookup path <$> getScriptConstants
+    where path = fromMaybe name (T.stripPrefix "constant:" name)
+
+-- Emit icon template.
+icon :: Text -> Doc
+icon what = case HM.lookup what scriptIconFileTable of
+    Just "" -> Doc.strictText $ "[[File:" <> what <> ".png|28px]]" -- shorthand notation
+    Just file -> Doc.strictText $ "[[File:" <> file <> ".png|28px]]"
+    _ ->  if isPronoun what then
+            ""
+        else
+            -- The "1" parameter makes the wiki template append its localized
+            -- term for the icon, so callers must not add the name themselves.
+            template "icon" [iconTerm what, "1"]
+iconText :: Text -> Text
+iconText = Doc.doc2text . icon
+
+-- Argument may be a tag or a tagged variable. Emit a flag in the former case,
+-- and localize in the latter case.
+eflag :: (HOI4Info g, Monad m) =>
+            Maybe HOI4Scope -> Either Text (Text, Text) -> PPT g m (Maybe Text)
+eflag expectScope = \case
+    Left name -> Just <$> flagText expectScope name
+    Right (vartag, var) -> tagged vartag var
+
+-- | Look up the message corresponding to a tagged atom.
+--
+-- For example, to localize @event_target:some_name@, call
+-- @tagged "event_target" "some_name"@.
+tagged :: (HOI4Info g, Monad m) =>
+    Text -> Text -> PPT g m (Maybe Text)
+tagged vartag var = case flip Tr.lookup varTags . TE.encodeUtf8 $ vartag of
+    Just msg -> Just <$> messageText (msg var)
+    Nothing -> return $ Just $ "<tt>" <> vartag <> ":" <> var <> "</tt>" -- just let it pass
+
+flagText :: (HOI4Info g, Monad m) =>
+    Maybe HOI4Scope -> Text -> PPT g m Text
+flagText expectScope = fmap Doc.doc2text . flag expectScope
+
+-- Emit an appropriate phrase if the given text is a pronoun, otherwise use the
+-- provided localization function.
+allowPronoun :: (HOI4Info g, Monad m) =>
+    Maybe HOI4Scope -> (Text -> PPT g m Doc) -> Text -> PPT g m Doc
+allowPronoun expectedScope getLoc name =
+    if isPronoun name
+        then pronoun expectedScope name
+        else getLoc name
+
+-- | Emit flag template if the argument is a tag, or an appropriate phrase if
+-- it's a pronoun.
+flag :: (HOI4Info g, Monad m) =>
+    Maybe HOI4Scope -> Text -> PPT g m Doc
+flag expectscope = allowPronoun expectscope $ \name ->
+                    template "flag" . (:[]) <$> getCountryName name
+
+-- | Emit an appropriate phrase for a pronoun.
+-- If a scope is passed, that is the type the current command expects. If they
+-- don't match, it's a synecdoche; adjust the wording appropriately.
+--
+-- All handlers in this module that take an argument of type 'Maybe HOI4Scope'
+-- call this function. Use whichever scope corresponds to what you expect to
+-- appear on the RHS. If it can be one of several (e.g. either a country or a
+-- province), use HOI4From. If it doesn't correspond to any scope, use Nothing.
+pronoun :: (HOI4Info g, Monad m) =>
+    Maybe HOI4Scope -> Text -> PPT g m Doc
+pronoun expectedScope name = withCurrentFile $ \f -> case T.toLower name of
+    "root" -> message MsgROOTCountry
+    "prev" -> --do
+--      ss <- getScopeStack
+--      traceM (f ++ ": pronoun PREV: scope stack is " ++ show ss)
+        getPrevScope >>= \case -- will need editing
+            Just HOI4Country
+                | expectedScope `matchScope` HOI4Country -> message MsgPREVCountry
+                | otherwise                             -> return "PREV"
+            Just HOI4ScopeState
+                | expectedScope `matchScope` HOI4ScopeState -> message MsgPREVState
+                | otherwise                             -> return "PREV"
+            Just HOI4UnitLeader
+                | expectedScope `matchScope` HOI4UnitLeader -> message MsgPREVUnitLeader
+                | otherwise                             -> return "PREV"
+            Just HOI4Operative
+                | expectedScope `matchScope` HOI4Operative -> message MsgPREVOperative
+                | otherwise                             -> return "PREV"
+            Just HOI4ScopeCharacter
+                | expectedScope `matchScope` HOI4ScopeCharacter -> message MsgPREVCharacter
+                | otherwise                             -> return "PREV"
+            Just HOI4Division
+                | expectedScope `matchScope` HOI4Division -> message MsgPREVDivision
+                | otherwise                             -> return "PREV"
+            Just HOI4From -> message MsgPREVFROM
+            Just HOI4Misc -> message MsgMISC
+            Just HOI4Custom -> message MsgPREVCustom
+            _ -> return "PREV"
+    "this" -> getCurrentScope >>= \case -- will need editing
+        Just HOI4Country
+            | expectedScope `matchScope` HOI4Country -> message MsgTHISCountry
+            | otherwise                             -> return "THIS"
+        Just HOI4ScopeState
+            | expectedScope `matchScope` HOI4ScopeState -> message MsgTHISState
+            | otherwise                             -> return "THIS"
+        Just HOI4UnitLeader
+            | expectedScope `matchScope` HOI4UnitLeader -> message MsgTHISUnitLeader
+            | otherwise                             -> return "THIS"
+        Just HOI4Operative
+            | expectedScope `matchScope` HOI4Operative -> message MsgTHISOperative
+            | otherwise                             -> return "THIS"
+        Just HOI4ScopeCharacter
+            | expectedScope `matchScope` HOI4ScopeCharacter -> message MsgTHISCharacter
+            | otherwise                             -> return "THIS"
+        Just HOI4Division
+            | expectedScope `matchScope` HOI4Division -> message MsgTHISDivision
+            | otherwise                             -> return "THIS"
+        Just HOI4Misc -> message MsgMISC
+        Just HOI4Custom -> message MsgPREVCustom
+        _ -> return "THIS"
+    "overlord" -> message MsgOverlord
+    "faction_leader" -> message MsgFactionLeader
+    "owner" -> getCurrentScope >>= \case
+        Just HOI4ScopeState -> message MsgOwnerState
+        Just HOI4UnitLeader -> message MsgOwnerUnit
+        Just HOI4Operative -> message MsgOwnerUnit
+        Just HOI4ScopeCharacter -> message MsgOwnerUnit
+        _ -> message MsgOwner
+    "controller" -> message MsgController
+    "capital_scope" -> message MsgCapital
+    "from" -> message MsgFROM -- TODO: Handle this properly (if possible)
+    proscope
+        | any (`T.isSuffixOf` proscope) [".overlord",".OVERLORD",".Overlord"] -> do
+            let labelstrip
+                    | ".overlord" `T.isSuffixOf` proscope = fromMaybe "<!--CHECK SCRIPT-->" (T.stripSuffix ".overlord" proscope)
+                    | ".Overlord" `T.isSuffixOf` proscope = fromMaybe "<!--CHECK SCRIPT-->" (T.stripSuffix ".Overlord" proscope)
+                    | ".OVERLORD" `T.isSuffixOf` proscope = fromMaybe "<!--CHECK SCRIPT-->" (T.stripSuffix ".OVERLORD" proscope)
+                    | otherwise = proscope
+                tagorpro = if T.length labelstrip == 3 then T.toUpper labelstrip else labelstrip
+            tagloc <- do
+                mflag <- eflag (Just HOI4Country) (Left tagorpro)
+                return $ fromMaybe "<!--CHECK SCRIPT-->" mflag
+            message $ MsgOverlordOf tagloc
+        | any (`T.isSuffixOf` proscope) [".faction_leader",".FACTION_LEADER",".Faction_leader"] -> do
+            let labelstrip
+                    | ".faction_leader" `T.isSuffixOf` proscope = fromMaybe "<!--CHECK SCRIPT-->" (T.stripSuffix ".faction_leader" proscope)
+                    | ".Faction_leader" `T.isSuffixOf` proscope = fromMaybe "<!--CHECK SCRIPT-->" (T.stripSuffix ".Faction_leader" proscope)
+                    | ".FACTION_LEADER" `T.isSuffixOf` proscope = fromMaybe "<!--CHECK SCRIPT-->" (T.stripSuffix ".FACTION_LEADER" proscope)
+                    | otherwise = proscope
+                tagorpro = if T.length labelstrip == 3 then T.toUpper labelstrip else labelstrip
+            tagloc <- do
+                mflag <- eflag (Just HOI4Country) (Left tagorpro)
+                return $ fromMaybe "<!--CHECK SCRIPT-->" mflag
+            message $ MsgFactionLeaderOf tagloc
+        | any (`T.isSuffixOf` proscope) [".owner",".OWNER",".Owner"] -> do
+            let labelstrip
+                    | ".owner" `T.isSuffixOf` proscope = fromMaybe "<!--CHECK SCRIPT-->" (T.stripSuffix ".owner" proscope)
+                    | ".Owner" `T.isSuffixOf` proscope = fromMaybe "<!--CHECK SCRIPT-->" (T.stripSuffix ".Owner" proscope)
+                    | ".OWNER" `T.isSuffixOf` proscope = fromMaybe "<!--CHECK SCRIPT-->" (T.stripSuffix ".OWNER" proscope)
+                    | otherwise = proscope
+            stateloc <-
+                if all isDigit $ T.unpack labelstrip
+                then getStateLoc $ read (T.unpack labelstrip)
+                else do
+                mstate <- eGetState (Left labelstrip)
+                return $ fromMaybe "<!--CHECK SCRIPT-->" mstate
+            message $ MsgOwnerOf stateloc
+        | any (`T.isSuffixOf` proscope) [".controller",".CONTROLLER",".Controller"] -> do
+            let labelstrip
+                    | ".controller" `T.isSuffixOf` proscope = fromMaybe "<!--CHECK SCRIPT-->" (T.stripSuffix ".controller" proscope)
+                    | ".Controller" `T.isSuffixOf` proscope = fromMaybe "<!--CHECK SCRIPT-->" (T.stripSuffix ".Controller" proscope)
+                    | ".CONTROLLER" `T.isSuffixOf` proscope = fromMaybe "<!--CHECK SCRIPT-->" (T.stripSuffix ".CONTROLLER" proscope)
+                    | otherwise = proscope
+            stateloc <-
+                if all isDigit $ T.unpack labelstrip
+                then getStateLoc $ read (T.unpack labelstrip)
+                else do
+                mstate <- eGetState (Left labelstrip)
+                return $ fromMaybe "<!--CHECK SCRIPT-->" mstate
+            message $ MsgControllerOf stateloc
+        | otherwise -> return $ Doc.strictText name -- something else; regurgitate untouched
+    where
+        Nothing `matchScope` _ = True
+        Just expect `matchScope` actual
+            | expect == actual = True
+            | otherwise        = False
+
+isTag :: Text -> Bool
+isTag s = T.length s == 3 && T.all isUpper s
+
+-- Tagged messages
+varTags :: Trie (Text -> ScriptMessage)
+varTags = Tr.fromList . map (first TE.encodeUtf8) $
+    [("event_target", MsgEventTargetVar)
+    ,("var"         , MsgVariable)
+    ]
+
+isPronoun :: Text -> Bool
+isPronoun s = T.map toLower s `Set.member` pronouns || (\ls -> ".owner" `T.isSuffixOf` ls || ".controller" `T.isSuffixOf` ls || ".faction_leader" `T.isSuffixOf` ls || ".overlord" `T.isSuffixOf` ls || ".prev" `T.isSuffixOf` ls || ".from" `T.isSuffixOf` ls) (T.toLower s)
+    where
+        pronouns = Set.fromList
+            ["root"
+            ,"prev"
+            ,"this"
+            ,"from"
+            ,"overlord"
+            ,"faction_leader"
+            ,"owner"
+            ,"controller"
+            ,"capital_scope"
+            ]
+
+-- Get the localization for a state ID, if available.
+getStateLoc :: (HOI4Info g, Monad m) =>
+    Int -> PPT g m Text
+getStateLoc n = do
+    let stateid_t = T.pack (show n)
+    mstateloc <- getGameL10nIfPresent ("STATE_" <> stateid_t)
+    case mstateloc of
+        -- the wiki's state template renders as bold name + id in parentheses
+        Just _ -> return $ Doc.doc2text (template "state" [stateid_t])
+        -- Some scripts (e.g. prioritize lists) mix province ids in with state
+        -- ids; try the victory point name for those
+        _ -> do
+            mvploc <- getGameL10nIfPresent ("VICTORY_POINTS_" <> stateid_t)
+            return $ case mvploc of
+                Just vploc -> boldText vploc <> " (province " <> stateid_t <> ")"
+                _ -> "province (" <> stateid_t <> ")"
+
+eGetState :: (HOI4Info g, Monad m) =>
+             Either Text (Text, Text) -> PPT g m (Maybe Text)
+eGetState = \case
+    Left name -> do
+        pronouned <- pronoun (Just HOI4ScopeState) name
+        let pronountext = Doc.doc2text pronouned
+        return $ Just pronountext
+    Right (vartag, var) -> tagged vartag var
+
+-- | As 'eGetState', falling back on a marker for a human to fill in where
+-- nothing can be worked out.
+eGetStateText :: (HOI4Info g, Monad m) => Either Text (Text, Text) -> PPT g m Text
+eGetStateText = fmap (fromMaybe "<!-- Check Script -->") . eGetState
+
+-- convenience synonym
+tryLoc :: (HOI4Info g, Monad m) => Text -> PPT g m (Maybe Text)
+tryLoc = getGameL10nIfPresent
+
+-- | Get icon and localization for the atom given. Return @mempty@ if there is
+-- no icon, and wrapped in @<tt>@ tags if there is no localization.
+tryLocAndIcon :: (HOI4Info g, Monad m) => Text -> PPT g m (Text,Text)
+tryLocAndIcon atom = do
+    loc <- tryLoc atom
+    return (fromMaybe mempty (Just (iconText atom)),
+            fromMaybe ("<tt>" <> atom <> "</tt>") loc)
+
+-- | Get localization for the atom given. Return atom
+-- if there is no localization.
+tryLocMaybe :: (HOI4Info g, Monad m) => Text -> PPT g m (Text,Text)
+tryLocMaybe atom = do
+    loc <- tryLoc atom
+    return ("", fromMaybe atom loc)
+
+getRegionLoc :: (HOI4Info g, Monad m) =>
+    Int -> PPT g m Text
+getRegionLoc n = do
+    let regionid_t = T.pack (show n)
+    mregionloc <- getGameL10nIfPresent ("STRATEGICREGION_" <> regionid_t)
+    return $ case mregionloc of
+        Just loc -> boldText loc <> " (" <> regionid_t <> ")"
+        _ -> "Region" <> regionid_t
+
+-- | The flag or localized name behind a country atom, or 'Nothing' where it
+-- cannot be worked out.
+flagMaybeText :: (HOI4Info g, Monad m) => Text -> PPT g m (Maybe Text)
+flagMaybeText txt = eflag (Just HOI4Country) (Left txt)
+
+-- | As 'tryLocAndIcon', localizing the @_title@ key of the atom given.
+tryLocAndIconTitle :: (HOI4Info g, Monad m) => Text -> PPT g m (Text, Text)
+tryLocAndIconTitle t = tryLocAndIcon (t <> "_title")
+
+-- | Fill in every script constant a piece of localization refers to in brackets.
+-- The game reads those as it draws the text, and unlike the variables that share
+-- the same bracket syntax, a constant is the same number whenever it is read, so
+-- it can be filled in here as well. A reference to something that is not a
+-- constant holding a number is left as it stands for a human to deal with.
+fillConstants :: (HOI4Info g, Monad m) => Text -> PPT g m Text
+fillConstants text = do
+    constants <- getScriptConstants
+    return (fill constants text)
+    where
+        marker = "[?constant:"
+        fill constants t = case T.breakOn marker t of
+            (_, rest) | T.null rest -> t
+            (before, rest) ->
+                let afterMarker = T.drop (T.length marker) rest
+                    (path, closing) = T.breakOn "]" afterMarker
+                in case (HM.lookup path constants, T.stripPrefix "]" closing) of
+                    (Just val, Just after) ->
+                        before <> Doc.doc2text (plainNum val) <> fill constants after
+                    -- Whatever this refers to, the marker itself is done with, so
+                    -- what follows is searched without it and the recursion ends.
+                    _ -> before <> marker <> fill constants afterMarker
+
+getCharacterName :: (Monad m, HOI4Info g) =>
+    Text -> PPT g m Text
+getCharacterName idn = do
+    characters <- getCharacters
+    case HM.lookup idn characters of
+        Just charid -> return $ cha_loc_name charid
+        _ -> getGameL10n idn
+
+-- | The post a character is commissioned into, worded as the game words it
+-- where it gives a country that commander: @becomes a General@ and the like.
+-- A character written for no military post has nothing to say here, and one
+-- written for two is named for both, there being nothing in the script to say
+-- which of them a tooltip has in mind.
+getCharacterRole :: (Monad m, HOI4Info g) =>
+    Text -> PPT g m Text
+getCharacterRole idn = do
+    characters <- getCharacters
+    return $ case HM.lookup idn characters of
+        Just charid -> T.intercalate " and " (mapMaybe roleName (cha_unit_roles charid))
+        _ -> ""
+    where
+        roleName = \case
+            "field_marshal" -> Just "a Field Marshal"
+            "corps_commander" -> Just "a General"
+            "navy_leader" -> Just "an Admiral"
+            _ -> Nothing
+
+-- | The name behind whatever an advisor statement is pointed at. Script names an
+-- advisor either by the token their post is known by or by the character's own
+-- id, and either way it is the person's name a reader wants.
+advisorName :: (HOI4Info g, Monad m) => Text -> PPT g m Text
+advisorName token = do
+    charto <- getCharToken
+    case HM.lookup token charto of
+        Just adv -> getCharacterName (adv_cha_id adv)
+        Nothing -> getCharacterName token
+
+-- | The name of an organization. Most are localized under their own token; the
+-- rest are named by the key their entry gives.
+mioName :: (HOI4Info g, Monad m) => Text -> PPT g m Text
+mioName token = do
+    names <- getMioNames
+    mloc <- getGameL10nIfPresent token
+    case mloc of
+        Just loc -> return (Doc.oneLine loc)
+        Nothing -> case HM.lookup token names of
+            Just key -> Doc.oneLine <$> getGameL10n key
+            Nothing -> return ("<tt>" <> token <> "</tt>")
+
+-- | What kind of manufacturer an organization is, which is said by the archetype
+-- its entry is built out of rather than by anything of its own. An organization
+-- written out in full has no archetype and so nothing to say here.
+mioKind :: (HOI4Info g, Monad m) => Text -> PPT g m (Maybe Text)
+mioKind token = do
+    includes <- getMioIncludes
+    case HM.lookup token includes of
+        Nothing -> return Nothing
+        Just archetype -> fmap Doc.oneLine <$> getGameL10nIfPresent archetype

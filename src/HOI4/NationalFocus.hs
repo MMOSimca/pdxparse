@@ -1,6 +1,6 @@
 {-
 Module      : HOI4.NationalFocus
-Description : Feature handler for Hearts of Iron IV decisions
+Description : Feature handler for Hearts of Iron IV national focuses
 -}
 module HOI4.NationalFocus (
         parseHOI4NationalFocuses

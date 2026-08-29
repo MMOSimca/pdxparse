@@ -158,7 +158,6 @@ data ScriptMessage
     | MsgRandomSubjectCountry
     | MsgRandomUnitLeader
     -- dual scope messages
-    | MsgROOT
     | MsgROOTSCOPECountry
     | MsgROOTSCOPEState
     | MsgROOTSCOPEOperative
@@ -169,7 +168,6 @@ data ScriptMessage
     | MsgROOTOperative
     | MsgROOTUnitLeader
 
-    | MsgPREV
     | MsgPREVPREV
     | MsgPREVPREVPREV
     | MsgPREVSCOPECharacter
@@ -185,7 +183,6 @@ data ScriptMessage
     | MsgPREVCountry
     | MsgPREVDivision
     | MsgPREVState
-    | MsgPREVStateOwner
     | MsgPREVOperative
     | MsgPREVUnitLeader
     | MsgPREVFROM
@@ -196,7 +193,6 @@ data ScriptMessage
     | MsgTHISState
     | MsgTHISOperative
     | MsgTHISUnitLeader
-    | MsgTHISCustom
 
     | MsgFROM
     | MsgFROMSCOPE
@@ -247,11 +243,9 @@ data ScriptMessage
     | MsgIf
     | MsgLimit
     | MsgPrioritize {scriptMessageWhat :: Text}
-    | MsgOriginalTagToCheck {scriptMessageWho :: Text}
     | MsgWhile
     | MsgFor
     | MsgRandom
-    | MsgRandomList
     | MsgRandomChance {scriptMessageChance :: Double}
     | MsgRandomVarChance {scriptMessageWhat :: Text}
     | MsgRandomChanceHOI4 {scriptMessageChance :: Double, scriptMessageAmt :: Double}
@@ -315,7 +309,6 @@ data ScriptMessage
     | MsgHasFlagFor {scriptMessageFlagType :: Text, scriptMessageName :: Text, scriptMessageAmtText :: Text, scriptMessageTime :: Text, scriptMessageDate :: Text, scriptMessageLoc :: Text}
     | MsgSetFlag {scriptMessageFlagType :: Text, scriptMessageName :: Text, scriptMessageLoc :: Text}
     | MsgSetFlagFor {scriptMessageFlagType :: Text, scriptMessageName :: Text, scriptMessageAmtText :: Text, scriptMessageDaysText :: Text, scriptMessageLoc :: Text}
-    | MsgHadFlag {scriptMessageFlagType :: Text, scriptMessageName :: Text, scriptMessageDays :: Double, scriptMessageLoc :: Text}
     | MsgModifyFlag {scriptMessageFlagType :: Text, scriptMessageFlag :: Text, scriptMessageAmt :: Double, scriptMessageLoc :: Text}
     | MsgModifyFlagVar {scriptMessageFlagType :: Text, scriptMessageFlag :: Text, scriptMessageAmtText :: Text, scriptMessageLoc :: Text}
     | MsgCharacterFlag
@@ -505,7 +498,6 @@ data ScriptMessage
     | MsgOperativeEvent
     | MsgUnitLeaderEvent
     | MsgTriggerEvent {scriptMessageEvttype :: Text, scriptMessageEvtid :: Text, scriptMessageName :: Text}
-    | MsgTriggerEventDays {scriptMessageEvttype :: Text, scriptMessageEvtid :: Text, scriptMessageName :: Text, scriptMessageDays :: Double}
     | MsgTriggerEventTime {scriptMessageEvttype :: Text, scriptMessageEvtid :: Text, scriptMessageName :: Text, scriptMessageTime :: Text}
     | MsgDeclareWarOn {scriptMessageWhom :: Text, scriptMessageWhat :: Text, scriptMessageStates :: Text}
     | MsgHasDLC {scriptMessageIcon :: Text, scriptMessageDlc :: Text}
@@ -575,14 +567,11 @@ data ScriptMessage
     | MsgAddPowerBalanceModifier { scriptMessageWho :: Text, scriptMessageWhoKey :: Text, scriptMessageWhat :: Text, scriptMessageWhatKey :: Text }
     | MsgRemovePowerBalanceModifier { scriptMessageWho :: Text, scriptMessageWhat :: Text, scriptMessageWhoKey :: Text , scriptMessageWhatKey :: Text }
     | MsgHasPowerBalanceModifier { scriptMessageWho :: Text, scriptMessageWhat :: Text, scriptMessageWhoKey :: Text , scriptMessageWhatKey :: Text }
-    | MsgModifier {scriptMessageWhat :: Text, scriptMessageAmt :: Double}
     | MsgModifierYellow {scriptMessageWhat :: Text, scriptMessageDec :: Maybe Int, scriptMessageAmt :: Double}
     | MsgModifierSign {scriptMessageWhat :: Text, scriptMessageDec :: Maybe Int, scriptMessageAmt :: Double}
     | MsgModifierColourPos {scriptMessageWhat :: Text, scriptMessageDec :: Maybe Int, scriptMessageAmt :: Double}
     | MsgModifierColourNeg {scriptMessageWhat :: Text, scriptMessageDec :: Maybe Int, scriptMessageAmt :: Double}
-    | MsgModifierPc {scriptMessageWhat :: Text, scriptMessageAmt :: Double}
     | MsgModifierPcSign {scriptMessageWhat :: Text, scriptMessageDec :: Maybe Int, scriptMessageAmt :: Double}
-    | MsgModifierPcReduced {scriptMessageWhat :: Text, scriptMessageAmt :: Double}
     | MsgModifierPcReducedSign {scriptMessageWhat :: Text, scriptMessageDec :: Maybe Int, scriptMessageAmt :: Double}
     | MsgModifierPcReducedSignMin {scriptMessageWhat :: Text, scriptMessageDec :: Maybe Int, scriptMessageAmt :: Double}
     | MsgModifierPcPos {scriptMessageWhat :: Text, scriptMessageDec :: Maybe Int, scriptMessageAmt :: Double}
@@ -782,7 +771,6 @@ data ScriptMessage
     | MsgDivisionTemplate {scriptMessageWhat :: Text}
     | MsgDeleteUnitTemplateAndunits {scriptMessageYn :: Bool, scriptMessageWhat :: Text, scriptMessage_where :: Text}
     | MsgDeleteUnits {scriptMessageYn :: Bool, scriptMessageWhat :: Text, scriptMessage_where :: Text}
-    | MsgDeleteUnit {scriptMessageYn :: Bool, scriptMessageWhat :: Text, scriptMessageWhere :: Text}
     | MsgArmyManpowerInState {scriptMessageComp :: Text, scriptMessageAmt :: Double, scriptMessageWhat :: Text, scriptMessageWhere :: Text, scriptMessage_where2 :: Text}
     | MsgDivisionsInState {scriptMessageComp :: Text, scriptMessageAmt :: Double, scriptMessageWhat :: Text, scriptMessageWhere :: Text, scriptMessage_where2 :: Text}
     | MsgDivisionsInBorderState {scriptMessageComp :: Text, scriptMessageAmt :: Double, scriptMessageWhat :: Text, scriptMessageWhere :: Text, scriptMessageWhere2 :: Text}
@@ -1131,8 +1119,6 @@ instance RenderMessage Script ScriptMessage where
         MsgRandomUnitLeader
             -> "One random employed unit leader:"
         -- dual scope messages
-        MsgROOT
-            -> "[SCOPE]ROOT"
         MsgROOTSCOPECountry
             -> "Our country"
         MsgROOTSCOPEState
@@ -1152,8 +1138,6 @@ instance RenderMessage Script ScriptMessage where
         MsgROOTUnitLeader
             -> "the currently considered unit leader"
 
-        MsgPREV
-            -> "[SCOPE]PREV"
         MsgPREVPREV
             -> "[SCOPE]PREV.PREV<!-- manually check scope -->"
         MsgPREVPREVPREV
@@ -1184,8 +1168,6 @@ instance RenderMessage Script ScriptMessage where
             -> "the previously mentioned division"
         MsgPREVState
             -> "the previously mentioned state"
-        MsgPREVStateOwner
-            -> "the owner of the previously mentioned state"
         MsgPREVOperative
             -> "the previously mentioned operative"
         MsgPREVUnitLeader
@@ -1207,8 +1189,6 @@ instance RenderMessage Script ScriptMessage where
             -> "this operative"
         MsgTHISUnitLeader
             -> "this unit leader"
-        MsgTHISCustom
-            -> "current custom scope<!-- check game script for where it points to -->"
 
         MsgFROM
             -> "FROM<!-- check game script for where it points to -->"
@@ -1365,18 +1345,11 @@ instance RenderMessage Script ScriptMessage where
                 [ "Prioritize "
                 , _what
                 ]
-        MsgOriginalTagToCheck {scriptMessageWho = _who}
-            -> mconcat
-                [ "originally "
-                , _who
-                ]
         MsgWhile
             -> "While:"
         MsgFor
             -> "For:"
         MsgRandom
-            -> "One of the following at random:"
-        MsgRandomList
             -> "One of the following at random:"
         MsgRandomChance {scriptMessageChance = _chance}
             -> mconcat
@@ -1765,27 +1738,6 @@ instance RenderMessage Script ScriptMessage where
                 , _name --typewriterText
                 , _amtT
                 , _days
-                , "|?}})"
-                ]
-        MsgHadFlag {scriptMessageFlagType = _flagType, scriptMessageName = _name, scriptMessageDays = _days, scriptMessageLoc = _loc}
-            -> mconcat $ ifThenElse (T.null _loc)
-                [ "Has had "
-                , _flagType
-                , " flag "
-                , typewriterText _name
-                , " for "
-                , toMessage (formatDays _days)
-                ]
-
-                [ "Has had '''"
-                , _loc, "''' for "
-                , toMessage (formatDays _days)
-                , " ({{hover|Has had "
-                , _flagType
-                , " flag "
-                , _name
-                , " for "
-                , toMessage (formatDays _days)
                 , "|?}})"
                 ]
         MsgModifyFlag {scriptMessageFlagType = _flagType, scriptMessageFlag = _flag, scriptMessageAmt = _amt, scriptMessageLoc = _loc}
@@ -2975,16 +2927,6 @@ instance RenderMessage Script ScriptMessage where
                 , _evtid
                 , " -->"
                 ]
-        MsgTriggerEventDays {scriptMessageEvttype = _evttype, scriptMessageEvtid = _evtid, scriptMessageName = _name, scriptMessageDays = _days}
-            -> mconcat
-                [ _evttype
-                , " "
-                , toMessage (iquotes _name)
-                , " <!-- "
-                , _evtid
-                , " --> in "
-                , toMessage (formatDays _days)
-                ]
         MsgTriggerEventTime {scriptMessageEvttype = _evttype, scriptMessageEvtid = _evtid, scriptMessageName = _name, scriptMessageTime = _time}
             -> mconcat
                 [ _evttype
@@ -3494,12 +3436,6 @@ instance RenderMessage Script ScriptMessage where
                 , _what
                 , "<!--", _akey, "-->"
                 ]
-        MsgModifier {scriptMessageWhat = _what, scriptMessageAmt = _amt}
-            -> mconcat
-                [ _what
-                , ":  "
-                , toMessage (bold (plainNumMin _amt))
-                ]
         MsgModifierYellow {scriptMessageWhat = _what, scriptMessageDec = _dec, scriptMessageAmt = _amt}
             -> mconcat
                 [ _what
@@ -3524,23 +3460,11 @@ instance RenderMessage Script ScriptMessage where
                 , ": "
                 , toMessage $ templateColor (colourNumSignPrec _dec False _amt)
                 ]
-        MsgModifierPc {scriptMessageWhat = _what, scriptMessageAmt = _amt}
-            -> mconcat
-                [ _what
-                , ": "
-                , toMessage (bold (plainPcMin _amt))
-                ]
         MsgModifierPcSign {scriptMessageWhat = _what, scriptMessageDec = _dec, scriptMessageAmt = _amt}
             -> mconcat
                 [ _what
                 , ": "
                 , toMessage (bold (plainPcSignPrec _dec _amt))
-                ]
-        MsgModifierPcReduced {scriptMessageWhat = _what, scriptMessageAmt = _amt}
-            -> mconcat
-                [ _what
-                , ": "
-                , toMessage (bold (reducedNum plainPcMin _amt))
                 ]
         MsgModifierPcReducedSign {scriptMessageWhat = _what, scriptMessageDec = _dec, scriptMessageAmt = _amt}
             -> mconcat
@@ -5037,13 +4961,6 @@ instance RenderMessage Script ScriptMessage where
                 [ ifThenElseT _yn "Disband" "Delete"
                 , " all units created from template"
                 , toMessage (iquotes _what)
-                ]
-        MsgDeleteUnit {scriptMessageYn = _yn, scriptMessageWhat = _what, scriptMessageWhere = _where}
-            -> mconcat
-                [ ifThenElseT _yn "Disband" "Delete"
-                , " all units"
-                , ifThenElseT (T.null _what) "" (" created from template " <> toMessage (iquotes _what))
-                , ifThenElseT (T.null _where) "" (" in " <> _where)
                 ]
         MsgDivisionTemplate {scriptMessageWhat = _what}
             -> mconcat

@@ -47,7 +47,6 @@ import SettingsTypes ( PPT, Settings (..)
                      , setCurrentFile, withCurrentFile
                      , hoistErrors, hoistExceptions
                      , getGameInterface, getGameInterfaceNamed, getGameInterfaceIfPresent)
-import HOI4.Handlers (flagText)
 
 -- | Empty event value. Starts off Nothing/empty everywhere.
 newHOI4Event :: HOI4Scope -> FilePath -> HOI4Event
@@ -323,7 +322,6 @@ optionAddEffect :: Monad m => Maybe GenericScript -> GenericStatement -> PPT g m
 optionAddEffect Nothing stmt = optionAddEffect (Just []) stmt
 optionAddEffect (Just effs) stmt = return $ Just (effs ++ [stmt])
 
-iquotes't = Doc.doc2text . iquotes
 
 -- | Present an event's title block.
 ppTitles :: (HOI4Info g, Monad m) => Bool {- ^ Is this a hidden event? -}
@@ -364,12 +362,7 @@ ppDescs _ descs = (("| cond_event_text = yes" <> PP.line <> "| event_text = ") <
         Nothing -> Doc.strictText key
         Just txt -> "''" <> Doc.strictText (Doc.nl2br (wikifyLocColours txt)) <> "''"
 
-ppEventLoc :: (HOI4Info g, Monad m) => Text -> PPT g m Text
-ppEventLoc id = do
-    loc <- getEventTitle id -- Note: Hidden events often have empty titles, see e.g. fetishist_flavor.400
-    case loc of
-        (Just t) | T.length (T.strip t) /= 0 -> return $ "<!-- " <> id <> " -->" <> iquotes't t -- TODO: Add link if possible
-        _ -> return $ "<tt>" <> id <> "</tt>"
+
 
 
 ppTriggeredBy :: (HOI4Info g, Monad m) => Text -> [Doc] -> PPT g m Doc

@@ -41,7 +41,7 @@ import SettingsTypes ( PPT, Settings (..)
 import HOI4.Common -- everything
 import HOI4.Localization
 import Data.Char (toLower)
-import HOI4.SpecialHandlers (modifiersTable)
+import HOI4.ModifierTable (modifiersTable)
 
 
 parseHOI4UnitTags :: (IsGameState (GameState g), IsGameData (GameData g), Monad m) =>

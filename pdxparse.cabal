@@ -34,9 +34,9 @@ executable pdxparse
                        HOI4.Ideas,
                        HOI4.CountryNames,
                        HOI4.Localization,
-                       HOI4.IO,
                        HOI4.Messages,
                        HOI4.Misc,
+                       HOI4.ModifierTable,
                        HOI4.Modifiers,
                        HOI4.NationalFocus,
                        HOI4.Settings,
@@ -44,6 +44,7 @@ executable pdxparse
                        HOI4.TechAndEquipment,
                        HOI4.Templates,
                        HOI4.Types,
+                       HOI4.WikiTables,
                        Interface
                        Localization,
                        MessageTools,

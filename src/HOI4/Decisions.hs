@@ -39,7 +39,6 @@ import qualified Doc
 import FileIO (Feature (..), writeFeatures)
 import HOI4.Messages -- everything
 import MessageTools (iquotes, italicText, formatDays)
-import HOI4.Handlers (flagText, getStateLoc)
 import QQ (pdx)
 import SettingsTypes ( PPT, Settings (..)
                      , IsGame (..), IsGameData (..), IsGameState (..)
@@ -630,18 +629,12 @@ ppActivatedBy decisionId = do
             return [mconcat $ ["| activated_by = "] ++ [PP.line] ++ intersperse PP.line ts' ++ [PP.line]]
         _ -> return [Doc.strictText ""]
 
-ppEventLoc :: (HOI4Info g, Monad m) => Text -> PPT g m Text
-ppEventLoc id = do
-    loc <- getEventTitle id -- Note: Hidden events often have empty titles, see e.g. fetishist_flavor.400
-    case loc of
-        (Just t) | T.length (T.strip t) /= 0 -> return $ "<!-- " <> id <> " -->" <> iquotes't t -- TODO: Add link if possible
-        _ -> return $ "<tt>" <> id <> "</tt>"
+
 
 formatWeight :: HOI4DecisionWeight -> Text
 formatWeight Nothing = ""
 formatWeight (Just (n, d)) = T.pack (" (Base weight: " ++ show n ++ "/" ++ show d ++ ")")
 
-iquotes't = Doc.doc2text . iquotes
 
 ppDecisionSource :: (HOI4Info g, Monad m) => HOI4DecisionSource -> PPT g m Doc
 ppDecisionSource (HOI4DecSrcOption eventId optionId) = do

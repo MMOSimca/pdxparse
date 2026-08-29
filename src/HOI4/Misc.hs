@@ -44,8 +44,8 @@ import SettingsTypes ( PPT
                      , setCurrentFile, withCurrentFile
                      , hoistErrors, hoistExceptions)
 import HOI4.Common -- everything
-import HOI4.SpecialHandlers ( modifiersTable)
 import StatementUtils -- everything
+import HOI4.ModifierTable (modifiersTable)
 import HOI4.Messages (ScriptMessage (..), ModifierDisplay, modYesNo, modNoYes)
 
 newHOI4CountryHistory :: Maybe Text -> Text -> HOI4CountryHistory
@@ -226,56 +226,6 @@ parseHOI4InitialVariables scripts = return $ HM.mapMaybe id $
         plainAssignment [pdx| $v = !n |] = Just (v, n)
         plainAssignment _ = Nothing
 
-{-
-parseHOI4Interface :: (IsGameState (GameState g), IsGameData (GameData g), Monad m) =>
-    HashMap String GenericScript -> PPT g m (HashMap Text Text)
-parseHOI4Interface scripts = HM.unions . HM.elems <$> do
-    tryParse <- hoistExceptions $
-        HM.traverseWithKey
-            (\sourceFile scr -> setCurrentFile sourceFile $ mapM processInterface $ concatMap (\case
-                [pdx| $spriteTypes = @spr |] | T.toLower spriteTypes == "spritetypes" -> spr
-                _ -> []) scr)
-            scripts
-    case tryParse of
-        Left err -> do
-            traceM $ "Completely failed parsing interface: " ++ T.unpack err
-            return HM.empty
-        Right interfaceFilesOrErrors ->
-            flip HM.traverseWithKey interfaceFilesOrErrors $ \sourceFile einterface ->
-                fmap (mkInterMap . catMaybes) . forM einterface $ \case
-                    Left err -> do
-                        traceM $ "Error parsing interface in " ++ sourceFile
-                                 ++ ": " ++ T.unpack err
-                        return Nothing
-                    Right iinterface -> return iinterface
-    where
-        mkInterMap :: [(Text,Text)] -> HashMap Text Text
-        mkInterMap interfacelist = HM.fromList interfacelist
-
-processInterface :: (IsGameState (GameState g), MonadError Text m) => GenericStatement -> PPT g m (Either Text  (Maybe (Text, Text)))
-processInterface stmt@[pdx| $spriteType = @spr |] | T.toLower spriteType == "spritetype"
-    =  case (getId spr, getPic spr) of
-        (Just id, Just pic) -> withCurrentFile $ \file -> return $ Right $ Just (id, pic)
-        (Nothing, Just pic) -> return (Right Nothing)
-        (Just id, Nothing) -> return (Right Nothing)
-        _ -> return (Right Nothing)
-    where
-        getId :: [GenericStatement] -> Maybe Text
-        getId [] = Nothing
-        getId (stmt@[pdx| $name = $id |] : _)
-            | T.toLower name == "name" = Just id
-        getId (stmt@[pdx| $name = ?id |] : _)
-            | T.toLower name == "name" = Just id
-        getId (_ : ss) = getId ss
-        getPic :: [GenericStatement] -> Maybe Text
-        getPic [] = Nothing
-        getPic (stmt@[pdx| $texturefile = $id |] : _)
-            | T.toLower texturefile == "texturefile" = Just $ T.pack $ takeBaseName $ T.unpack id
-        getPic (stmt@[pdx| $texturefile = ?id |] : _)
-            | T.toLower texturefile == "texturefile" = Just $ T.pack $ takeBaseName $ T.unpack id
-        getPic (_ : ss) = getPic ss
-processInterface stmt = return (Right Nothing)
--}
 -------------
 -- terrain --
 -------------
@@ -613,6 +563,10 @@ parseHOI4ModifierDefinition _ = withCurrentFile $ \file ->
     throwError ("unrecognised form for scripted trigger in " <> T.pack file)
 
 
+-- | The modifier localization keys that read as headings (all-caps), in the
+-- order the given key list puts them; 'HOI4.SpecialHandlers.sortmods' sorts
+-- modifier blocks by them.
+parseHOI4LocKeys :: Monad m => [Text] -> PPT g m [Text]
 parseHOI4LocKeys order = return $ map fst (sortOn (\x -> elemIndex (snd x) order) . filter (modchk . snd) . HM.toList . HM.map (\(loc,_,_) -> loc) $ modifiersTable)
     where modchk = T.all (\xs -> isUpper xs || not (isAlphaNum xs))
 

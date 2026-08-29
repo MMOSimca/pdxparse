@@ -10,6 +10,7 @@ module HOI4.Common (
     ,   ppMany
     ,   AIWillDo (..), AIModifier (..)
     ,   ppAiWillDo, ppAiMod
+    ,   ppEventLoc, iquotes't
     ,   module HOI4.Types
     ) where
 
@@ -39,9 +40,13 @@ import Abstract -- everything
 import qualified Doc -- everything
 import HOI4.Messages -- everything
 import QQ (pdx)
+import MessageTools (iquotes)
 import SettingsTypes -- everything
 import StatementUtils -- everything
 import HOI4.Handlers -- everything
+import HOI4.Localization (flagText, eflag, isTag, getStateLoc, pronoun, eGetState
+                         , tryLoc, tryLocAndIcon, tryLocAndIconTitle, tryLocMaybe, flagMaybeText
+                         , advisorName, mioName)
 import HOI4.SpecialHandlers -- everything
 import HOI4.Types -- everything
 
@@ -61,8 +66,9 @@ ppStatement statement = imsg2doc =<< ppIndent statement
 ppIndent :: (Monad m, HOI4Info g) => GenericStatement -> PPT g m IndentedMessages
 ppIndent stmt = indentUp $ ppOne stmt
 
-flagTextMaybe :: (HOI4Info g, Monad m) => Text -> PPT g m (Text,Text)
-flagTextMaybe = fmap (mempty,) . flagText (Just HOI4Country)
+-- | A flag where an (icon, text) pair is asked for: no icon, just the flag.
+flagNoIcon :: (HOI4Info g, Monad m) => Text -> PPT g m (Text,Text)
+flagNoIcon = fmap (mempty,) . flagText (Just HOI4Country)
 
 -- | Extract the appropriate message(s) from a script. Statements are handled
 -- one at a time, except for the runs of them that only make sense together.
@@ -496,18 +502,13 @@ handlersCompound = Tr.fromList
         -- random and random_list are also part of flow control but are more complicated
         ]
 
--- Helpers for LocRhs
-withLocAtomName :: (HOI4Info g, Monad m) =>
-    (Text -> ScriptMessage) -> StatementHandler g m
-withLocAtomName msg = withLocAtom' msg (<> "_name")
-
 -- | Handlers for simple statements where RHS is a localizable atom
 handlersLocRhs :: (HOI4Info g, Monad m) => Trie (StatementHandler g m)
 handlersLocRhs = Tr.fromList
         [("create_faction"        , withLocAtom MsgCreateFaction)
         ,("set_state_name"        , withLocAtom MsgSetStateName)
         ,("set_state_category"    , withLocAtom MsgSetStateCategory)
-        ,("custom_effect_tooltip" , customEffectTooltip)
+        ,("custom_effect_tooltip" , tooltipWith MsgCustomEffectTooltip)
         ,("has_country_leader_with_trait" , withLocAtom MsgHasCountryLeaderWithTrait)
         ,("has_decision"          , withLocAtomKey MsgHasDecision)
         ,("has_power_balance"     , withLocAtomCompound MsgHasPowerBalance)
@@ -528,7 +529,7 @@ handlersLocRhs = Tr.fromList
         ,("is_researching_technology" , withLocAtom MsgIsResearchingTechnology)
         ,("set_faction_name"      , withLocAtom MsgSetFactionName)
         ,("retire_ideology_leader" , withLocAtom MsgRetireIdeologyLeader)
-        ,("tooltip"               , tooltip)
+        ,("tooltip"               , tooltipWith MsgTooltip)
         ]
 
 -- | Handlers for statements whose RHS is a state ID
@@ -662,9 +663,9 @@ handlersYesNo = Tr.fromList
         ,("has_intelligence_agency"     , withBool MsgHasIntelligenceAgency)
         ,("is_field_marshal"            , withBool MsgIsFieldMarshal)
         ,("is_corps_commander"          , withBool MsgIsCorpsCommander)
-        ,("has_done_agency_upgrade"     , hasDoneAgencyUpgrade)
+        ,("has_done_agency_upgrade"     , withLookupAtom agencyUpgradeLink MsgHasDoneAgencyUpgrade)
         ,("create_intelligence_agency"  , createIntelligenceAgency)
-        ,("upgrade_intelligence_agency" , upgradeIntelligenceAgency)
+        ,("upgrade_intelligence_agency" , withLookupAtom agencyUpgradeLink MsgUpgradeIntelligenceAgency)
         ,("has_offensive_war"           , withBool MsgHasOffensiveWar)
         ,("has_war"                     , withBool MsgHasWar)
         ,("has_war_with_major"          , withBool MsgHasWarWithMajor)
@@ -693,10 +694,6 @@ handlersYesNo = Tr.fromList
         ,("set_major"                   , withBool MsgSetMajor)
         ]
 
--- Helpers for text/value pairs
-tryLocAndIconTitle :: (HOI4Info g, Monad m) => Text -> PPT g m (Text, Text)
-tryLocAndIconTitle t = tryLocAndIcon (t <> "_title")
-
 -- | Handlers for text/value pairs.
 --
 -- $textvalue
@@ -705,29 +702,27 @@ handlersTextValue = Tr.fromList
         [("add_offsite_building"        , textValue "type" "level" MsgAddOffsiteBuilding MsgAddOffsiteBuildingVar tryLocAndIcon)
         ,("add_popularity"              , textValue "ideology" "popularity" MsgAddPopularity MsgAddPopularityVar ideologyIconLoc)
         ,("add_power_balance_value"     , textValueKey "id" "value" MsgAddPowerBalanceValue MsgAddPowerBalanceValueVar)
-        ,("core_compliance"             , textValueCompare "occupied_country_tag" "value" "more than" "less than" MsgCoreCompliance MsgCoreComplianceVar flagTextMaybe)
-        ,("core_resistance"             , textValueCompare "occupied_country_tag" "value" "more than" "less than" MsgCoreResistance MsgCoreResistanceVar flagTextMaybe)
-        ,("has_volunteers_amount_from"  , textValueCompare "tag" "count" "more than" "less than" MsgHasVolunteersAmountFrom MsgHasVolunteersAmountFromVar flagTextMaybe)
+        ,("core_compliance"             , textValueCompare "occupied_country_tag" "value" "more than" "less than" MsgCoreCompliance MsgCoreComplianceVar flagNoIcon)
+        ,("core_resistance"             , textValueCompare "occupied_country_tag" "value" "more than" "less than" MsgCoreResistance MsgCoreResistanceVar flagNoIcon)
+        ,("has_volunteers_amount_from"  , textValueCompare "tag" "count" "more than" "less than" MsgHasVolunteersAmountFrom MsgHasVolunteersAmountFromVar flagNoIcon)
         ,("modify_tech_sharing_bonus"   , textValue "id" "bonus" MsgModifyTechSharingBonus MsgModifyTechSharingBonusVar tryLocMaybe) --icon ignored
         ,("power_balance_value"         , textValueCompare "id" "value" "more than" "less than" MsgPowerBalanceValue MsgPowerBalanceValueVar tryLocMaybe)
         ,("set_province_name"           , textValue "name" "id" MsgSetProvinceName MsgSetProvinceNameVar tryLocMaybe)
         ,("set_victory_points"          , valueValue "province" "value" MsgSetVictoryPoints MsgSetVictoryPointsVar)
         ,("add_victory_points"          , valueValue "province" "value" MsgAddVictoryPoints MsgAddVictoryPointsVar)
         ,("stockpile_ratio"             , textValueCompare "archetype" "ratio" "more than" "less than" MsgStockpileRatio MsgStockpileRatioVar tryLocMaybe)
-        ,("strength_ratio"              , textValueCompare "tag" "ratio" "more than" "less than" MsgStrengthRatio MsgStrengthRatioVar flagTextMaybe)
+        ,("strength_ratio"              , textValueCompare "tag" "ratio" "more than" "less than" MsgStrengthRatio MsgStrengthRatioVar flagNoIcon)
         ,("remove_building"             , textValue "type" "level" MsgRemoveBuilding MsgRemoveBuildingVar tryLocAndIcon)
         ,("modify_character_flag"       , withNonlocTextValue "flag" "value" MsgCharacterFlag MsgModifyFlag MsgModifyFlagVar) -- Localization/icon ignored
         ,("modify_country_flag"         , withNonlocTextValue "flag" "value" MsgCountryFlag MsgModifyFlag MsgModifyFlagVar) -- Localization/icon ignored
         ,("modify_global_flag"          , withNonlocTextValue "flag" "value" MsgGlobalFlag MsgModifyFlag MsgModifyFlagVar) -- Localization/icon ignored
         ,("modify_state_flag"           , withNonlocTextValue "flag" "value" MsgStateFlag MsgModifyFlag MsgModifyFlagVar) -- Localization/icon ignored
-        ,("fighting_army_strength_ratio" , textValueCompare "tag" "ratio" "more than" "less than" MsgFightingArmyStrengthRatio MsgFightingArmyStrengthRatioVar flagTextMaybe)
-        ,("distance_to"                 , textValueCompare "target" "value" "more than" "less than" MsgDistanceTo MsgDistanceToVar flagTextMaybe)
+        ,("fighting_army_strength_ratio" , textValueCompare "tag" "ratio" "more than" "less than" MsgFightingArmyStrengthRatio MsgFightingArmyStrengthRatioVar flagNoIcon)
+        ,("distance_to"                 , textValueCompare "target" "value" "more than" "less than" MsgDistanceTo MsgDistanceToVar flagNoIcon)
         ,("set_political_party"         , textValue "ideology" "popularity" MsgSetPoliticalParty MsgSetPoliticalPartyVar partyIconLoc)
         ,("modify_unit_leader_flag"     , withNonlocTextValue "flag" "value" MsgUnitLeaderFlag MsgModifyFlag MsgModifyFlagVar) -- Localization/icon ignored
         ]
 
-flagMaybeText :: (HOI4Info g, Monad m) => Text -> PPT g m (Maybe Text)
-flagMaybeText txt = eflag (Just HOI4Country) (Left txt)
 -- | Handlers for text/atom pairs
 handlersTextAtom :: (HOI4Info g, Monad m) => Trie (StatementHandler g m)
 handlersTextAtom = Tr.fromList
@@ -752,8 +747,8 @@ handlersSpecialComplex = Tr.fromList
         ,("add_mastery"                  , addMastery False)
         ,("add_daily_mastery"            , addMastery True)
         ,("add_mastery_bonus"            , addMasteryBonus)
-        ,("activate_advisor"             , advisorPost MsgActivateAdvisor)
-        ,("deactivate_advisor"           , advisorPost MsgDeactivateAdvisor)
+        ,("activate_advisor"             , withLookupAtom advisorName MsgActivateAdvisor)
+        ,("deactivate_advisor"           , withLookupAtom advisorName MsgDeactivateAdvisor)
         ,("set_can_be_fired_in_advisor_role" , setCanBeFiredInAdvisorRole)
         ,("remove_relation_modifier"     , relationModifier MsgRemoveRelationModifier False)
         ,("has_relation_modifier"        , relationModifier MsgHasRelationModifier False)
@@ -824,13 +819,13 @@ handlersSpecialComplex = Tr.fromList
         ,("get_highest_scored_country"   , getHighestScoredCountry)
         ,("add_contested_owner"          , addContestedOwner)
         ,("has_shine_effect_on_focus"    , handleFocus MsgHasShineEffectOnFocus)
-        ,("is_military_industrial_organization" , isMio)
+        ,("is_military_industrial_organization" , withLookupAtomKey mioName MsgIsMio)
         ,("has_doctrine"                  , hasDoctrine)
         ,("can_be_country_leader"        , canBeCountryLeader)
         ,("remove_from_array"            , arrayValue MsgRemoveFromArray)
         ,("activate_shine_on_focus"      , handleFocus MsgActivateShineOnFocus)
         ,("remove_unit_leader_role"      , rhsAlwaysYes MsgRemoveUnitLeaderRole)
-        ,("complete_mio_trait"           , completeMioTrait)
+        ,("complete_mio_trait"           , mioTooltip MsgCompleteMioTrait)
         ,("transfer_units_fraction"      , transferUnitsFraction)
         ,("add_resistance_target"        , addResistanceTarget)
 
@@ -907,10 +902,10 @@ handlersSpecialComplex = Tr.fromList
         ,("clear_division_template_cap"  , clearDivisionTemplateCap)
         ,("is_special_project_completed" , withLocAtom MsgIsSpecialProjectCompleted)
         ,("promote_leader"               , rhsAlwaysYes MsgPromoteToFieldMarshal)
-        ,("show_mio_tooltip"              , showMio)
-        ,("unlock_military_industrial_organization_tooltip" , unlockMio)
-        ,("unlock_mio_trait_tooltip"      , unlockMioTrait)
-        ,("unlock_mio_policy_tooltip"     , unlockMioPolicy)
+        ,("show_mio_tooltip"              , mioTooltip MsgShowMio)
+        ,("unlock_military_industrial_organization_tooltip" , mioTooltip MsgUnlockMio)
+        ,("unlock_mio_trait_tooltip"      , mioTooltip MsgUnlockMioTrait)
+        ,("unlock_mio_policy_tooltip"     , mioTooltip MsgUnlockMioPolicy)
         -- Written inside a modifier block, where 'modifierMSG' handles it; this
         -- is for anywhere else it may turn up.
         ,("custom_modifier_tooltip"       , tooltipWith MsgCustomModifierTooltip)
@@ -1082,34 +1077,15 @@ ppOne' stmt lhs rhs = case lhs of
             _ -> preStatement stmt
     CustomLhs _ -> preStatement stmt
 
+-- | Quote the text in italics, as 'Text'.
+iquotes't :: Text -> Text
+iquotes't = Doc.doc2text . iquotes
 
--- | Try to extract one matching statement
-extractStmt :: (a -> Bool) -> [a] -> (Maybe a, [a])
-extractStmt p xs = extractStmt' p xs []
-    where
-        extractStmt' _ [] acc = (Nothing, acc)
-        extractStmt' p (x:xs) acc =
-            if p x then
-                (Just x, acc++xs)
-            else
-                extractStmt' p xs (acc++[x])
-
--- | Predicate for matching text on the left hand side. The game reads a key
--- however it happens to be capitalized, and script now and then writes one
--- oddly -- @originaL_tag_to_check@ in the Australian tree -- so a key is
--- matched the same way here. A field this misses is not read at all.
-matchLhsText :: Text -> GenericStatement -> Bool
-matchLhsText t [pdx| $lhs = %_ |] | sameKey t lhs = True
-matchLhsText t [pdx| $lhs < %_ |] | sameKey t lhs = True
-matchLhsText t [pdx| $lhs > %_ |] | sameKey t lhs = True
-matchLhsText _ _ = False
-
--- | Whether two script keys are the same one, which is not a matter of how
--- either is capitalized.
-sameKey :: Text -> Text -> Bool
-sameKey a b = T.toLower a == T.toLower b
-
--- | Predicate for matching text on boths sides
-matchExactText :: Text -> Text -> GenericStatement -> Bool
-matchExactText l r [pdx| $lhs = $rhs |] | l == lhs && r == T.toLower rhs = True
-matchExactText _ _ _ = False
+-- | An event named the way a reader can find it: its title, with the id in a
+-- comment for whoever edits the page.
+ppEventLoc :: (HOI4Info g, Monad m) => Text -> PPT g m Text
+ppEventLoc id = do
+    loc <- getEventTitle id -- Note: Hidden events often have empty titles, see e.g. fetishist_flavor.400
+    case loc of
+        (Just t) | T.length (T.strip t) /= 0 -> return $ "<!-- " <> id <> " -->" <> iquotes't t -- TODO: Add link if possible
+        _ -> return $ "<tt>" <> id <> "</tt>"
