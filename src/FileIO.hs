@@ -3,11 +3,9 @@ Module      : FileIO
 Description : High level I/O for Clausewitz scripts
 -}
 module FileIO (
-        readFileRetry
-    ,   buildPath
+        buildPath
     ,   readScript
     ,   readPathScript
-    ,   readScriptFromText
     ,   Feature (..)
     ,   writeFeatures
     ) where
@@ -41,7 +39,7 @@ import Abstract -- everything
 import SettingsTypes (Settings (..), IsGameData (..), GameData (..), PPT, hoistExceptions)
 import Data.List (intercalate)
 
--- | Read a file as Text. Unfortunately EU4 script files use several incompatible
+-- | Read a file as Text. Unfortunately script files use several incompatible
 -- encodings. Try the following encodings in order:
 --
 -- 1. UTF-8
@@ -60,11 +58,11 @@ readFileRetry path = do
 -- | Given a path under the game's root directory, build a fully qualified path
 -- referring to that file.
 --
--- For example, if we're parsing EU4 on Windows with the usual install
+-- For example, if we're parsing HOI4 on Windows with the usual install
 -- location:
 --
 -- @
---  buildPath settings "events/FlavorENG.txt" = "C:\Program Files (x86)\Steam\steamapps\common\Europa Universalis IV\events\FlavorENG.txt"
+--  buildPath settings "events/Baltic.txt" = "C:\Program Files (x86)\Steam\steamapps\common\Hearts of Iron IV\events\Baltic.txt"
 -- @
 buildPath :: Settings -> FilePath -> FilePath
 buildPath settings path =
@@ -145,20 +143,12 @@ readPathScript filepath = do
             -- just pass on all other cases
             x -> x
 
-readScriptFromText :: Text -> GenericScript
-readScriptFromText contents = case Ap.parseOnly
-    ( skipSpace
-        *> genericScript
-    ) contents of
-    Right result -> result
-    Left err -> trace ("Error \"" ++ err ++ "\" in readScriptFromText with the text:" ++ show contents) []
-
 ------------------------------
 -- Writing features to file --
 ------------------------------
 
 -- | An individual game feature. For example, a value for this exists for each
--- EU4 event, one for each idea group, one for each decision, etc.
+-- event, one for each national focus, one for each decision, etc.
 --
 -- The parameter is a type containing data relevant to that feature, or an
 -- error message from processing.

@@ -178,7 +178,6 @@ readSettings = do
             let provisionalSettings = Settings
                             { steamDir = steamDirCanonicalized
                             , steamApps = steamAppsCanonicalized
-                            , l10nScheme = case game of Game g -> locScheme g
                             , game = game
                             , gameFolder = gamefolder
                             , gameOrModFolder = gameormodfolder

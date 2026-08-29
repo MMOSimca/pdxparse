@@ -12,16 +12,12 @@ $locsyn
 -}
 module Yaml (
         LocEntry (..)
-    ,   L10nLang, L10n, L10nO,L10nLangO
+    ,   L10nLang, L10n, L10nO, L10nLangO
     ,   parseLocFile
-    ,   mergeLangs, mergeLangList
---  ,   message
---  ,   locFile
+    ,   mergeLangs
     ) where
 
 import Control.Applicative (Applicative (..), Alternative (..), liftA2)
-
-import Data.List (foldl')
 
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict.InsOrd as HMO
@@ -68,14 +64,6 @@ mergeLoc = HMO.unionWith latest
 -- the one in the first argument.
 mergeLangs :: L10nO -> L10nO -> L10nO
 mergeLangs = HMO.unionWith mergeLoc
-
--- TODO: make L10nLang and L10n newtypes, so we can define Monoid instances for
--- them with the above as mappend. Then this will be mconcat:
-
--- | Merge a list of localization tables, from left to right, using
--- 'mergeLangs'.
-mergeLangList :: [L10nO] -> L10nO
-mergeLangList = foldl' mergeLangs HMO.empty
 
 ------------------------
 -- Parser combinators --

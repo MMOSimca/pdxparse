@@ -32,16 +32,7 @@ The following command line options are supported:
     -v, --version   show version information and exit
     -n, --nowait    don't wait for the user to press a key before exiting
 
-In addition to that, EU4 parsing supports the following additional options, each of which can be used multiple times:
-
-    -e, --onlyextra                skip writing normal game files and only write the result of parsing the files which are specified in the following options
-    -w, --withlabels               the top level of the extra files is considered a label which gets localized, but not processed further
-    -f FILE, --file=FILE           also process FILE without any special handling
-    -c FILE, --countryscope=FILE   also process FILE as containing code in the country scope
-    -s FILE, --provincescope=FILE  also process FILE as containing code in the province scope
-    -m FILE, --modifiers=FILE      also process FILE as containing modifiers (if the modifiers are not on the top level of the file, --withlabels has to be used as well)
-
-Without command line options, pdxparse just processes everything it finds and puts the results in the directory `output`. `--onlyextra` can be used to restrict the output, but the parsing of the extra files is not content-aware.
+Without command line options, pdxparse just processes everything it finds and puts the results in the directory `output`.
 
 ## Known Issues
 

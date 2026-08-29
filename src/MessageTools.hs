@@ -2,10 +2,10 @@
 module MessageTools (
     -- * Numbers
     -- ** Plain formatting
-        plainNum, plainNumMin, roundNum, roundNumSign, plainNumSign
+        plainNum, plainNumMin, roundNum, plainNumSign
     ,   roundNumNoSpace
     ,   fixedNumText
-    ,   plainPc, plainPcMin, roundPc, plainPcSign
+    ,   plainPc, plainPcMin
     -- ** Coloured formatting
     -- | These functions take an additional 'Bool' argument that specifies
     -- whether a positive quantity is good (@True@) or bad (@False@). It
@@ -17,15 +17,12 @@ module MessageTools (
     -- ** Fixed decimal places
     -- | Each of these writes the number to a set number of decimal places
     -- instead of to as many as it happens to have. See 'fixedNum'.
-    ,   fixedNum
     ,   colourNumSignPrec, colourPcSignPrec
     ,   plainNumSignPrec, plainNumMinPrec
     ,   plainPcPrec, plainPcMinPrec, plainPcSignPrec
     -- ** Reduced numbers
     -- | Several quantities range from 0 to 100 in game, but are expressed in
-    -- script as a number between 0 and 1. This includes religous quantities
-    -- (e.g. patriarch authority), government strength (e.g. republican
-    -- tradition), economic quantities (e.g. mercantilism), etc. To present
+    -- script as a number between 0 and 1. To present
     -- these, pass your chosen presentation function to 'reducedNum'.
     ,   reducedNum
     -- * Plural
@@ -33,17 +30,13 @@ module MessageTools (
     -- * Gain/lose
     -- | These functions hardcode their message fragments. They will have to
     -- be duplicated for languages other than English.
-    ,   gainOrLose, gainsOrLoses
+    ,   gainOrLose
     ,   increasedOrDecreased, increaseOrDecrease
     ,   addOrRemove, addedOrRemoved
-    ,   addAOrAn, addAOrAnWithExtraText
-    -- * Advisor text helpers
-    ,   advisorDiscountText
     -- * Time formatting
     , formatHours
     , formatDays
     , formatMonths
-    , formatYears
     -- * Wiki markup
     ,   template, templateDoc
     -- * If-then-else
@@ -166,10 +159,6 @@ plainPc = ppNum False True False False False
 plainPcMin :: Double -> Doc
 plainPcMin = ppNum False True False False True
 
--- | Format a number as is, with a sign and a percent sign.
-plainPcSign :: Double -> Doc
-plainPcSign = ppNum False True False True False
-
 -- | Front end to 'ppNum' for uncoloured numbers.
 roundNum' :: Bool -- ^ Whether to treat this number as a percentage
           -> Bool -- ^ Whether to add a + if this number is positive
@@ -183,19 +172,9 @@ roundNum' is_pc pos_plus n =
 roundNum :: Double -> Doc
 roundNum = roundNum' False False
 
--- | Format a number, but make sure it's an integer by rounding it off, with an
--- optional sign.
-roundNumSign :: Bool -> Double -> Doc
-roundNumSign = roundNum' False
-
 -- | Format a number, but make sure it's an integer by rounding it off.
 roundNumNoSpace :: (RealFrac n, PPSep n) => n -> Text
 roundNumNoSpace n = Doc.doc2text $ PP.integer (round n :: Integer)
-
--- | Format a number as a percentage, but make sure it's an integer by rounding
--- it off.
-roundPc :: Double -> Doc
-roundPc = roundNum' True False
 
 -- | Format a number in an appropriate colour.
 colourNum :: Bool -> Double -> Doc
@@ -316,12 +295,6 @@ gainOrLose :: (Ord n, Num n) => n -> Text
 gainOrLose n | n < 0     = "Lose"
              | otherwise = "Gain"
 
--- | Say "gains" or "loses" (with that capitalisation) depending on whether the
--- numeric argument is positive or negative (respectively).
-gainsOrLoses :: (Ord n, Num n) => n -> Text
-gainsOrLoses n | n < 0     = "loses"
-               | otherwise = "gains"
-
 -- | Say "increased" or "decreased" (with that capitalisation) depending on whether the
 -- numeric argument is positive or negative (respectively).
 increasedOrDecreased :: (Ord n, Num n) => n -> Text
@@ -346,28 +319,6 @@ addOrRemove n | n < 0     = "Remove"
 addedOrRemoved :: (Ord n, Num n) => n -> Text
 addedOrRemoved n | n < 0     = "removed"
                  | otherwise = "added"
-
--- | add "A " in front of the text or "An " if the first letter is a vowel
---   if the first parameter is False, "a " or "an " is added instead
-addAOrAn :: Bool -> Text -> Text
-addAOrAn capitalize text = addAOrAnWithExtraText capitalize text ""
-
--- | add "A " in front of the text or "An " if the first letter is a vowel
---   if the first parameter is False, "a " or "an " is added instead
---   if extra is not empty, it is added between the A/An and the text
-addAOrAnWithExtraText :: Bool -> Text -> Text -> Text
-addAOrAnWithExtraText capitalize text extra = do
-    let capitalizedA = if capitalize then "A" else "a"
-    let aOrAn = if isVowel(T.head text) then T.append capitalizedA "n" else capitalizedA
-    T.concat [aOrAn, ifThenElse (T.null extra) " " (" " <> extra <> " ") , text]
-    where
-        isVowel :: Char -> Bool
-        isVowel x = x `elem` ("aeiouAEIOU" :: String)
-
--- | Format advisor discount text (or empty if none)
-advisorDiscountText :: Double -> Doc
-advisorDiscountText 0 = ""
-advisorDiscountText discount = " (" <> plainPc (100*(1-discount)) <> " cheaper to employ)"
 
 -- | Format years
 formatYears :: Int -> Text

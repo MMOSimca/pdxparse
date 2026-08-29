@@ -8,7 +8,6 @@ module Doc
     , doc2text
     , ppSigned, ppNosigned
     , ppFloat
-    , ppFloatT
     , nl2br
     , oneLine
     , Doc
@@ -64,10 +63,6 @@ ppFloat n
     where
     trunc :: Int
     trunc = floor n
-
--- | Pretty-print a Double, as Text.
-ppFloatT :: Double -> Text
-ppFloatT = TL.toStrict . PP.displayT . PP.renderCompact . ppFloat
 
 -- | Convert newlines to <br/> tags.
 nl2br :: Text -> Text
