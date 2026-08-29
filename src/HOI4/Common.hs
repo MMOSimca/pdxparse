@@ -183,17 +183,12 @@ ppHandlers = foldl' Tr.unionL Tr.empty
     , handlersCompound
     , handlersLocRhs
     , handlersState
-    , handlersFlagOrstate
-    , handlersNumericOrFlag
-    , handlersAdvisorId
     , handlersTypewriter
     , handlersSimpleIcon
     , handlersSimpleFlag
     , handlersFlagOrYesNo
     , handlersIconFlagOrPronoun
     , handlersYesNo
-    , handlersNumericOrTag
-    , handlersNumStates
     , handlersTextValue
     , handlersTextAtom
     , handlersSpecialComplex
@@ -299,6 +294,10 @@ handlersNumericCompare = Tr.fromList
         ,("communism"                        , numericCompare "more than" "less than" MsgCommunismCompare MsgCommunismCompareVar)
         ,("neutrality"                       , numericCompare "more than" "less than" MsgNeutralityCompare MsgNeutralityCompareVar)
         ,("num_faction_members"              , numericCompare "more than" "fewer than" MsgNumFactionMembers MsgNumFactionMembersVar)
+        ,("faction_influence_ratio"          , numericCompare "more than" "less than" MsgFactionInfluenceRatio MsgFactionInfluenceRatioVar)
+        ,("average_stats"                    , numericCompare "more than" "less than" MsgAverageStats MsgAverageStatsVar)
+        ,("political_power_growth"           , numericCompare "more than" "less than" MsgPoliticalPowerGrowth MsgPoliticalPowerGrowthVar)
+        ,("agency_upgrade_number"            , numericCompare "more than" "fewer than" MsgAgencyUpgrades MsgAgencyUpgradesVar)
         -- A building's own name is a trigger for how many levels of it a state
         -- has. The ones above have a message of their own; the rest are named by
         -- their icon. See 'HOI4.Messages.buildingKeys'.
@@ -322,9 +321,6 @@ handlersNumericCompare = Tr.fromList
         ,("stronghold_network"               , buildingLevel "stronghold_network")
         ,("supply_node"                      , buildingLevel "supply_node")
         ,("synthetic_refinery"               , buildingLevel "synthetic_refinery")
-        ,("faction_influence_ratio"          , numericCompare "more than" "less than" MsgFactionInfluenceRatio MsgFactionInfluenceRatioVar)
-        ,("average_stats"                    , numericCompare "more than" "less than" MsgAverageStats MsgAverageStatsVar)
-        ,("political_power_growth"           , numericCompare "more than" "less than" MsgPoliticalPowerGrowth MsgPoliticalPowerGrowthVar)
         ]
 
 -- | Handlers for numeric statements with icons
@@ -553,26 +549,6 @@ handlersState = Tr.fromList
         ,("transfer_state"      , withState MsgTransferState)
         ]
 
--- | Handlers for statements whose RHS is a flag OR a province ID
--- Also abusable for tag,scope purposes
-handlersFlagOrstate :: (HOI4Info g, Monad m) => Trie (StatementHandler g m)
-handlersFlagOrstate = Tr.fromList
-        [
-        ]
-
--- | Handlers for statements whose RHS is a number OR a tag/pronoun, with icon
-handlersNumericOrFlag :: (HOI4Info g, Monad m) => Trie (StatementHandler g m)
-handlersNumericOrFlag = Tr.fromList
-        [
-        ]
-
--- TODO: parse advisor files
--- | Handlers for statements whose RHS is an advisor ID
-handlersAdvisorId :: (HOI4Info g, Monad m) => Trie (StatementHandler g m)
-handlersAdvisorId = Tr.fromList
-        [
-        ]
-
 -- | Simple statements whose RHS should be presented as is, in typewriter face
 --   or just need the RHS unmodified
 handlersTypewriter :: (HOI4Info g, Monad m) => Trie (StatementHandler g m)
@@ -668,15 +644,6 @@ handlersFlagOrYesNo = Tr.fromList
         [("start_resistance"            , withFlagOrBool MsgStartResistance MsgCountryStartResistance)
         ]
 
--- | Handlers for statements whose RHS may be an icon, a flag, a province, or a
--- pronoun (such as ROOT).
-handlersIconFlagOrPronoun :: (HOI4Info g, Monad m) => Trie (StatementHandler g m)
-handlersIconFlagOrPronoun = Tr.fromList
-        [
-        ]
-
-
-
 -- | Handlers for yes/no statements
 handlersYesNo :: (HOI4Info g, Monad m) => Trie (StatementHandler g m)
 handlersYesNo = Tr.fromList
@@ -696,7 +663,6 @@ handlersYesNo = Tr.fromList
         ,("is_field_marshal"            , withBool MsgIsFieldMarshal)
         ,("is_corps_commander"          , withBool MsgIsCorpsCommander)
         ,("has_done_agency_upgrade"     , hasDoneAgencyUpgrade)
-        ,("agency_upgrade_number"       , numericCompare "more than" "fewer than" MsgAgencyUpgrades MsgAgencyUpgradesVar)
         ,("create_intelligence_agency"  , createIntelligenceAgency)
         ,("upgrade_intelligence_agency" , upgradeIntelligenceAgency)
         ,("has_offensive_war"           , withBool MsgHasOffensiveWar)
@@ -725,19 +691,6 @@ handlersYesNo = Tr.fromList
         ,("has_any_power_balance"       , withBool MsgHasAnyPowerBalance)
         ,("set_demilitarized_zone"      , withBool MsgSetDemilitarizedZone)
         ,("set_major"                   , withBool MsgSetMajor)
-        ]
-
--- | Handlers for statements that may be numeric or a tag
-handlersNumericOrTag :: (HOI4Info g, Monad m) => Trie (StatementHandler g m)
-handlersNumericOrTag = Tr.fromList
-        [
-        ]
-
--- | Handlers querying the number of provinces of some kind, mostly religions
--- and trade goods
-handlersNumStates :: (HOI4Info g, Monad m) => Trie (StatementHandler g m)
-handlersNumStates = Tr.fromList
-        [
         ]
 
 -- Helpers for text/value pairs
@@ -963,7 +916,7 @@ handlersSpecialComplex = Tr.fromList
         ,("event_option_tooltip"          , eventOptionTooltip)
         ]
 
--- | Handlers for idea groups
+-- | Handlers for "ideas", which include character traits, national spirits, laws, and more
 handlersIdeas :: (HOI4Info g, Monad m) => Trie (StatementHandler g m)
 handlersIdeas = Tr.fromList
         [("has_idea"                    , handleIdeas False MsgHasIdea)

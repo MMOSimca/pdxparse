@@ -2790,9 +2790,9 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgDeactivateAdvisor {scriptMessageWho = _who}
             -> mconcat
-                [ "Dismiss advisor '''"
+                [ "Remove advisor '''"
                 , _who
-                , "'''"
+                , "''' losing the effect"
                 ]
         MsgIsHiredAsAdvisor {scriptMessageYn = _yn}
             -> mconcat
@@ -5875,9 +5875,9 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgAddFactionInfluenceRatio {scriptMessageAmt = _amt}
             -> mconcat
-                [ "Gain "
+                [ "Add "
                 , toMessage $ templateColor (reducedNum (colourPcSign True) _amt)
-                , " of the faction's total influence"
+                , " '''Faction Influence''' for our country in our faction"
                 ]
         MsgAddMioResearchBonus {scriptMessageAmt = _amt}
             -> mconcat
