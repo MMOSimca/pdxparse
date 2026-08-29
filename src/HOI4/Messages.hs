@@ -2537,7 +2537,7 @@ instance RenderMessage Script ScriptMessage where
         MsgPuppet {scriptMessageWhom = _whom, scriptMessageWhat = _what}
             -> mconcat
                 [ _whom
-                , " becomes a puppet of the current scope"
+                , " becomes a puppet of the current scope."
                 ]
         MsgRecallVolunteersFrom {scriptMessageWhom = _whom, scriptMessageWhat = _what}
             -> mconcat
@@ -2556,7 +2556,7 @@ instance RenderMessage Script ScriptMessage where
                 [ "Release "
                 , _whom
                 , ifThenElseT (T.null _what) "" "<!-- ",_what," -->"
-                , " as a puppet"
+                , " as a puppet."
                 ]
         MsgRemoveClaimBy {scriptMessageWho = _who, scriptMessageWhat = _what}
             -> mconcat

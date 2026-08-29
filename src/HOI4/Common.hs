@@ -621,6 +621,7 @@ handlersSimpleFlag = Tr.fromList
         ,("recall_volunteers_from"  , withFlag MsgRecallVolunteersFrom)
         ,("release"                 , withFlag MsgRelease)
         ,("release_puppet"          , withFlag MsgReleasePuppet)
+        ,("release_puppet_on_controlled" , withFlag MsgReleasePuppet)
         ,("remove_claim_by"         , withFlag MsgRemoveClaimBy)
         ,("remove_core_of"          , withFlag MsgRemoveCoreOf)
         ,("remove_from_faction"     , withFlag MsgRemoveFromFaction)
