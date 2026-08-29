@@ -5,7 +5,6 @@ Description : Types for program configuration and structure
 module SettingsTypes (
         L10n
     ,   CLArgs (..)
-    ,   L10nScheme (..)
     ,   Game (..), IsGame (..)
     ,   IsGameData (..)
     ,   IsGameState (..)
@@ -33,7 +32,7 @@ module SettingsTypes (
     ,   unsnoc, safeLast, safeIndex
     ) where
 
-import Debug.Trace (trace, traceM)
+import Debug.Trace (trace)
 
 import Control.Monad (void)
 import Control.Monad.Trans (MonadIO)
@@ -44,7 +43,6 @@ import Control.Monad.State (StateT (..), gets)
 
 import Control.Applicative (Alternative (..), optional)
 
-import Data.Array ((!))
 import Data.Foldable (fold)
 import Data.Maybe (isJust, isNothing, fromJust, listToMaybe, fromMaybe)
 
@@ -53,16 +51,12 @@ import qualified Data.Text as T
 import Text.Shakespeare.I18N (Lang)
 --import qualified Text.PrettyPrint.Leijen.Text as PP
 
-import Text.Regex.TDFA (Regex)
-import qualified Text.Regex.TDFA as RE
-
 import Data.HashMap.Strict(HashMap)
 import qualified Data.HashMap.Strict as HM
 
 import Data.Attoparsec.Text (Parser, (<?>))
 import qualified Data.Attoparsec.Text as Ap
-import Data.Functor (($>))
-import Data.Char (digitToInt, isAlpha, isDigit, isSpace)
+import Data.Char (digitToInt, isAlpha, isDigit)
 
 import Doc (doc2text)
 import MessageTools (PPSep (..), fixedNumText)
@@ -75,60 +69,16 @@ data CLArgs
     = Paths
     | Version
     | Help
-    | Onlyextra
     | Nowait
-    | ProcessFile String
-    | ProcessCountryScopeFile String
-    | ProcessProvinceScopeFile String
-    | ProcessModifierFile String
-    | WithLabels
-    deriving (Show, Eq)
-
--- | Choice of localization scheme.
-data L10nScheme
-    = L10nCSV   -- ^ CSV (semicolon-delimited), for CK2 and earlier.
-    | L10nQYAML -- ^ Quasi-YAML, for EU4 1.17 and later (EU4 before 1.17 not supported).
     deriving (Show, Eq)
 
 ----------------------------
 -- Game specific settings --
 ----------------------------
 
-{- Old settings types
-data Game
-    = GameUnknown
-    | GameEU4 {
-            readScripts :: ScriptReader
-        ,   parseScripts :: ScriptParser
-        ,   writeScripts :: ScriptWriter
-        ,   eu4data :: EU4Data
-        }
-    | GameStellaris {
-            readScripts :: ScriptReader
-        ,   parseScripts :: ScriptParser
-        ,   writeScripts :: ScriptWriter
-        ,   stdata :: StellarisData
-        }
-    | GameHOI4 {
-            readScripts :: ScriptReader
-        ,   parseScripts :: ScriptParser
-        ,   writeScripts :: ScriptWriter
-        ,   hoi4data :: HOI4Data
-        }
-    | GameVic2 {
-            readScripts :: ScriptReader
-        ,   parseScripts :: ScriptParser
-        ,   writeScripts :: ScriptWriter
-        ,   vic2data :: Vic2Data
-        }
-    deriving (Show)
--}
-
 -- | Type for the Reader. This should include a scope stack if the game needs
 -- one (most PDS games do). The top of a scope stack indicates the current
--- scope, which affects the interpretation of some statements - for example,
--- for EU4, @prestige = 1@ in bonus scope means "+1 yearly prestige", in a
--- command scope means "gain 1 prestige".
+-- scope, which affects the interpretation of some statements.
 class IsGameState s where
     currentFile :: s -> Maybe FilePath
     modifyCurrentFile :: Maybe FilePath -> s -> s
@@ -142,8 +92,6 @@ class IsGameData d where
 
 -- | Top level handlers for the game scripts, features etc.
 class IsGame g where
-    -- | Localization scheme used by this game.
-    locScheme :: g -> L10nScheme
     -- | Action to read the game scripts and parse to AST. They should be
     -- stored with 'Control.Monad.State.modify'.
     readScripts :: MonadIO m => PPT g (ExceptT Text m) ()
@@ -158,9 +106,7 @@ class IsGame g where
     -- | Parser state type. Should be an instance of 'IsGameState' and include
     -- a stack of context types (e.g. bonus, country, province, trade node,
     -- etc.). The topmost element indicates the current scope, which affects
-    -- the interpretation of some statements for example, for EU4,
-    -- @prestige = 1@ in bonus scope means "+1 yearly prestige", in a command
-    -- scope means "gain 1 prestige".
+    -- the interpretation of some statements.
     data GameState g
     runWithInitState :: g -> Settings -> PPT g IO () -> IO ()
     -- | Scopes for the scope stack. This is an associated type synonym rather
@@ -209,7 +155,6 @@ class IsGame g where
 -- code be polymorphic over Game.
 data UnknownGame = UnknownGame
 instance IsGame UnknownGame where
-    locScheme _ = L10nQYAML
     readScripts = return ()
     parseScripts = return ()
     writeScripts = return ()
@@ -262,7 +207,7 @@ instance IsGameState (GameState UnknownGame) where
 -- in the game's @Types@ module. Instead, have game-specific code be
 -- polymorphic over 'IsGame'.
 --
--- See the source for "SettingsTypes" or "EU4.Settings" for an example IsGame
+-- See the source for "SettingsTypes" or "HOI4.Settings" for an example IsGame
 -- instance.
 data Game where
     Game :: IsGame g => g -> Game
@@ -279,9 +224,7 @@ data Settings = Settings {
                                 -- @C:\Program Files (x86)@
     ,   steamApps   :: FilePath -- ^ Steam apps directory under steamDir,
                                 --   usually @Steam/steamapps/common@
-    ,   l10nScheme  :: L10nScheme -- ^ Localization scheme being used
     ,   game        :: Game     -- ^ Game-specific actions.
-    ,   gameString  :: Text     -- ^ Game as string for comparison.
     ,   gameFolder  :: String   -- ^ Folder under apps directory containing the
                                 --   game files.  Usually the same as the
                                 --   game's name, e.g. "Hearts of Iron IV".
@@ -301,8 +244,6 @@ data Settings = Settings {
     ,   langs       :: [Lang]   -- ^ Preferential list of output languages.
                                 --   Currently only \"en\" is supported.
     ,   settingsFile :: FilePath -- ^ Path to @settings.yaml@.
-    ,   clargs      :: [CLArgs] -- ^ Command line arguments.
-    ,   filesToProcess :: [FilePath] -- ^ List of files being processed.
     ,   inlineScriptLimit :: Int -- ^ How large the body of a named block of
                                  --   script -- a scripted effect or trigger --
                                  --   may be, counted in statements, for it to be
@@ -419,10 +360,9 @@ alsoIndent' x = withCurrentIndent $ \i -> return (i,x)
 getCurrentLang :: (IsGameData (GameData g), Monad m) => PPT g m L10nLang
 getCurrentLang = gets (HM.findWithDefault HM.empty . language . getSettings) <*> gets (gameL10n . getSettings)
 
--- | remove or handle formatting markers from a localisation text
--- currently only simple formattings (§ followed by one character) are handled
--- For EU4 and HOI4 £ and § are both used for text icons and colors respectively
--- $ is used for nested strings and in EU4 for keys
+-- | Remove or handle formatting markers from a localisation text.
+-- £ and § are used for text icons and colors respectively,
+-- $ is used for nested localization keys.
 handleLocFormat :: (IsGameData (GameData g), Monad m) => Text -> PPT g m Text
 handleLocFormat = handleLocFormatArgs HM.empty
 
@@ -432,21 +372,9 @@ handleLocFormat = handleLocFormatArgs HM.empty
 -- (@custom_effect_tooltip = { localization_key = … STATE = … }@) says in the
 -- script what to put in each of its own placeholders instead.
 handleLocFormatArgs :: (IsGameData (GameData g), Monad m) => HashMap Text LocArg -> Text -> PPT g m Text
-handleLocFormatArgs args text = do
-    game <- gets (gameString . getSettings)
-    handleGameFormat args game text
-
-handleGameFormat :: (IsGameData (GameData g), Monad m) => HashMap Text LocArg -> Text -> Text -> PPT g m Text
-handleGameFormat args g t
-    | g == "HOI4" = do
-        case parseFormat t of
-            Left err -> return $ trace ("parse failed on: " ++ err) t
-            Right tformat -> mconcat <$> traverse (unpackTextfragment args) tformat
-    | g == "EU4" =
-        case removeFormat t of
-            Left err -> return t
-            Right clean -> return clean
-    | otherwise = return t
+handleLocFormatArgs args t = case parseFormat t of
+    Left err -> return $ trace ("parse failed on: " ++ err) t
+    Right tformat -> mconcat <$> traverse (unpackTextfragment args) tformat
 
 unpackTextfragment :: (IsGameData (GameData g), Monad m) => HashMap Text LocArg -> FormattedTextFragment -> PPT g m Text
 unpackTextfragment args = \case
@@ -563,25 +491,6 @@ keyText = (,) <$> ("$" *> Ap.takeWhile1 (Ap.inClass "a-zA-Z._0-9-"))
 iconText :: Parser Text
 iconText = "£" *> Ap.takeWhile1 (Ap.inClass "a-zA-Z._0-9|-")
     <* Ap.option 'e' (Ap.satisfy (not . \c -> isAlpha c || Ap.isHorizontalSpace c)) -- can be end of line or a special character directly after the key
-
-removeFormat :: Text -> Either String Text
-removeFormat = Ap.parseOnly removeCol . stripMissionColor
-
-removeCol :: Parser Text
-removeCol = mconcat <$> many removeCol'
-
-removeCol' :: Parser Text
-removeCol' = Ap.takeWhile1 (not . \c -> '§' == c )
-         <|> Ap.char '§'
-            *> (Ap.anyChar $> mempty)
-    <?> "color character"
-
-stripMissionColor :: Text -> Text
-stripMissionColor loc_title = case RE.matchOnceText strip_color_RE loc_title of
-    Just (pre, matcharr, post) -> fst (matcharr ! 2)
-    _                          -> loc_title
-    where
-        strip_color_RE = RE.makeRegex("^\\[(Root.GetPreviewColor[^]]*)\\](.*)\\[Root.GetPreviewColor[^]]*_end]$"::Text)::Regex
 
 -- | Get the localization string for a given key. If it doesn't exist, use the
 -- key itself.

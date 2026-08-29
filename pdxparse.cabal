@@ -8,7 +8,7 @@ synopsis:            A parser for scripts used in Paradox Development Studios ga
 description:         This program extracts script and localization files from
                      games by Paradox Development Studios to the format
                      (including templates, etc.) used by Paradox wikis.
-                     Currently only Europa Universalis IV is supported.
+                     Currently only Hearts of Iron IV is supported.
 homepage:            https://github.com/HairyDude/pdxparse
 license:             MIT
 license-file:        LICENSE
@@ -25,19 +25,6 @@ executable pdxparse
   main-is:             Main.hs
   other-modules:       Abstract,
                        Doc,
-                       EU4.Common,
-                       EU4.Decisions,
-                       EU4.Events,
-                       EU4.Extra,
-                       EU4.Handlers
-                       EU4.IdeaGroups,
-                       EU4.IO,
-                       EU4.Missions,
-                       EU4.Modifiers,
-                       EU4.Policies,
-                       EU4.Settings,
-                       EU4.Templates,
-                       EU4.Types,
                        FileIO,
                        HOI4.CharactersAndTraits
                        HOI4.Common,
@@ -60,18 +47,11 @@ executable pdxparse
                        Interface
                        Localization,
                        MessageTools,
-                       Messages,
                        Paths_pdxparse,
                        Platform,
                        QQ,
                        Settings,
                        SettingsTypes,
-                       Stellaris.Common,
-                       Stellaris.Events,
-                       Stellaris.Settings,
-                       Stellaris.Types,
-                       Vic2.Settings,
-                       Vic2.Types,
                        Yaml
 
   default-extensions:  DeriveGeneric,

@@ -74,9 +74,6 @@ data HOI4Data = HOI4Data {
     ,   hoi4modifierScripts :: HashMap FilePath GenericScript
 
     ,   hoi4countryHistoryScripts :: HashMap FilePath GenericScript -- Country Tag -> country tag + ideology
-    ,   hoi4extraScripts :: HashMap FilePath GenericScript -- Extra scripts parsed on the command line
---    ,   hoi4interfacegfxScripts :: HashMap FilePath GenericScript
---    ,   hoi4interfacegfx :: HashMap Text Text
     ,   hoi4characterScripts :: HashMap FilePath GenericScript
     ,   hoi4characters :: HashMap Text HOI4Character
     ,   hoi4countryleadertraitScripts :: HashMap FilePath GenericScript
@@ -115,12 +112,6 @@ data HOI4Data = HOI4Data {
     ,   hoi4scriptconstants :: HashMap Text Double -- ^ dotted path -> value
     ,   hoi4lockeys :: [Text]
     ,   hoi4modkeys :: [Text]
-
-    ,   hoi4extraScriptsCountryScope :: HashMap FilePath GenericScript -- Extra scripts parsed on the command line
-    ,   hoi4extraScriptsProvinceScope :: HashMap FilePath GenericScript -- Extra scripts parsed on the command line
-    ,   hoi4extraScriptsModifier :: HashMap FilePath GenericScript -- Extra scripts parsed on the command line
-
-    -- etc.
     }
 
 -- | State type for HOI4.
@@ -271,12 +262,6 @@ class (IsGame g,
     getLocKeys :: Monad m => PPT g m [Text]
     -- | Get the modkeys parsed
     getModKeys :: Monad m => PPT g m [Text]
-
-    -- | Get extra scripts parsed from command line arguments
-    getExtraScripts :: Monad m => PPT g m (HashMap FilePath GenericScript)
-    getExtraScriptsCountryScope :: Monad m => PPT g m (HashMap FilePath GenericScript)
-    getExtraScriptsProvinceScope :: Monad m => PPT g m (HashMap FilePath GenericScript)
-    getExtraScriptsModifier :: Monad m => PPT g m (HashMap FilePath GenericScript)
 
 -------------------
 -- Feature types --

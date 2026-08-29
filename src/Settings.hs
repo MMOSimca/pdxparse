@@ -35,10 +35,7 @@ import Interface (readInterface)
 import SettingsTypes ( CLArgs (..), Settings (..), Game (..), IsGame (..)
                      , setGameL10n)
 import Paths_pdxparse (version, getDataFileName)
-import EU4.Settings (EU4 (..))
 import HOI4.Settings (HOI4 (..))
-import Stellaris.Settings (Stellaris (..))
-import Vic2.Settings (Vic2 (..))
 
 -- | Intermediate structure. Maybe values don't need to be present in the
 -- settings file.
@@ -107,12 +104,6 @@ programOpts =
     , Option ['v'] ["version"]       (NoArg Version) "show version information"
     , Option ['h'] ["help"]          (NoArg Help) "show this message"
     , Option ['n'] ["nowait"]        (NoArg Nowait) "don't wait for the user to press a key before exiting"
-    , Option ['w'] ["withlabels"]    (NoArg WithLabels)  "the top level of the extra files is considered a label which gets localized, but not processed further"
-    , Option ['e'] ["onlyextra"]     (NoArg Onlyextra) "skip writing normal game files and only write the result of parsing the file, countryscope, provincescope and modifiers arguments"
-    , Option ['f'] ["file"]          (ReqArg ProcessFile "FILE")  "also process FILE"
-    , Option ['c'] ["countryscope"]  (ReqArg ProcessCountryScopeFile "FILE")  "also process FILE as containing code in the counrty scope"
-    , Option ['s'] ["provincescope"] (ReqArg ProcessProvinceScopeFile "FILE")  "also process FILE as containing code in the province scope"
-    , Option ['m'] ["modifiers"]     (ReqArg ProcessModifierFile "FILE")  "also process FILE as containing modifiers"
     ]
 
 readCommandLineOptions :: IO ([CLArgs], [String], [String])
@@ -122,7 +113,7 @@ readCommandLineOptions = getOpt Permute programOpts <$> getArgs
 -- files. If we can't, abort.
 readSettings :: IO Settings
 readSettings = do
-    (opts, nonopts, errs) <- readCommandLineOptions
+    (opts, _nonopts, errs) <- readCommandLineOptions
     unless (null errs) $ do
         forM_ errs $ \err -> putStrLn err
         putStrLn $ usageInfo "pdxparse" programOpts
@@ -172,18 +163,13 @@ readSettings = do
                 modfolder = fromMaybe "" (modNameI settingsIn)
                 modlocation = fromMaybe "C:/thisgoesnowhere" (modDirI settingsIn)
 
-            (game, gameString) <- case gamefolder of
-                "Europa Universalis IV" -> return (Game EU4, "EU4")
-                "Hearts of Iron IV" -> return (Game HOI4, "HOI4")
-                "Stellaris" -> return (Game Stellaris, "Stellaris")
-                "Victoria 2" -> return (Game Vic2, "Vic2")
+            game <- case gamefolder of
+                "Hearts of Iron IV" -> return (Game HOI4)
                 other -> do
                     putStrLn $ "I don't know how to handle " ++ other ++ "!"
                     exitFailure
 
-            langFolder <- case gamefolder of
-                "Hearts of Iron IV" -> return $ "localisation" </> T.unpack lang
-                _other -> return "localisation"
+            let langFolder = "localisation" </> T.unpack lang
 
             gameormodfolder <- case modNameI settingsIn of
                 Just _mname -> return modfolder
@@ -194,7 +180,6 @@ readSettings = do
                             , steamApps = steamAppsCanonicalized
                             , l10nScheme = case game of Game g -> locScheme g
                             , game = game
-                            , gameString = gameString
                             , gameFolder = gamefolder
                             , gameOrModFolder = gameormodfolder
                             , gameModPath = modlocation
@@ -209,8 +194,6 @@ readSettings = do
                             , gameL10nKeys = [] -- filled in later
                             , langs = ["en"]
                             , settingsFile = settingsFilePath
-                            , clargs = opts
-                            , filesToProcess = nonopts
                             , inlineScriptLimit = fromMaybe 10 (inlineScriptLimitI settingsIn)
                             , collapseLargeScripts = fromMaybe False (collapseLargeScriptsI settingsIn) }
 

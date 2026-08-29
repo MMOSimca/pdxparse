@@ -25,7 +25,7 @@ import System.IO (hPutStrLn, stderr)
 
 import Abstract -- everything
 import FileIO (buildPath, readScript)
-import SettingsTypes ( PPT, Settings (..), L10nScheme (..)
+import SettingsTypes ( PPT, Settings (..)
                      , IsGame (..), IsGameData (..), IsGameState (..)
                      , safeIndex, safeLast)
 import HOI4.Types -- everything
@@ -95,7 +95,6 @@ fixLocalization s =
 -- | HOI4 game type. This is only interesting for its instances.
 data HOI4 = HOI4
 instance IsGame HOI4 where
-    locScheme _  = L10nQYAML
     readScripts  = readHOI4Scripts
     parseScripts = parseHOI4Scripts
     writeScripts = writeHOI4Scripts
@@ -164,12 +163,6 @@ instance IsGame HOI4 where
                 ,   hoi4scriptconstants = HM.empty
                 ,   hoi4lockeys = []
                 ,   hoi4modkeys = []
-
-                -- unused
-                ,   hoi4extraScripts = HM.empty
-                ,   hoi4extraScriptsCountryScope = HM.empty
-                ,   hoi4extraScriptsProvinceScope = HM.empty
-                ,   hoi4extraScriptsModifier = HM.empty
                 }))
                 (HOI4S $ HOI4State {
                     hoi4currentFile = Nothing
@@ -385,19 +378,6 @@ instance HOI4Info HOI4 where
     getModKeys = do
         HOI4D ed <- get
         return (hoi4modkeys ed)
--- unused
-    getExtraScripts = do
-        HOI4D ed <- get
-        return (hoi4extraScripts ed)
-    getExtraScriptsCountryScope = do
-        HOI4D ed <- get
-        return (hoi4extraScriptsCountryScope ed)
-    getExtraScriptsProvinceScope = do
-        HOI4D ed <- get
-        return (hoi4extraScriptsProvinceScope ed)
-    getExtraScriptsModifier = do
-        HOI4D ed <- get
-        return (hoi4extraScriptsModifier ed)
 
 instance IsGameData (GameData HOI4) where
     getSettings (HOI4D ed) = hoi4settings ed
