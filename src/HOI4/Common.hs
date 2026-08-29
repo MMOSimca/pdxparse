@@ -187,7 +187,6 @@ ppHandlers = foldl' Tr.unionL Tr.empty
     , handlersSimpleIcon
     , handlersSimpleFlag
     , handlersFlagOrYesNo
-    , handlersIconFlagOrPronoun
     , handlersYesNo
     , handlersTextValue
     , handlersTextAtom
@@ -887,6 +886,9 @@ handlersSpecialComplex = Tr.fromList
         ,("has_active_mission"           , locandid MsgHasActiveMission)
         ,("activate_targeted_decision"   , textAtomKey "target" "decision" MsgActivateTargetedDecision flagMaybeText)
         ,("remove_targeted_decision"     , textAtomKey "target" "decision" MsgRemoveTargetedDecision flagMaybeText)
+        -- The tactic is named by a localization key of its own, kept apart from
+        -- the rest in tactics_l_english.yml.
+        ,("unlock_tactic"                , withLocAtom MsgUnlockTactic)
         ,("unlock_decision_category_tooltip" , withLocAtom MsgUnlockDecisionCategoryTooltip)
         ,("unlock_decision_tooltip"       , unlockDecisionTooltip)
         ,("add_days_remove"              , textValueKey "decision" "days" MsgAddDaysRemove MsgAddDaysRemoveVar)

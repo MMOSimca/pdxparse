@@ -896,6 +896,7 @@ data ScriptMessage
     | MsgIsInArray {scriptMessageVar1 :: Text, scriptMessageVar2 :: Text}
     | MsgAddToTempArray {scriptMessageVar1 :: Text, scriptMessageVar2 :: Text}
     | MsgClearTempArray {scriptMessageWhat :: Text}
+    | MsgUnlockTactic {scriptMessageWhat :: Text}
     | MsgCreateDynamicCountry {scriptMessageWhom :: Text}
     | MsgReserveDynamicCountry
     | MsgAddToArray {scriptMessageVar1 :: Text, scriptMessageVar2 :: Text}
@@ -5784,6 +5785,11 @@ instance RenderMessage Script ScriptMessage where
                 , ifThenElseT (T.null _var2) "the current scope" (typewriterText _var2)
                 , " to the temporary array "
                 , typewriterText _var1
+                ]
+        MsgUnlockTactic {scriptMessageWhat = _what}
+            -> mconcat
+                [ "Enables Tactic: "
+                , _what
                 ]
         MsgClearTempArray {scriptMessageWhat = _what}
             -> mconcat
