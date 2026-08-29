@@ -4538,12 +4538,12 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgIsCharacter {scriptMessageWhat = _what}
             -> mconcat
-                [ "Is character "
+                [ "Is "
                 ,  toMessage (iquotes _what)
                 ]
         MsgIsOnContinent {scriptMessageWhat = _what}
             -> mconcat
-                [ "Is on the continent "
+                [ "Is in "
                 ,  toMessage (iquotes _what)
                 ]
         MsgHasCountryLeader {scriptMessageWhom = _whom}
