@@ -1942,7 +1942,11 @@ hasDlc :: (HOI4Info g, Monad m) => StatementHandler g m
 hasDlc [pdx| %_ = ?dlc |]
     = msgToPP $ MsgHasDLC dlc_icon dlc
     where
-        mdlc_key = HM.lookup dlc . HM.fromList $
+        -- Script does not always spell an expansion's name the way its store
+        -- page does ("Peace For Our Time"), and the difference is never more
+        -- than which letters are capital, so the name is matched without
+        -- regard to case.
+        mdlc_key = HM.lookup (T.toLower dlc) . HM.fromList . map (first T.toLower) $
             [("Together for Victory", "tfv")
             ,("Death or Dishonor", "dod")
             ,("Waking the Tiger", "wtt")
