@@ -32,7 +32,7 @@ import qualified Doc
 import FileIO ( Feature (..), Consolidation (..), ConsolidatedFeature (..)
               , naturalOrder, writeFeatures, writeFeaturesWith)
 import HOI4.WikiPage ( CountryIndex, buildCountryIndex
-                     , ppPageIntro, ppSectionHeader, boxWrapper)
+                     , ppPageIntro, ppSectionHeader, boxWrapper, requiresDebug)
 import HOI4.EventSources (ppSource)
 import HOI4.Messages -- everything
 import MessageTools (italicText, formatDays)
@@ -442,15 +442,34 @@ writeHOI4Decisions = do
 
 -- | Present one decision file's decisions as a single wiki page, a section
 -- per category, since each category is written to a folder of its own.
+-- Decisions only visible in debug mode are left off the page, their
+-- categories with them if that empties them; a file with nothing else in it
+-- makes no page at all.
 ppDecisionsPage :: (HOI4Info g, Monad m) =>
-    CountryIndex -> FilePath -> [ConsolidatedFeature HOI4Decision] -> PPT g m Doc
+    CountryIndex -> FilePath -> [ConsolidatedFeature HOI4Decision] -> PPT g m (Maybe Doc)
 ppDecisionsPage countries srcPath cfs = do
-    intro <- ppPageIntro countries "decisions" srcPath
-    let byCategory = M.toAscList $
-            M.map (sortBy (\a b -> naturalOrder (cfId a) (cfId b))) $
-            M.fromListWith (++) [(T.pack (takeFileName (cfDir cf)), [cf]) | cf <- cfs]
-    sections <- mapM ppCategorySection byCategory
-    return . mconcat $ intersperse PP.line (intro : sections)
+    cats <- getDecisioncats
+    case filter (not . decisionRequiresDebug cats . cfFeature) cfs of
+        [] -> return Nothing
+        shown -> do
+            intro <- ppPageIntro countries "decisions" srcPath
+            let byCategory = M.toAscList $
+                    M.map (sortBy (\a b -> naturalOrder (cfId a) (cfId b))) $
+                    M.fromListWith (++) [(T.pack (takeFileName (cfDir cf)), [cf]) | cf <- shown]
+            sections <- mapM ppCategorySection byCategory
+            return . Just . mconcat $ intersperse PP.line (intro : sections)
+
+-- | Whether the decision can only be seen with the game in debug mode. All
+-- four of its own trigger blocks gate whether it shows, and its category's do
+-- too: a decision of a category that never appears is never seen either.
+decisionRequiresDebug :: HashMap Text HOI4Decisioncat -> HOI4Decision -> Bool
+decisionRequiresDebug cats dec =
+    any (requiresDebug . ($ dec))
+        [dec_allowed, dec_target_root_trigger, dec_visible, dec_target_trigger]
+    || maybe False catRequiresDebug (HM.lookup (dec_cat dec) cats)
+    where
+        catRequiresDebug cat = any (requiresDebug . ($ cat))
+            [decc_allowed, decc_visible]
 
 -- | Present one category's decisions: a heading naming the category, then its
 -- decisions wrapped so their boxes flow together.

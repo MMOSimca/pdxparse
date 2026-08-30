@@ -16,6 +16,7 @@ module HOI4.WikiPage (
     ,   boxWrapper
     ,   pageCountry
     ,   pageExpansion
+    ,   requiresDebug
     ) where
 
 import Control.Monad (forM)
@@ -33,12 +34,14 @@ import System.FilePath (takeBaseName)
 import Text.PrettyPrint.Leijen.Text (Doc)
 import qualified Text.PrettyPrint.Leijen.Text as PP
 
+import Abstract (GenericScript)
 import qualified Doc
 import HOI4.CountryNames (casualName, casualNameTag, looselyNamed)
 import HOI4.Localization (flagText)
 import HOI4.Messages (wikifyLocColours)
 import HOI4.Types
 import HOI4.WikiTables (expansionOfPrefix)
+import QQ (pdx)
 import SettingsTypes ( PPT, Settings (..), IsGame (..), IsGameData (..)
                      , getGameL10nIfPresent)
 
@@ -149,3 +152,17 @@ dropExpansionPrefix base =
 -- | A path as the wiki writes one, whatever this platform's separator is.
 wikiPath :: FilePath -> Text
 wikiPath = T.replace "\\" "/" . T.pack
+
+-- | Whether a trigger script requires the game to be running in debug mode.
+-- Features gated this way exist for testing and are never seen in a normal
+-- game, so the consolidated pages leave them out. Only a requirement that
+-- always holds counts: an @is_debug@ under an @OR@ or a @NOT@ doesn't make
+-- the feature debug-only, so only blocks that keep AND semantics are looked
+-- into.
+requiresDebug :: Maybe GenericScript -> Bool
+requiresDebug = maybe False (any requiring)
+    where
+        requiring [pdx| $lhs = yes |] = T.toLower lhs == "is_debug"
+        requiring [pdx| $lhs = @scr |]
+            | T.toLower lhs `elem` ["and", "hidden_trigger"] = any requiring scr
+        requiring _ = False

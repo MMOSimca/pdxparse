@@ -34,7 +34,7 @@ import HOI4.Common -- everything
 import HOI4.EventSources (ppSource)
 import HOI4.Localization
 import HOI4.WikiPage ( CountryIndex, buildCountryIndex
-                     , ppPageIntro, ppSectionHeader, boxWrapper)
+                     , ppPageIntro, ppSectionHeader, boxWrapper, requiresDebug)
 import FileIO ( Feature (..), Consolidation (..), ConsolidatedFeature (..)
               , naturalOrder, writeFeaturesWith)
 import HOI4.Messages (imsg2doc, wikifyLocColours)
@@ -97,13 +97,18 @@ writeHOI4Events = do
 
 -- | Present one event file's events as a single wiki page. Events are
 -- gathered into sections by their ids, so that a file of a hundred events
--- reads as a dozen headings rather than a hundred.
+-- reads as a dozen headings rather than a hundred. Events that can only fire
+-- in debug mode are left off the page, their sections with them if that
+-- empties them; a file with nothing else in it makes no page at all.
 ppEventsPage :: (HOI4Info g, Monad m) =>
-    CountryIndex -> FilePath -> [ConsolidatedFeature HOI4Event] -> PPT g m Doc
-ppEventsPage countries srcPath cfs = do
-    intro <- ppPageIntro countries "events" srcPath
-    sections <- mapM ppEventSection (groupEvents cfs)
-    return . mconcat $ intersperse PP.line (intro : sections)
+    CountryIndex -> FilePath -> [ConsolidatedFeature HOI4Event] -> PPT g m (Maybe Doc)
+ppEventsPage countries srcPath cfs =
+    case filter (not . requiresDebug . hoi4evt_trigger . cfFeature) cfs of
+        [] -> return Nothing
+        shown -> do
+            intro <- ppPageIntro countries "events" srcPath
+            sections <- mapM ppEventSection (groupEvents shown)
+            return . Just . mconcat $ intersperse PP.line (intro : sections)
 
 -- | Present one section of an events page: its heading, then the events under
 -- it wrapped so their boxes flow together.

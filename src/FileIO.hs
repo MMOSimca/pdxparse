@@ -194,8 +194,10 @@ data ConsolidatedFeature a = ConsolidatedFeature
 
 -- | Build the body of one consolidated file, given the directory it will be
 -- written to and every feature belonging in it, in no particular order.
+-- 'Nothing' means the file has nothing to say -- e.g. everything in it is
+-- debug-only -- and is not written at all.
 type ConsolidationRender g m a =
-    FilePath -> [ConsolidatedFeature a] -> PPT g (ExceptT Text m) Doc
+    FilePath -> [ConsolidatedFeature a] -> PPT g (ExceptT Text m) (Maybe Doc)
 
 -- | How 'writeFeaturesWith' should build consolidated @_all.txt@ files. The
 -- constructor says where each one goes; the function it carries decides
@@ -293,7 +295,8 @@ writeFeaturesWith featureName features pprint mconsolidate = do
                     Left err -> liftIO . TIO.putStrLn $
                         "Error while writing consolidated " <> featureName
                             <> " in " <> T.pack dir <> ": " <> err
-                    Right body -> liftIO $
+                    Right Nothing -> return ()
+                    Right (Just body) -> liftIO $
                         writeFeature (dir </> aggFileName dir) gamefoldr body
 
 -- | Name of the consolidated file for an output directory.
