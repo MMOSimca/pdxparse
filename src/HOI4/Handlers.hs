@@ -4127,9 +4127,7 @@ newAPB = AnyProvBuilding Nothing "at least" 0 [] False False False False False
 -- level given.
 anyProvinceBuildingLevel :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
 anyProvinceBuildingLevel stmt@[pdx| %_ = @scr |] = case apb_building apb of
-        Just bld -> do
-            bldloc <- getGameL10n bld
-            msgToPP $ MsgAnyProvinceBuildingLevel (iconText bld) bldloc
+        Just bld -> msgToPP $ MsgAnyProvinceBuildingLevel (iconText bld)
                         (apb_comp apb) (apb_level apb) whichProvinces
         Nothing -> preStatement stmt
     where
