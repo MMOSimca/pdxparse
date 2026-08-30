@@ -89,7 +89,7 @@ module HOI4.Handlers (
     ,   random
     ,   randomList
     ,   hasDlc
-    ,   customTriggerTooltip
+    ,   effectTooltip
     ,   limitClause
     ,   isClause
     ,   isThirdPerson
@@ -1928,14 +1928,16 @@ hasDlc [pdx| %_ = ?dlc |]
         dlc_icon = maybe "" iconText mdlc_key
 hasDlc stmt = preStatement stmt
 
-customTriggerTooltip :: (HOI4Info g, Monad m) => StatementHandler g m
-customTriggerTooltip [pdx| %_ = @scr |]
+-- | Handler for @effect_tooltip@, which shows the effects inside it without
+-- executing them.
+effectTooltip :: (HOI4Info g, Monad m) => StatementHandler g m
+effectTooltip [pdx| %_ = @scr |]
     -- The tooltip says what the effects inside it would do without doing them,
     -- so what it holds is written where the tooltip itself stood. A line of its
     -- own would say nothing, and the indent that comes with one would put its
     -- contents a step further in than the effects standing beside it.
     = indentDown (ppMany scr)
-customTriggerTooltip stmt = preStatement stmt
+effectTooltip stmt = preStatement stmt
 
 ---------------
 -- has focus --
@@ -2098,20 +2100,23 @@ setVariable msgWW msgWV stmt@[pdx| %_ = @scr |]
             (_, Just var) -> HM.singleton "RIGHT" (LocText (toTT var))
             _ -> HM.empty
         pp_sv :: SetVariable -> PPT g m IndentedMessages
-        pp_sv sv = do
-            ttmsg <- case sv_tooltip sv of
-                Just tt -> do
-                    ttloc <- getGameL10nArgs (rightArg sv) tt
-                    indentUp $ msgToPP $ MsgVariableTooltip ttloc
-                Nothing -> return []
-            case (sv_which sv, sv_which2 sv, sv_value sv) of
-                (Just v1, Just v2, Nothing) -> do
-                    headmsg <- msgToPP $ msgWW (toTT v1) (toTT v2)
-                    return $ headmsg ++ ttmsg
-                (Just v,  Nothing, Just val) -> do
-                    headmsg <- msgToPP $ msgWV (toTT v) val
-                    return $ headmsg ++ ttmsg
-                _ -> preStatement stmt
+        pp_sv sv = case (sv_which sv, sv_which2 sv, sv_value sv) of
+            (Just v1, Just v2, Nothing) -> withTooltip sv (msgWW (toTT v1) (toTT v2)) (msgWW v1 v2)
+            (Just v,  Nothing, Just val) -> withTooltip sv (msgWV (toTT v) val) (msgWV v val)
+            _ -> preStatement stmt
+        -- A statement with a tooltip is shown by that tooltip: it is the
+        -- game's own sentence for what the change means, where the statement
+        -- itself only says what it does to a name no reader knows. The
+        -- literal reading goes behind a hover after it, for whoever wants the
+        -- variable itself -- written without markup, like every other hover,
+        -- since it ends up in a title attribute where tags don't render.
+        withTooltip :: SetVariable -> ScriptMessage -> ScriptMessage -> PPT g m IndentedMessages
+        withTooltip sv marked plain = case sv_tooltip sv of
+            Nothing -> msgToPP marked
+            Just tt -> do
+                ttloc <- getGameL10nArgs (rightArg sv) tt
+                literal <- messageText plain
+                msgToPP $ MsgVariableTooltip ttloc literal
 setVariable _ _ stmt = preStatement stmt
 
 data ClampVariable = ClampVariable

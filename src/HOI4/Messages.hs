@@ -606,7 +606,7 @@ data ScriptMessage
     | MsgAddManeuver {scriptMessageAmt :: Double}
     | MsgSurrenderProgress {scriptMessageAmt :: Double, scriptMessageCompare :: Text}
     | MsgSurrenderProgressVar {scriptMessageAmtText :: Text, scriptMessageCompare :: Text}
-    | MsgVariableTooltip { scriptMessageWhat :: Text}
+    | MsgVariableTooltip { scriptMessageWhat :: Text, scriptMessageWhat2 :: Text}
     | MsgSetVariable { scriptMessageVar1 :: Text, scriptMessageVar2 :: Text}
     | MsgSetTempVariable { scriptMessageVar1 :: Text, scriptMessageVar2 :: Text}
     | MsgSetVariableVal { scriptMessageVar :: Text, scriptMessageAmt :: Double}
@@ -3741,10 +3741,15 @@ instance RenderMessage Script ScriptMessage where
                 , typewriterText _amtT
                 , " surrender progress"
                 ]
-        MsgVariableTooltip { scriptMessageWhat = _what}
+        -- The tooltip is the game's own sentence for what the change comes to,
+        -- so it is the line; the statement's literal reading is kept behind a
+        -- hover for whoever wants the variable itself.
+        MsgVariableTooltip { scriptMessageWhat = _what, scriptMessageWhat2 = _what2}
             -> mconcat
-                [ "Variable Tooltip: "
-                , _what
+                [ _what
+                , ". ({{hover|"
+                , _what2
+                , "|?}})"
                 ]
         MsgSetVariable { scriptMessageVar1 = _var1, scriptMessageVar2 = _var2}
             -> mconcat

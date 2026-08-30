@@ -492,7 +492,7 @@ handlersCompound = Tr.fromList
         ,("or"                          , compoundMessage MsgOr) --OR
         ,("count_triggers"              , compoundMessageExtractNum "amount" MsgCountTriggers)
         ,("hidden_trigger"              , compoundMessage MsgHiddenTriggers)
-        ,("custom_trigger_tooltip"      , compoundMessage MsgCustomTriggerTooltip)
+        ,("custom_trigger_tooltip"      , customTriggerTooltip)
         ,("hidden_effect"               , compoundMessage MsgHiddenEffect)        ,("else"                    ,                      compoundMessage MsgElse)
         ,("else_if"                     , compoundMessageCondition MsgElseIf)
         ,("if"                          , compoundMessageCondition MsgIf)
@@ -912,7 +912,6 @@ handlersSpecialComplex = Tr.fromList
         -- What one option of an event comes to, for an effect that will offer
         -- the player that event.
         ,("event_option_tooltip"         , eventOptionTooltip)
-        ,("custom_trigger_tooltip"       , customTriggerTooltip)
         ,("custom_override_tooltip"      , customOverrideTooltip)
         ]
 
@@ -984,7 +983,7 @@ handlersMisc = Tr.fromList
         ,("set_rule"            , setRule MsgSetRule)
         ,("set_technology"      , setTechnology)
 
-        ,("effect_tooltip"      , customTriggerTooltip) -- shows the effects but doesn't execute them, don't know if I want it to show up in the parser
+        ,("effect_tooltip"      , effectTooltip) -- shows the effects but doesn't execute them, don't know if I want it to show up in the parser
         ]
 
 -- | Handlers for ignored statements

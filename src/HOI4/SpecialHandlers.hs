@@ -46,6 +46,7 @@ module HOI4.SpecialHandlers (
     ,   addTimedTrait
     ,   swapLeaderTrait
     ,   eventOptionTooltip
+    ,   customTriggerTooltip
     ,   customOverrideTooltip
     ,   tooltipWith
     ,   showUnitLeader
@@ -1674,6 +1675,21 @@ tooltipWith msg stmt@[pdx| %_ = @scr |] =
         _ -> preStatement stmt
 tooltipWith msg [pdx| %_ = ?key |] = tooltipText msg =<< locKeyText HM.empty key
 tooltipWith _ stmt = preStatement stmt
+
+-- | Handler for @custom_trigger_tooltip@, which shows its own sentence in
+-- place of the triggers inside it. That sentence is all the game ever shows
+-- of the block, so it stands alone where the block stood, with the hidden
+-- triggers dropped: a lone line can read on from whatever the block was
+-- written under, where a heading and a list cannot. A block with no sentence
+-- to show falls back to listing its triggers under a heading, which is more
+-- than the game says, but the wiki has nothing else to say there.
+customTriggerTooltip :: (HOI4Info g, Monad m) => StatementHandler g m
+customTriggerTooltip stmt@[pdx| %_ = @scr |] = do
+    shown <- concatMapM (tooltipWith MsgUnprocessed) [tt | tt@[pdx| tooltip = %_ |] <- scr]
+    if null shown
+        then compoundMessage MsgCustomTriggerTooltip stmt
+        else return shown
+customTriggerTooltip stmt = preStatement stmt
 
 -- | Handler for @custom_override_tooltip@, which runs the effects inside it but
 -- shows only its own sentence in place of theirs. What the game hides here is
