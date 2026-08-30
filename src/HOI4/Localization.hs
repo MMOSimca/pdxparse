@@ -34,6 +34,7 @@ module HOI4.Localization (
     ,   tagged
     ,   allowPronoun
     ,   pronoun
+    ,   scopeValText
     ,   getStateLoc
     ,   getRegionLoc
     ,   eGetState
@@ -224,11 +225,27 @@ scopeName mroot depth inner = case T.stripPrefix "." cmdrest of
         mtag <- countryTag target
         named <- case mtag of
             Just tag -> countryLoc tag cmd
-            -- Every other pronoun means whichever country the text happens to
-            -- be drawn for, which nothing outside the game can say.
-            Nothing | T.toLower target == "root" ->
-                        maybe (return Nothing) (`countryLoc` cmd) mroot
-                    | otherwise -> return Nothing
+            -- A pronoun means whatever the game put there as it draws the
+            -- text, which in general nothing outside the game can say. But
+            -- within a decision or an event the writers say what the pronouns
+            -- stand for where they can ('withRootIdent' and its kin), and a
+            -- ROOT given by the caller outranks even that. A pronoun known
+            -- only by its role is left as written: its wording names the role
+            -- where the pronoun stands in a list, but spliced into running
+            -- text it would read as a name, which it is not.
+            Nothing -> do
+                mval <- case T.toLower target of
+                    "root" -> maybe getRootIdent (return . Just . ScopeValTag) mroot
+                    "from" -> getFromIdent
+                    "this" -> getThisIdent
+                    "prev" -> getPrevIdent
+                    _ -> return Nothing
+                case mval of
+                    Just (ScopeValTag tag) -> countryLoc tag cmd
+                    Just (ScopeValState n)
+                        | T.toLower cmd `elem` ["getname", "getnamecap", "getnamedef", "getnamedefcap"]
+                        -> S.getGameL10nIfPresent ("STATE_" <> T.pack (show n))
+                    _ -> return Nothing
         -- What is asked of the scope may be a scripted localization rather
         -- than a name: @[THIS.GetAntiSovietFocusName]@ works its text out in
         -- the scope written in front of it. Which scope that is settles which
@@ -534,13 +551,20 @@ flag expectscope = allowPronoun expectscope $ \name ->
 -- call this function. Use whichever scope corresponds to what you expect to
 -- appear on the RHS. If it can be one of several (e.g. either a country or a
 -- province), use HOI4From. If it doesn't correspond to any scope, use Nothing.
+-- | The wiki text for what a pronoun stands for, as 'getFromIdent' and its
+-- kin know it: the named country or state, or the wording for its role.
+scopeValText :: (HOI4Info g, Monad m) => HOI4ScopeVal -> PPT g m Text
+scopeValText (ScopeValTag tag) = flagText (Just HOI4Country) tag
+scopeValText (ScopeValState n) = getStateLoc n
+scopeValText (ScopeValRole _ txt) = return txt
+
 pronoun :: (HOI4Info g, Monad m) =>
     Maybe HOI4Scope -> Text -> PPT g m Doc
 pronoun expectedScope name = withCurrentFile $ \f -> case T.toLower name of
     "root" -> message MsgROOTCountry
-    "prev" -> --do
---      ss <- getScopeStack
---      traceM (f ++ ": pronoun PREV: scope stack is " ++ show ss)
+    "prev" -> getPrevIdent >>= \case
+      Just val -> Doc.strictText <$> scopeValText val
+      Nothing ->
         getPrevScope >>= \case -- will need editing
             Just HOI4Country
                 | expectedScope `matchScope` HOI4Country -> message MsgPREVCountry
@@ -596,7 +620,12 @@ pronoun expectedScope name = withCurrentFile $ \f -> case T.toLower name of
         _ -> message MsgOwner
     "controller" -> message MsgController
     "capital_scope" -> message MsgCapital
-    "from" -> message MsgFROM -- TODO: Handle this properly (if possible)
+    -- Who FROM is depends on where the script stands -- the target of a
+    -- targeted decision, whoever fired the event -- and the writers of those
+    -- features say so where they can ('withFromIdent').
+    "from" -> getFromIdent >>= \case
+        Just val -> Doc.strictText <$> scopeValText val
+        Nothing -> message MsgFROM
     proscope
         | any (`T.isSuffixOf` proscope) [".overlord",".OVERLORD",".Overlord"] -> do
             let labelstrip

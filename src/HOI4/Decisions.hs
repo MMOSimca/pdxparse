@@ -15,7 +15,7 @@ import Control.Monad.Except (ExceptT (..), MonadError (..))
 import Control.Monad.State (gets)
 import Control.Monad.Trans (MonadIO (..))
 
-import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
+import Data.Maybe (catMaybes, fromMaybe, isJust, isNothing, mapMaybe)
 import Data.List (intersperse, foldl', intercalate, nubBy, sortBy)
 
 import Data.HashMap.Strict (HashMap)
@@ -149,7 +149,7 @@ writeHOI4DecisionCats = do
 
 -- | Present a parsed decision category.
 ppdecisioncat :: forall g m. (HOI4Info g, MonadError Text m) => HOI4Decisioncat -> PPT g m Doc
-ppdecisioncat decc = setCurrentFile (decc_path decc) $ do
+ppdecisioncat decc = setCurrentFile (decc_path decc) $ withCategoryIdents decc $ do
     version <- gets (gameVersion . getSettings)
     decc_text_loc <- fmap wikifyLocColours <$> getGameL10nIfPresent (decc_name decc <> "_desc")
     let deccArg :: Text -> (HOI4Decisioncat -> Maybe a) -> (a -> PPT g m Doc) -> PPT g m [Doc]
@@ -472,19 +472,27 @@ decisionRequiresDebug cats dec =
             [decc_allowed, decc_visible]
 
 -- | Present one category's decisions: a heading naming the category, then its
--- decisions wrapped so their boxes flow together.
+-- decisions wrapped so their boxes flow together. The category's name is
+-- read as its own gates read the pronouns, so a name written for one country
+-- names it.
 ppCategorySection :: (HOI4Info g, Monad m) =>
     (Text, [ConsolidatedFeature HOI4Decision]) -> PPT g m Doc
 ppCategorySection (catId, cfs) = do
-    mloc <- getGameL10nIfPresent catId
+    cats <- getDecisioncats
+    mloc <- maybe id withCategoryIdents (HM.lookup catId cats) $
+        getGameL10nIfPresent catId
     let header = ppSectionHeader (fromMaybe catId mloc) (Just catId)
     return $ header <> PP.line <> boxWrapper (map cfDoc cfs)
 
 -- | Present a parsed decision.
 ppdecision :: forall g m. (HOI4Info g, MonadError Text m) => HOI4Decision -> PPT g m Doc
-ppdecision dec = setCurrentFile (dec_path dec) $ do
+ppdecision dec = setCurrentFile (dec_path dec) $ withDecisionIdents dec $ do
     version <- gets (gameVersion . getSettings)
-    dec_text_loc <- fmap wikifyLocColours <$> getGameL10nIfPresent (dec_name dec <> "_desc")
+    -- The description was localized at parse time, before what the pronouns
+    -- mean here was known, so what they name is filled in now -- and only
+    -- where it is pinned down: an ambiguous pronoun keeps its brackets rather
+    -- than have a role's wording spliced into running text.
+    dec_text_loc <- traverse (fmap wikifyLocColours . fillLocScopes) (dec_desc dec)
     let decArg :: Text -> (HOI4Decision -> Maybe a) -> (a -> PPT g m Doc) -> PPT g m [Doc]
         decArg fieldname field fmt
             = maybe (return [])

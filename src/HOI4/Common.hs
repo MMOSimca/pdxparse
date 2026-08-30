@@ -786,7 +786,7 @@ handlersSpecialComplex = Tr.fromList
         ,("create_equipment_variant"     , createEquipmentVariant)
         ,("create_wargoal"               , createWargoal)
         ,("create_unit"                  , createUnit)
-        ,("country_event"                , triggerEvent MsgCountryEvent)
+        ,("country_event"                , triggerEvent True MsgCountryEvent)
         ,("declare_war_on"               , declareWarOn)
         ,("free_building_slots"          , freeBuildingSlots)
         ,("has_army_size"                , hasArmySize)
@@ -849,10 +849,10 @@ handlersSpecialComplex = Tr.fromList
         ,("reduce_focus_completion_cost" , reduceFocusCompletionCost)
 
         -- Events
-        ,("news_event"                   , triggerEvent MsgNewsEvent)
-        ,("state_event"                  , triggerEvent MsgStateEvent)
-        ,("unit_leader_event"            , triggerEvent MsgUnitLeaderEvent)
-        ,("operative_leader_event"       , triggerEvent MsgOperativeEvent)
+        ,("news_event"                   , triggerEvent False MsgNewsEvent)
+        ,("state_event"                  , triggerEvent True MsgStateEvent)
+        ,("unit_leader_event"            , triggerEvent False MsgUnitLeaderEvent)
+        ,("operative_leader_event"       , triggerEvent False MsgOperativeEvent)
 
         -- Flags
         ,("set_character_flag"           , setFlag MsgCharacterFlag)
@@ -1028,7 +1028,8 @@ ppOne' stmt lhs rhs = case lhs of
                 CompoundRhs scr ->
                     withCurrentIndent $ \_ -> do -- force indent level at least 1
                         lflag <- plainMsg' . (<>"<!-- " <> label <> " -->" <>":") =<< flagText (Just HOI4Country) label
-                        scriptMsgs <- scope HOI4Country $ ppMany scr
+                        scriptMsgs <- scope HOI4Country $
+                            withThisIdent (Just (ScopeValTag label)) $ ppMany scr
                         return (lflag : scriptMsgs)
                 _ -> preStatement stmt
              else case rhs of
@@ -1072,7 +1073,8 @@ ppOne' stmt lhs rhs = case lhs of
             CompoundRhs scr -> do
                         state_loc <- getStateLoc n
                         header <- msgToPP (MsgState state_loc)
-                        scriptMsgs <- scope HOI4ScopeState $ ppMany scr
+                        scriptMsgs <- scope HOI4ScopeState $
+                            withThisIdent (Just (ScopeValState n)) $ ppMany scr
                         return (header ++ scriptMsgs)
             _ -> preStatement stmt
     CustomLhs _ -> preStatement stmt
@@ -1083,9 +1085,16 @@ iquotes't = Doc.doc2text . iquotes
 
 -- | An event named the way a reader can find it: its title, with the id in a
 -- comment for whoever edits the page.
+--
+-- The title belongs to that event, so whatever the pronouns mean in the
+-- script in hand must not be filled into it. Its own FROM is whoever fires
+-- it, where everything that does belongs to one country; its ROOT -- the
+-- recipient -- is not known here.
 ppEventLoc :: (HOI4Info g, Monad m) => Text -> PPT g m Text
 ppEventLoc id = do
-    loc <- getEventTitle id -- Note: Hidden events often have empty titles, see e.g. fetishist_flavor.400
+    mfirer <- eventFirerTag id
+    loc <- withRootIdent Nothing $ withFromIdent (ScopeValTag <$> mfirer) $
+        getEventTitle id -- Note: Hidden events often have empty titles, see e.g. fetishist_flavor.400
     case loc of
         (Just t) | T.length (T.strip t) /= 0 -> return $ "<!-- " <> id <> " -->" <> iquotes't t -- TODO: Add link if possible
         _ -> return $ typewriterText id

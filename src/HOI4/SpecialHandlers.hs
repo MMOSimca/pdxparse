@@ -208,9 +208,11 @@ handleIdea' always addIdea ide = do
             let ideaKey = id_id iidea
                 ideaname = id_name iidea
             ideaIcon <- getIdeaIcon iidea
-            idea_loc <- getGameL10n ideaname
+            -- The idea's name and what it grants are drawn for the country
+            -- gaining it, which is the current scope, whose own ROOT it is.
+            idea_loc <- thisContext $ getGameL10n ideaname
             category <- if id_category iidea == "country" then getGameL10n "FE_COUNTRY_SPIRIT" else getGameL10n $ id_category iidea
-            effectbox <- modmessage iidea idea_loc ideaKey ideaIcon
+            effectbox <- thisContext $ modmessage iidea idea_loc ideaKey ideaIcon
             effectboxNS <- if addIdea && (always || id_category iidea == "country")
                               then return $ Just effectbox else return Nothing
             -- The wiki has an icon of its own for each of the country's laws,
@@ -261,9 +263,10 @@ showIdeaWith nest stmt@[pdx| %_ = $idea |] = do
     charto <- getCharToken
     case HM.lookup idea ides of
         Just iidea -> do
-            idea_loc <- getGameL10n (id_name iidea)
+            -- Drawn for the country whose idea it is: see 'handleIdea''.
+            idea_loc <- thisContext $ getGameL10n (id_name iidea)
             ideaIcon <- getIdeaIcon iidea
-            modmessage iidea idea_loc (id_id iidea) ideaIcon
+            thisContext $ modmessage iidea idea_loc (id_id iidea) ideaIcon
         Nothing -> case HM.lookup idea charto of
             Just ccharto -> nest $ showAdvisor idea ccharto
             -- Script also points this at things that are not ideas at all, a
@@ -1658,9 +1661,20 @@ getUnitTraits trait = do
 eventOptionTooltip :: (HOI4Info g, Monad m) => StatementHandler g m
 eventOptionTooltip stmt@[pdx| %_ = ?key |] = do
     events <- getEvents
-    case HM.lookup (T.dropEnd 1 (T.dropWhileEnd (/= '.') key)) events of
-        Just evt | Just opt <- find isNamedKey (fromMaybe [] (hoi4evt_options evt)) ->
-            setIsInEffect True (ppMany (fromMaybe [] (hoi4opt_effects opt)))
+    let eid = T.dropEnd 1 (T.dropWhileEnd (/= '.') key)
+    case HM.lookup eid events of
+        Just evt | Just opt <- find isNamedKey (fromMaybe [] (hoi4evt_options evt)) -> do
+            -- The effects belong to that event, so the pronouns mean what
+            -- they do inside it. Its FROM is whoever fires it: script writes
+            -- this tooltip beside its own firing of the event, so the ROOT
+            -- of the script in hand is who that is, and failing that, an
+            -- event everything fires from one country is that country's.
+            -- Its ROOT -- the recipient -- is not known here.
+            mfirer <- getRootIdent >>= \case
+                Just val -> return (Just val)
+                Nothing -> fmap ScopeValTag <$> eventFirerTag eid
+            withRootIdent Nothing $ withFromIdent mfirer $ withThisIdent Nothing $
+                setIsInEffect True (ppMany (fromMaybe [] (hoi4opt_effects opt)))
         _ -> preStatement stmt
     where isNamedKey opt = hoi4opt_name opt == Just key
 eventOptionTooltip stmt = preStatement stmt

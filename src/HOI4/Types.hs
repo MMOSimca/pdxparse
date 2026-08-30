@@ -28,12 +28,20 @@ module HOI4.Types (
     ,   HOI4Building (..)
         -- * Low level types
     ,   HOI4Scope (..)
+    ,   HOI4ScopeVal (..)
+    ,   scopeValType, scopeValTag
+    ,   allowedSoleTag, decTakerTag, catTakerTag, decTargetIdent
+    ,   withDecisionIdents, withCategoryIdents, withFocusIdents
+    ,   eventFirerTag, sourceFirerTag
     ,   AIWillDo (..)
     ,   AIModifier (..)
     ,   aiWillDo
     ) where
 
+import Control.Applicative ((<|>))
 import Data.List (foldl')
+import Data.Maybe (isJust, isNothing, mapMaybe)
+import qualified Data.HashMap.Strict as HM
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.HashMap.Strict (HashMap)
@@ -132,6 +140,14 @@ data HOI4State = HOI4State {
     -- | The character a statement is about, where the script it stands in has
     -- scoped to one by name.
     ,   hoi4currentCharacter :: Maybe Text
+    -- | What @ROOT@ stands for in the script being written out, where known.
+    ,   hoi4rootIdent :: Maybe HOI4ScopeVal
+    -- | What @FROM@ stands for in the script being written out, where known.
+    ,   hoi4fromIdent :: Maybe HOI4ScopeVal
+    -- | What each scope on 'hoi4scopeStack' stands for, aligned with it:
+    -- pushing a scope pushes 'Nothing' here, and the handlers that scope to
+    -- something they can name fill the top in.
+    ,   hoi4identStack :: [Maybe HOI4ScopeVal]
     } deriving (Show)
 
 -- | Interface for HOI4 feature handlers. Most of the methods just get data
@@ -142,6 +158,22 @@ class (IsGame g,
        Scope g ~ HOI4Scope,
        IsGameData (GameData g),
        IsGameState (GameState g)) => HOI4Info g where
+    -- | What @ROOT@ stands for in the script being written out, where known.
+    getRootIdent :: Monad m => PPT g m (Maybe HOI4ScopeVal)
+    -- | Set what @ROOT@ stands for, for the length of the given action.
+    withRootIdent :: Monad m => Maybe HOI4ScopeVal -> PPT g m a -> PPT g m a
+    -- | What @FROM@ stands for in the script being written out, where known.
+    getFromIdent :: Monad m => PPT g m (Maybe HOI4ScopeVal)
+    -- | Set what @FROM@ stands for, for the length of the given action.
+    withFromIdent :: Monad m => Maybe HOI4ScopeVal -> PPT g m a -> PPT g m a
+    -- | What the current scope (@THIS@) stands for, where known.
+    getThisIdent :: Monad m => PPT g m (Maybe HOI4ScopeVal)
+    -- | Say what the scope just entered stands for, for the length of the
+    -- given action. Use just inside 'SettingsTypes.scope', which pushes an
+    -- unknown; this fills it in.
+    withThisIdent :: Monad m => Maybe HOI4ScopeVal -> PPT g m a -> PPT g m a
+    -- | What the previous scope (@PREV@) stands for, where known.
+    getPrevIdent :: Monad m => PPT g m (Maybe HOI4ScopeVal)
     -- | Get the title of an event by its ID. Only works if event scripts have
     -- been parsed.
     getEventTitle :: Monad m => Text -> PPT g m (Maybe Text)
@@ -692,6 +724,148 @@ data HOI4Scope
     | HOI4Custom -- ^ custom for the parser, is usually defined by the code
                  --   example for ace_killed_by_ace events in on_actions PREV = enemy ace
     deriving (Show, Eq, Ord, Enum, Bounded)
+
+-- | What a scope pronoun stands for, where context pins it down. A pronoun in
+-- script means whatever the game put there as it runs; most of the time
+-- nothing outside the game can say what that is, but a decision knows its
+-- taker and its targets, and an event can know who fires it, so within their
+-- scripts the pronouns can be given as what they mean.
+data HOI4ScopeVal
+    = ScopeValTag Text -- ^ One country in particular, by tag
+    | ScopeValState Int -- ^ One state in particular, by id
+    | ScopeValRole HOI4Scope Text -- ^ Known only by role, e.g. \"Target Country\"
+    deriving (Show)
+
+-- | The scope type of what the pronoun stands for.
+scopeValType :: HOI4ScopeVal -> HOI4Scope
+scopeValType (ScopeValTag _) = HOI4Country
+scopeValType (ScopeValState _) = HOI4ScopeState
+scopeValType (ScopeValRole s _) = s
+
+-- | The country tag the pronoun stands for, when it stands for one country.
+scopeValTag :: HOI4ScopeVal -> Maybe Text
+scopeValTag (ScopeValTag tag) = Just tag
+scopeValTag _ = Nothing
+
+-- | The one country an @allowed@-style trigger block confines a feature to,
+-- where it does. Only a lone tag among the block's own statements counts:
+-- anything under an @OR@ leaves a choice open, and no feature demands two
+-- different tags at once.
+allowedSoleTag :: Maybe GenericScript -> Maybe Text
+allowedSoleTag mscr = case mapMaybe tagOf (concat mscr) of
+    [tag] -> Just tag
+    _ -> Nothing
+    where
+        tagOf [pdx| tag = $tag |] = Just tag
+        tagOf [pdx| original_tag = $tag |] = Just tag
+        tagOf _ = Nothing
+
+-- | The one country a decision category can appear for, where its gates
+-- confine it to one.
+catTakerTag :: HOI4Decisioncat -> Maybe Text
+catTakerTag cat = allowedSoleTag (decc_allowed cat) <|> allowedSoleTag (decc_visible cat)
+
+-- | The one country that can take the decision, where its own gates or its
+-- category's confine it to one. Many decisions are gated on their category
+-- alone, so the category's gates speak for its decisions.
+decTakerTag :: HashMap Text HOI4Decisioncat -> HOI4Decision -> Maybe Text
+decTakerTag cats dec =
+        allowedSoleTag (dec_allowed dec)
+    <|> allowedSoleTag (dec_visible dec)
+    <|> (catTakerTag =<< HM.lookup (dec_cat dec) cats)
+
+-- | What FROM stands for in a targeted decision's scripts: the one entry of
+-- @targets@ where there is only one, and its role otherwise, with
+-- @state_target@ telling states from countries. No list at all still makes a
+-- targeted decision -- everything the target trigger lets through is a
+-- candidate -- and an untargeted decision leaves FROM unsaid.
+decTargetIdent :: HOI4Decision -> Maybe HOI4ScopeVal
+decTargetIdent dec = case (dec_targets dec, dec_target_array dec, dec_state_target dec) of
+    (Just array, marray, Just _) -> Just $ case mapMaybe stateOf array of
+        [n] | isNothing marray -> ScopeValState n
+        _ -> stateRole
+    (Just array, marray, Nothing) -> Just $ case mapMaybe tagOf array of
+        [tag] | isNothing marray -> ScopeValTag tag
+        _ -> countryRole
+    (Nothing, Just _, Just _) -> Just stateRole
+    (Nothing, Just _, Nothing) -> Just countryRole
+    (Nothing, Nothing, Just _) -> Just stateRole
+    (Nothing, Nothing, Nothing)
+        | isJust (dec_target_trigger dec) -> Just countryRole
+        | otherwise -> Nothing
+    where
+        countryRole = ScopeValRole HOI4Country "Target Country"
+        stateRole = ScopeValRole HOI4ScopeState "Target State"
+        -- Quiet counterparts of the extractors in 'HOI4.Decisions.ppdecision',
+        -- which do the complaining about shapes we don't know; a shape unknown
+        -- here only leaves FROM unsaid.
+        tagOf (StatementBare (GenericLhs e [])) = Just e
+        tagOf _ = Nothing
+        stateOf (StatementBare (IntLhs e)) = Just e
+        stateOf [pdx| state = !e |] = Just e
+        stateOf _ = Nothing
+
+-- | Run an action knowing what the pronouns mean in the given decision's
+-- scripts: ROOT, and THIS at the top, are the taker, and FROM is the target.
+withDecisionIdents :: (HOI4Info g, Monad m) => HOI4Decision -> PPT g m a -> PPT g m a
+withDecisionIdents dec action = do
+    cats <- getDecisioncats
+    let rootIdent = ScopeValTag <$> decTakerTag cats dec
+    withRootIdent rootIdent $ withThisIdent rootIdent $
+        withFromIdent (decTargetIdent dec) action
+
+-- | Run an action knowing what the pronouns mean in the given decision
+-- category's own scripts and text: ROOT, and THIS at the top, are the one
+-- country it can appear for, where known.
+withCategoryIdents :: (HOI4Info g, Monad m) => HOI4Decisioncat -> PPT g m a -> PPT g m a
+withCategoryIdents cat action =
+    let rootIdent = ScopeValTag <$> catTakerTag cat
+    in withRootIdent rootIdent $ withThisIdent rootIdent action
+
+-- | Run an action knowing what the pronouns mean in the given national
+-- focus's scripts and text: ROOT, and THIS at the top, are the country whose
+-- tree it belongs to, where it belongs to one.
+withFocusIdents :: (HOI4Info g, Monad m) => HOI4NationalFocus -> PPT g m a -> PPT g m a
+withFocusIdents nf action =
+    let rootIdent = ScopeValTag <$> nf_country nf
+    in withRootIdent rootIdent $ withThisIdent rootIdent action
+
+-- | The one country that fires the given event, where every source firing it
+-- is known to belong to that same country. Inside the event this is who FROM
+-- is, so an event with a single sender can name it wherever it says FROM. A
+-- source belonging to no one country in particular -- an on_action, another
+-- event's option -- keeps the sender unknown.
+eventFirerTag :: (HOI4Info g, Monad m) => Text -> PPT g m (Maybe Text)
+eventFirerTag eid = do
+    eventTriggers <- getEventTriggers
+    case HM.lookupDefault [] eid eventTriggers of
+        [] -> return Nothing
+        srcs -> do
+            mtags <- traverse sourceFirerTag srcs
+            return $ case mtags of
+                (mtag@(Just _) : rest) | all (== mtag) rest -> mtag
+                _ -> Nothing
+
+-- | The country whose script a source stands in, where the source pins it
+-- down to one: a decision only one country may take, or a focus in one
+-- country's tree.
+sourceFirerTag :: (HOI4Info g, Monad m) => HOI4Source -> PPT g m (Maybe Text)
+sourceFirerTag src = case src of
+    HOI4SrcDecComplete did _ -> decFirer did
+    HOI4SrcDecRemove did _ -> decFirer did
+    HOI4SrcDecCancel did _ -> decFirer did
+    HOI4SrcDecTimeout did _ -> decFirer did
+    HOI4SrcNFComplete fid _ _ -> nfFirer fid
+    HOI4SrcNFSelect fid _ _ -> nfFirer fid
+    _ -> return Nothing
+    where
+        decFirer did = do
+            decs <- getDecisions
+            cats <- getDecisioncats
+            return $ decTakerTag cats =<< HM.lookup did decs
+        nfFirer fid = do
+            nfs <- getNationalFocus
+            return $ nf_country =<< HM.lookup fid nfs
 
 -- | AI decision factors.
 data AIWillDo = AIWillDo

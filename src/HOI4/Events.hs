@@ -118,11 +118,12 @@ ppEventSection (_, []) = return mempty
 ppEventSection (_, cfs@(cf:rest)) = do
     header <- case rest of
         -- A section holding one event is named for the event, which reads
-        -- better than a range of one.
+        -- better than a range of one. The title is read the way the event
+        -- itself reads it, so a title naming its sender names them here too.
         [] -> do
             let eid = eventId cf
             mtitle <- case [key | HOI4EvtTitleSimple key <- hoi4evt_title (cfFeature cf)] of
-                (key:_) -> getGameL10nIfPresent key
+                (key:_) -> withEventIdents eid (getGameL10nIfPresent key)
                 _ -> return Nothing
             return $ ppSectionHeader (fromMaybe eid mtitle) (Just eid)
         _ -> return $ ppSectionHeader
@@ -455,11 +456,20 @@ ppTriggeredBy eventId trig = do
 
 -- | Pretty-print an event. If some essential parts are missing from the data,
 -- throw an exception.
+-- | Run an action knowing what the pronouns mean inside the given event:
+-- FROM is whoever fired it, known by name where everything that fires it
+-- belongs to a single country. ROOT is the recipient, whom nothing outside
+-- the game can name.
+withEventIdents :: (HOI4Info g, Monad m) => Text -> PPT g m a -> PPT g m a
+withEventIdents eid action = do
+    mfirer <- eventFirerTag eid
+    withFromIdent (ScopeValTag <$> mfirer) action
+
 ppEvent :: forall g m. (HOI4Info g, MonadError Text m) =>
     HOI4Event -> PPT g m Doc
 ppEvent evt = maybe
     (throwError "hoi4evt_id missing")
-    (\eid -> setCurrentFile (hoi4evt_path evt) $ do
+    (\eid -> setCurrentFile (hoi4evt_path evt) $ withEventIdents eid $ do
         -- Valid event
         version <- gets (gameVersion . getSettings)
         (conditional, options_pp'd) <- case hoi4evt_options evt of

@@ -150,6 +150,7 @@ module HOI4.Handlers (
     ,   divisionTemplate
     ,   hasNavySize
     ,   locandid
+    ,   thisContext
     ,   createUnit
     ,   damageBuilding
     ,   withRegion
@@ -717,59 +718,77 @@ compoundMessageExtractNum _ _ stmt = preStatement stmt
 -- | Generic handler for a simple compound statement headed by a pronoun.
 compoundMessagePronoun :: (HOI4Info g, Monad m) => StatementHandler g m
 compoundMessagePronoun stmt@[pdx| $head = @scr |] = withCurrentIndent $ \i -> do
-    params <- withCurrentFile $ \f -> case T.toLower head of
-        "root" -> --do --ROOT
-                --newscope <- getRootScope
-                return (Just HOI4Country, Just MsgROOTSCOPECountry) --case newscope of
-                    --Just HOI4Country -> Just MsgROOTSCOPECountry
-                    --Just HOI4ScopeCharacter -> Just MsgROOTSCOPECharacter
-                    --Just HOI4Operative -> Just MsgROOTSCOPEOperative
-                    --Just HOI4ScopeState -> Just MsgROOTSCOPEState
-                    --Just HOI4UnitLeader -> Just MsgROOTSCOPEUnitLeader
-                    --_ -> Nothing) -- warning printed below
-        "prev" -> do --PREV
-                newscope <- getPrevScope
-                return (newscope, case newscope of
-                    Just HOI4Country -> Just MsgPREVSCOPECountry
-                    Just HOI4ScopeCharacter -> Just MsgPREVSCOPECharacter
-                    Just HOI4Operative -> Just MsgPREVSCOPEOperative
-                    Just HOI4ScopeState -> Just MsgPREVSCOPEState
-                    Just HOI4UnitLeader -> Just MsgPREVSCOPEUnitLeader
-                    Just HOI4Misc -> Just MsgPREVSCOPEMisc
-                    Just HOI4From -> Just MsgPREVSCOPEFROM -- Roll with it
-                    Just HOI4Custom -> Just MsgPREVSCOPECustom
-                    Nothing -> Just MsgPREVSCOPECustom2
-                    _ -> Nothing) -- warning printed below
-        "prev.prev" -> do --PREV
-                newscope <- getPrevScopeCustom 2
-                return (newscope, Just MsgPREVPREV)
-        "prev.prev.prev" -> do --PREV
-                newscope <- getPrevScopeCustom 3
-                return (newscope, Just MsgPREVPREVPREV)
-        "owner" -> do --PREV
-                newscope <- getCurrentScope
-                return (Just HOI4Country, case newscope of
-                    Just HOI4ScopeState -> Just MsgOwnerStateSCOPE
-                    Just HOI4ScopeCharacter -> Just MsgOwnerUnitSCOPE
-                    Just HOI4UnitLeader -> Just MsgOwnerUnitSCOPE
-                    Just HOI4Operative -> Just MsgOwnerUnitSCOPE
-                    _ -> Just MsgOwnerSCOPE)
-        "from" -> return (Just HOI4From, Just MsgFROMSCOPE) -- FROM / Should be some way to have different message depending on if it is event or decison, etc.
-        "from.from" -> return (Just HOI4From, Just MsgFROMFROMSCOPE)
-        "from.from.from" -> return (Just HOI4From, Just MsgFROMFROMFROMSCOPE)
-        _ -> trace (f ++ ": compoundMessagePronoun: don't know how to handle head " ++ T.unpack head)
-             $ return (Nothing, undefined)
-    case params of
-        (Just newscope, Just scopemsg) -> do
-            script_pp'd <- scope newscope $ ppMany scr
-            return $ (i, scopemsg) : script_pp'd
-        (Nothing, Just scopemsg) -> do
-            script_pp'd <- scope HOI4Custom $ ppMany scr
-            return $ (i, scopemsg) : script_pp'd
-        _ -> do
-            withCurrentFile $ \f -> do
-                traceM $ "compoundMessagePronoun: " ++ f ++ ": potentially invalid use of " ++ T.unpack head ++ " in " ++ show stmt
-            preStatement stmt
+    -- Where what the pronoun stands for is known -- the target of a targeted
+    -- decision, whoever fired the event -- the block is headed by that, and
+    -- the scope inside carries it as the new current scope.
+    mnamed <- case T.toLower head of
+        "from" -> getFromIdent
+        "prev" -> getPrevIdent
+        _ -> return Nothing
+    case mnamed of
+      Just val -> do
+        valtext <- scopeValText val
+        script_pp'd <- scope (scopeValType val) $ withThisIdent (Just val) $ ppMany scr
+        return $ (i, MsgUnprocessed (valtext <> ":")) : script_pp'd
+      Nothing -> do
+        params <- withCurrentFile $ \f -> case T.toLower head of
+            "root" -> --do --ROOT
+                    --newscope <- getRootScope
+                    return (Just HOI4Country, Just MsgROOTSCOPECountry) --case newscope of
+                        --Just HOI4Country -> Just MsgROOTSCOPECountry
+                        --Just HOI4ScopeCharacter -> Just MsgROOTSCOPECharacter
+                        --Just HOI4Operative -> Just MsgROOTSCOPEOperative
+                        --Just HOI4ScopeState -> Just MsgROOTSCOPEState
+                        --Just HOI4UnitLeader -> Just MsgROOTSCOPEUnitLeader
+                        --_ -> Nothing) -- warning printed below
+            "prev" -> do --PREV
+                    newscope <- getPrevScope
+                    return (newscope, case newscope of
+                        Just HOI4Country -> Just MsgPREVSCOPECountry
+                        Just HOI4ScopeCharacter -> Just MsgPREVSCOPECharacter
+                        Just HOI4Operative -> Just MsgPREVSCOPEOperative
+                        Just HOI4ScopeState -> Just MsgPREVSCOPEState
+                        Just HOI4UnitLeader -> Just MsgPREVSCOPEUnitLeader
+                        Just HOI4Misc -> Just MsgPREVSCOPEMisc
+                        Just HOI4From -> Just MsgPREVSCOPEFROM -- Roll with it
+                        Just HOI4Custom -> Just MsgPREVSCOPECustom
+                        Nothing -> Just MsgPREVSCOPECustom2
+                        _ -> Nothing) -- warning printed below
+            "prev.prev" -> do --PREV
+                    newscope <- getPrevScopeCustom 2
+                    return (newscope, Just MsgPREVPREV)
+            "prev.prev.prev" -> do --PREV
+                    newscope <- getPrevScopeCustom 3
+                    return (newscope, Just MsgPREVPREVPREV)
+            "owner" -> do --PREV
+                    newscope <- getCurrentScope
+                    return (Just HOI4Country, case newscope of
+                        Just HOI4ScopeState -> Just MsgOwnerStateSCOPE
+                        Just HOI4ScopeCharacter -> Just MsgOwnerUnitSCOPE
+                        Just HOI4UnitLeader -> Just MsgOwnerUnitSCOPE
+                        Just HOI4Operative -> Just MsgOwnerUnitSCOPE
+                        _ -> Just MsgOwnerSCOPE)
+            "from" -> return (Just HOI4From, Just MsgFROMSCOPE) -- FROM / Should be some way to have different message depending on if it is event or decison, etc.
+            "from.from" -> return (Just HOI4From, Just MsgFROMFROMSCOPE)
+            "from.from.from" -> return (Just HOI4From, Just MsgFROMFROMFROMSCOPE)
+            _ -> trace (f ++ ": compoundMessagePronoun: don't know how to handle head " ++ T.unpack head)
+                 $ return (Nothing, undefined)
+        -- What ROOT stands for is what THIS stands for just inside a ROOT
+        -- block. The other pronouns known by name were already peeled off.
+        mrootval <- case T.toLower head of
+            "root" -> getRootIdent
+            _ -> return Nothing
+        case params of
+            (Just newscope, Just scopemsg) -> do
+                script_pp'd <- scope newscope $ withThisIdent mrootval $ ppMany scr
+                return $ (i, scopemsg) : script_pp'd
+            (Nothing, Just scopemsg) -> do
+                script_pp'd <- scope HOI4Custom $ ppMany scr
+                return $ (i, scopemsg) : script_pp'd
+            _ -> do
+                withCurrentFile $ \f -> do
+                    traceM $ "compoundMessagePronoun: " ++ f ++ ": potentially invalid use of " ++ T.unpack head ++ " in " ++ show stmt
+                preStatement stmt
 compoundMessagePronoun stmt = preStatement stmt
 
 -- | Generic handler for a simple compound statement with a tagged header.
@@ -1746,15 +1765,18 @@ data TriggerEvent = TriggerEvent
         }
 newTriggerEvent :: TriggerEvent
 newTriggerEvent = TriggerEvent Nothing Nothing Nothing Nothing Nothing Nothing Nothing
-triggerEvent :: forall g m. (HOI4Info g, Monad m) => ScriptMessage -> StatementHandler g m
-triggerEvent evtType stmt@[pdx| %_ = @scr |]
+-- | Handler for effects that fire an event. The Bool says whether ROOT inside
+-- the event being fired is the scope it is fired in -- true of country and
+-- state events, while a news event's ROOT is each country viewing it.
+triggerEvent :: forall g m. (HOI4Info g, Monad m) => Bool -> ScriptMessage -> StatementHandler g m
+triggerEvent rootIsRecipient evtType stmt@[pdx| %_ = @scr |]
     = msgToPP =<< pp_trigger_event =<< foldM addLine newTriggerEvent scr
     where
         addLine :: TriggerEvent -> GenericStatement -> PPT g m TriggerEvent
         addLine evt [pdx| id = ?!eeid |]
             | Just eid <- either (\n -> T.pack (show (n::Int))) id <$> eeid
             = do
-                mevt_t <- getEventTitle eid
+                mevt_t <- firedEventContext rootIsRecipient (getEventTitle eid)
                 return evt { e_id = Just eid, e_title_loc = mevt_t }
         addLine evt [pdx| days = %rhs |]
             = return evt { e_days = floatRhs rhs }
@@ -1781,14 +1803,14 @@ triggerEvent evtType stmt@[pdx| %_ = @scr |]
                     else
                         return $ MsgTriggerEvent evtType_t msgid loc
                 _ -> return $ preMessage stmt
-triggerEvent evtType stmt@[pdx| %_ = ?!rid |]
+triggerEvent rootIsRecipient evtType stmt@[pdx| %_ = ?!rid |]
     = msgToPP =<< pp_trigger_event =<< addLine newTriggerEvent rid
     where
         addLine :: TriggerEvent -> Maybe (Either Int Text) -> PPT g m TriggerEvent
         addLine evt eeid
             | Just eid <- either (\n -> T.pack (show (n::Int))) id <$> eeid
             = do
-                mevt_t <- getEventTitle eid
+                mevt_t <- firedEventContext rootIsRecipient (getEventTitle eid)
                 return evt { e_id = Just eid, e_title_loc = mevt_t }
         addLine evt _ = return evt
         pp_trigger_event :: TriggerEvent -> PPT g m ScriptMessage
@@ -1799,7 +1821,19 @@ triggerEvent evtType stmt@[pdx| %_ = ?!rid |]
                     let loc = fromMaybe msgid (e_title_loc evt)
                     return $ MsgTriggerEvent evtType_t msgid loc
                 _ -> return $ preMessage stmt
-triggerEvent _ stmt = preStatement stmt
+triggerEvent _ _ stmt = preStatement stmt
+
+-- | Read something of the event being fired -- its title -- with the
+-- pronouns meaning what they do inside that event: its ROOT is the scope the
+-- effect fires it in, where that is who ROOT is for its type of event, and
+-- its FROM is whoever is firing -- the ROOT of the script in hand. What the
+-- pronouns meant out here must not leak into text that is not written for
+-- here, so both are set even when the answer is that nothing is known.
+firedEventContext :: (HOI4Info g, Monad m) => Bool -> PPT g m a -> PPT g m a
+firedEventContext rootIsRecipient action = do
+    firer <- getRootIdent
+    recip <- if rootIsRecipient then getThisIdent else return Nothing
+    withRootIdent recip $ withFromIdent firer action
 
 -- Random
 
@@ -3603,9 +3637,25 @@ divisionTemplate  stmt = preStatement stmt
 locandid :: (Monad m, HOI4Info g) =>
     (Text -> Text -> ScriptMessage) -> StatementHandler g m
 locandid msg [pdx| %_ = ?key |] = do
-    loc <- getGameL10n key
+    -- The name is the other decision's: its FROM is that decision's own
+    -- target, and it is drawn for whoever the script in hand works it for --
+    -- the current scope.
+    decs <- getDecisions
+    mthis <- getThisIdent
+    loc <- withRootIdent mthis $
+        withFromIdent (decTargetIdent =<< HM.lookup key decs) $
+            getGameL10n key
     msgToPP $ msg loc key
 locandid _ stmt = preStatement stmt
+
+-- | Read text that belongs to something of the current scope's -- an idea it
+-- gains, a decision of its own that is named -- with the pronouns meaning
+-- what they do as the game draws that text for that scope: it is its own
+-- ROOT there, and the FROM of the script in hand has no say.
+thisContext :: (HOI4Info g, Monad m) => PPT g m a -> PPT g m a
+thisContext action = do
+    holder <- getThisIdent
+    withRootIdent holder $ withFromIdent Nothing action
 
 -----------------------------
 -- Handler for create_unit --

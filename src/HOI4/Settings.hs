@@ -163,10 +163,16 @@ instance IsGame HOI4 where
                 ,   hoi4IsInEffect = False
                 ,   hoi4expandedBlocks = []
                 ,   hoi4currentCharacter = Nothing
+                ,   hoi4rootIdent = Nothing
+                ,   hoi4fromIdent = Nothing
+                ,   hoi4identStack = []
                 }))
     type Scope HOI4 = HOI4Scope
+    -- What the new scope stands for is not known here, only its type; whoever
+    -- does know calls 'withThisIdent' just inside to fill the unknown in.
     scope s = local $ \(HOI4S st) -> HOI4S $
-        st { hoi4scopeStack = s : hoi4scopeStack st }
+        st { hoi4scopeStack = s : hoi4scopeStack st
+           , hoi4identStack = Nothing : hoi4identStack st }
     getCurrentScope = asks $ listToMaybe . hoi4scopeStack . hoi4s
     getPrevScope = asks $ safeIndex 1 . hoi4scopeStack . hoi4s
     getPrevScopeCustom i = asks $ safeIndex i . hoi4scopeStack . hoi4s
@@ -182,6 +188,14 @@ instance IsGame HOI4 where
         st { hoi4currentCharacter = Just name }
 
 instance HOI4Info HOI4 where
+    getRootIdent = asks $ hoi4rootIdent . hoi4s
+    withRootIdent mv = local $ \(HOI4S st) -> HOI4S $ st { hoi4rootIdent = mv }
+    getFromIdent = asks $ hoi4fromIdent . hoi4s
+    withFromIdent mv = local $ \(HOI4S st) -> HOI4S $ st { hoi4fromIdent = mv }
+    getThisIdent = asks $ join . listToMaybe . hoi4identStack . hoi4s
+    withThisIdent mv = local $ \(HOI4S st) -> HOI4S $
+        st { hoi4identStack = mv : drop 1 (hoi4identStack st) }
+    getPrevIdent = asks $ join . safeIndex 1 . hoi4identStack . hoi4s
     getEventTitle eid = do
         HOI4D ed <- get
         let evts = hoi4events ed

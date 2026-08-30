@@ -65,11 +65,27 @@ formatWeight :: HOI4SourceWeight -> Text
 formatWeight Nothing = ""
 formatWeight (Just (n, d)) = T.pack (" (Base weight: " ++ show n ++ "/" ++ show d ++ ")")
 
+-- | A decision's name with its pronouns filled in the way that decision reads
+-- them, where its script pins them down. The name was localized before that
+-- was known, and it is written for its own decision whatever page quotes it,
+-- so an ambiguous pronoun keeps its brackets.
+decNameLoc :: (HOI4Info g, Monad m) => Text -> Text -> PPT g m Text
+decNameLoc did loc = do
+    decs <- getDecisions
+    case HM.lookup did decs of
+        Just dec -> withDecisionIdents dec (fillLocScopes loc)
+        Nothing -> return loc
+
 -- | Present one source as wiki text for a "triggered by"/"activated by" list.
 ppSource :: (HOI4Info g, Monad m) => HOI4Source -> PPT g m Doc
 ppSource (HOI4SrcOption eventId optionId) = do
     eventLoc <- ppEventLoc eventId
-    optLoc <- wikifyLocColours <$> getGameL10n optionId
+    -- The option's words are the event's own: its FROM is whoever fires that
+    -- event, and whatever the pronouns mean on the page quoting it has no say.
+    mfirer <- eventFirerTag eventId
+    optLoc <- wikifyLocColours <$>
+        (withRootIdent Nothing $ withFromIdent (ScopeValTag <$> mfirer) $
+            getGameL10n optionId)
     return $ Doc.strictText $ mconcat [ "The event "
         , eventLoc
         , " option "
@@ -87,33 +103,37 @@ ppSource (HOI4SrcAfter eventId) = do
         , eventLoc
         , " event"
         ]
-ppSource (HOI4SrcDecComplete id loc) =
+ppSource (HOI4SrcDecComplete id loc) = do
+    locF <- decNameLoc id loc
     return $ Doc.strictText $ mconcat ["Taking the decision "
         , "<!-- "
         , id
         , " -->"
-        , iquotes't loc
+        , iquotes't locF
         ]
-ppSource (HOI4SrcDecRemove id loc) =
+ppSource (HOI4SrcDecRemove id loc) = do
+    locF <- decNameLoc id loc
     return $ Doc.strictText $ mconcat ["Finishing the decision "
         , "<!-- "
         , id
         , " -->"
-        , iquotes't loc
+        , iquotes't locF
         ]
-ppSource (HOI4SrcDecCancel id loc) =
+ppSource (HOI4SrcDecCancel id loc) = do
+    locF <- decNameLoc id loc
     return $ Doc.strictText $ mconcat ["Triggering the cancel trigger on the decision "
         , "<!-- "
         , id
         , " -->"
-        , iquotes't loc
+        , iquotes't locF
         ]
-ppSource (HOI4SrcDecTimeout id loc) =
+ppSource (HOI4SrcDecTimeout id loc) = do
+    locF <- decNameLoc id loc
     return $ Doc.strictText $ mconcat ["Running out the timer on the decision "
         , "<!-- "
         , id
         , " -->"
-        , iquotes't loc
+        , iquotes't locF
         ]
 ppSource (HOI4SrcOnAction act weight) = do
     actn <- actionName act

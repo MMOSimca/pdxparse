@@ -388,7 +388,7 @@ ppNationalFocuses nfs = do
 --    in fromMaybe ln nn
 
 ppNationalFocus :: forall g m. (HOI4Info g, Monad m) => HOI4NationalFocus -> PPT g m Doc
-ppNationalFocus nf = setCurrentFile (nf_path nf) $ do
+ppNationalFocus nf = setCurrentFile (nf_path nf) $ withFocusIdents nf $ do
     let nfArg :: (HOI4NationalFocus -> Maybe a) -> (a -> PPT g m Doc) -> PPT g m [Doc]
         nfArg field fmt
             = maybe (return [])
