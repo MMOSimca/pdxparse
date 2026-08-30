@@ -33,10 +33,10 @@ modifiersTable = HM.fromList
         ,("local_resources_chromium_factor" , ("local_resources_chromium_factor", MsgModifierPcPosReduced, Just 2))
         ,("local_resources_coal_factor"     , ("local_resources_coal_factor", MsgModifierPcPosReduced, Just 2))
         ,("surrender_limit"                 , ("MODIFIER_SURRENDER_LIMIT", MsgModifierPcPosReduced, Just 2))
-        ,("max_surrender_limit_offset"      , ("MODIFIER_MAX_SURRENDER_LIMIT_OFFSET", MsgModifierPcPosReduced, Just 2)) --precision 2
+        ,("max_surrender_limit_offset"      , ("MODIFIER_MAX_SURRENDER_LIMIT_OFFSET", MsgModifierPcPosReduced, Just 2))
 
             -- Politics modifiers
-        ,("min_export"                      , ("MODIFIER_MIN_EXPORT_FACTOR", MsgModifierPcReducedSign, Just 0)) -- yellow
+        ,("min_export"                      , ("MODIFIER_MIN_EXPORT_FACTOR", MsgModifierPcReducedSign, Just 0))
         ,("trade_opinion_factor"            , ("MODIFIER_TRADE_OPINION_FACTOR", MsgModifierPcReducedSign, Just 2))
         ,("economy_cost_factor"             , ("economy_cost_factor", MsgModifierPcNegReduced, Nothing))
         ,("disabled_ideas"                  , ("MODIFIER_DISABLE_IDEA_TAKING", modNoYes, Just 0))
@@ -58,13 +58,13 @@ modifiersTable = HM.fromList
         ,("navy_advisor_cost_factor"        , ("MODIFIER_NAVY_ADVISOR_COST_FACTOR", MsgModifierPcNegReduced, Just 0))
         ,("offensive_war_stability_factor"  , ("MODIFIER_STABILITY_OFFENSIVE_WAR_FACTOR", MsgModifierPcPosReduced, Just 2))
         ,("defensive_war_stability_factor"  , ("MODIFIER_STABILITY_DEFENSIVE_WAR_FACTOR", MsgModifierPcPosReduced, Just 2))
-        ,("unit_leader_as_advisor_cp_cost_factor" , ("MODIFIER_UNIT_LEADER_AS_ADVISOR_CP_COST_FACTOR", MsgModifierPcNegReduced, Just 1)) --precision 1
+        ,("unit_leader_as_advisor_cp_cost_factor" , ("MODIFIER_UNIT_LEADER_AS_ADVISOR_CP_COST_FACTOR", MsgModifierPcNegReduced, Just 1))
         ,("improve_relations_maintain_cost_factor" , ("MODIFIER_IMPROVE_RELATIONS_MAINTAIN_COST_FACTOR", MsgModifierPcNegReduced, Just 0))
         ,("party_popularity_stability_factor" , ("MODIFIER_STABILITY_POPULARITY_FACTOR", MsgModifierPcPosReduced, Just 2))
         ,("political_power_cost"            , ("MODIFIER_POLITICAL_POWER_COST", MsgModifierColourNeg, Just 2))
-        ,("political_power_gain"            , ("MODIFIER_POLITICAL_POWER_GAIN", MsgModifierColourPos, Just 2)) --precision 2
+        ,("political_power_gain"            , ("MODIFIER_POLITICAL_POWER_GAIN", MsgModifierColourPos, Just 2))
         ,("political_power_factor"          , ("MODIFIER_POLITICAL_POWER_FACTOR", MsgModifierPcPosReduced, Just 0))
-        ,("stability_factor"                , ("MODIFIER_STABILITY_FACTOR", MsgModifierPcPosReduced, Just 2)) --precision 2
+        ,("stability_factor"                , ("MODIFIER_STABILITY_FACTOR", MsgModifierPcPosReduced, Just 2))
         ,("stability_weekly"                , ("MODIFIER_STABILITY_WEEKLY", MsgModifierPcPosReduced, Just 2))
         ,("stability_weekly_factor"         , ("MODIFIER_STABILITY_WEEKLY_FACTOR", MsgModifierPcPosReduced, Just 2))
         ,("war_stability_factor"            , ("MODIFIER_STABILITY_WAR_FACTOR", MsgModifierPcPosReduced, Just 2))
@@ -77,22 +77,22 @@ modifiersTable = HM.fromList
         ,("drift_defence_factor"            , ("MODIFIER_DRIFT_DEFENCE_FACTOR", MsgModifierPcPosReduced, Just 1))
         ,("power_balance_daily"             , ("MODIFIER_POWER_BALANCE_DAILY", MsgModifierBop, Just 2))
         ,("power_balance_weekly"            , ("MODIFIER_POWER_BALANCE_WEEKLY", MsgModifierBop, Just 2))
-        ,("communism_drift"                 , ("communism_drift", MsgModifierColourPos, Nothing)) --precision 2
-        ,("democratic_drift"                , ("democratic_drift", MsgModifierColourPos, Nothing)) --precision 2
-        ,("fascism_drift"                   , ("fascism_drift", MsgModifierColourPos, Nothing)) --precision 2
-        ,("neutrality_drift"                , ("neutrality_drift", MsgModifierColourPos, Nothing)) --precision 2
+        ,("communism_drift"                 , ("communism_drift", MsgModifierColourPos, Nothing))
+        ,("democratic_drift"                , ("democratic_drift", MsgModifierColourPos, Nothing))
+        ,("fascism_drift"                   , ("fascism_drift", MsgModifierColourPos, Nothing))
+        ,("neutrality_drift"                , ("neutrality_drift", MsgModifierColourPos, Nothing))
         ,("communism_acceptance"            , ("communism_acceptance", MsgModifierColourPos, Nothing))
         ,("democratic_acceptance"           , ("democratic_acceptance", MsgModifierColourPos, Nothing))
         ,("fascism_acceptance"              , ("fascism_acceptance", MsgModifierColourPos, Nothing))
         ,("neutrality_acceptance"           , ("neutrality_acceptance", MsgModifierColourPos, Nothing))
 
             -- Diplomacy
-        ,("civil_war_involvement_tension"   , ("MODIFIER_CIVIL_WAR_INVOLVEMENT_TENSION", MsgModifierPcNegReduced, Just 1)) -- precision 1
+        ,("civil_war_involvement_tension"   , ("MODIFIER_CIVIL_WAR_INVOLVEMENT_TENSION", MsgModifierPcNegReduced, Just 1))
         ,("enemy_declare_war_tension"       , ("MODIFIER_ENEMY_DECLARE_WAR_TENSION", MsgModifierPcPosReduced, Just 1))
         ,("enemy_justify_war_goal_time"     , ("MODIFIER_ENEMY_JUSTIFY_WAR_GOAL_TIME", MsgModifierPcPosReduced, Just 1))
-        ,("faction_influence_war_score_factor" , ("MODIFIER_FACTION_INFLUENCE_WAR_SCORE", MsgModifierPcReducedSignMin, Just 2)) -- yellow
-        ,("faction_trade_opinion_factor"    , ("MODIFIER_FACTION_TRADE_OPINION_FACTOR", MsgModifierPcReducedSign, Just 2)) --precision 2 yellow
-        ,("generate_wargoal_tension"        , ("MODIFIER_GENERATE_WARGOAL_TENSION_LIMIT", MsgModifierPcReducedSign, Just 1)) -- yellow
+        ,("faction_influence_war_score_factor" , ("MODIFIER_FACTION_INFLUENCE_WAR_SCORE", MsgModifierPcReducedSignMin, Just 2))
+        ,("faction_trade_opinion_factor"    , ("MODIFIER_FACTION_TRADE_OPINION_FACTOR", MsgModifierPcReducedSign, Just 2))
+        ,("generate_wargoal_tension"        , ("MODIFIER_GENERATE_WARGOAL_TENSION_LIMIT", MsgModifierPcReducedSign, Just 1))
         ,("guarantee_cost"                  , ("MODIFIER_GUARANTEE_COST", MsgModifierPcNegReduced, Just 0))
         ,("guarantee_tension"               , ("MODIFIER_GUARANTEE_TENSION_LIMIT", MsgModifierPcNegReduced, Just 1))
         ,("join_faction_tension"            , ("MODIFIER_JOIN_FACTION_TENSION_LIMIT", MsgModifierPcNegReduced, Just 1))
@@ -142,7 +142,7 @@ modifiersTable = HM.fromList
             -- Equipment
         ,("equipment_capture"               , ("MODIFIER_EQUIPMENT_CAPTURE", MsgModifierPcPosReduced, Just 1))
         ,("equipment_capture_factor"        , ("MODIFIER_EQUIPMENT_CAPTURE_FACTOR", MsgModifierPcPosReduced, Just 1))
-        ,("equipment_conversion_speed"      , ("EQUIPMENT_CONVERSION_SPEED_MODIFIERS", MsgModifierPcPosReduced, Just 0))
+        ,("equipment_conversion_speed"      , ("MODIFIER_EQUIPMENT_CONVERSION_SPEED", MsgModifierPcPosReduced, Just 0))
         ,("equipment_upgrade_xp_cost"       , ("MODIFIER_EQUIPMENT_UPGRADE_XP_COST", MsgModifierPcNegReduced, Just 0))
         ,("license_purchase_cost"           , ("MODIFIER_LICENSE_PURCHASE_COST", MsgModifierPcNegReduced, Just 0))
         ,("license_tech_difference_speed"   , ("MODIFIER_LICENSE_TECH_DIFFERENCE_SPEED", MsgModifierPcPosReduced, Just 0))
@@ -159,7 +159,7 @@ modifiersTable = HM.fromList
             -- Military outside of combat
         ,("command_power_gain"              , ("MODIFIER_COMMAND_POWER_GAIN", MsgModifierColourPos, Just 2))
         ,("command_power_gain_mult"         , ("MODIFIER_COMMAND_POWER_GAIN_MULT", MsgModifierPcPosReduced, Just 0))
-        ,("conscription"                    , ("MODIFIER_CONSCRIPTION_FACTOR", MsgModifierPcReducedSignMin, Just 2)) --yellow
+        ,("conscription"                    , ("MODIFIER_CONSCRIPTION_FACTOR", MsgModifierPcReducedSignMin, Just 2))
         ,("conscription_factor"             , ("MODIFIER_CONSCRIPTION_TOTAL_FACTOR", MsgModifierPcPosReduced, Just 0))
         ,("dig_in_speed_factor"             , ("MODIFIER_DIG_IN_SPEED_FACTOR", MsgModifierPcPosReduced, Just 1))
         ,("experience_gain_air"             , ("MODIFIER_XP_GAIN_AIR", MsgModifierColourPos, Just 2))
@@ -168,7 +168,7 @@ modifiersTable = HM.fromList
         ,("experience_gain_army_factor"     , ("MODIFIER_XP_GAIN_ARMY_FACTOR", MsgModifierPcPosReduced, Just 1))
         ,("experience_gain_navy"            , ("MODIFIER_XP_GAIN_NAVY", MsgModifierColourPos, Just 2))
         ,("experience_gain_navy_factor"     , ("MODIFIER_XP_GAIN_NAVY_FACTOR", MsgModifierPcPosReduced, Just 1))
-        ,("land_equipment_upgrade_xp_cost"  , ("MODIFIER_LAND_EQUIPMENT_UPGRADE_XP_COST", MsgModifierPcNegReduced, Just 0)) --precision 0
+        ,("land_equipment_upgrade_xp_cost"  , ("MODIFIER_LAND_EQUIPMENT_UPGRADE_XP_COST", MsgModifierPcNegReduced, Just 0))
         ,("land_reinforce_rate"             , ("MODIFIER_LAND_REINFORCE_RATE", MsgModifierPcPosReduced, Just 1))
         ,("training_time_factor"            , ("MODIFIER_TRAINING_TIME_FACTOR", MsgModifierPcNegReduced, Just 2))
         ,("minimum_training_level"          , ("MODIFIER_MINIMUM_TRAINING_LEVEL", MsgModifierPcNegReduced, Just 0))
@@ -178,10 +178,10 @@ modifiersTable = HM.fromList
         ,("naval_doctrine_cost_factor"      , ("MODIFIER_NAVAL_DOCTRINE_COST_FACTOR", MsgModifierPcNegReduced, Just 2))
         ,("max_command_power"               , ("MODIFIER_MAX_COMMAND_POWER", MsgModifierColourPos, Just 0))
         ,("max_command_power_mult"          , ("MODIFIER_MAX_COMMAND_POWER_MULT", MsgModifierPcPosReduced, Just 0))
-        ,("training_time_army_factor"       , ("MODIFIER_TRAINING_TIME_ARMY_FACTOR", MsgModifierPcReducedSign, Just 1)) --yellow
+        ,("training_time_army_factor"       , ("MODIFIER_TRAINING_TIME_ARMY_FACTOR", MsgModifierPcReducedSign, Just 1))
         ,("weekly_manpower"                 , ("MODIFIER_WEEKLY_MANPOWER", MsgModifierColourPos, Just 0))
-        ,("refit_ic_cost"                   , ("MODIFIER_INDUSTRIAL_REFIT_IC_COST_FACTOR", MsgModifierPcNegReduced, Just 0)) --precision 0
-        ,("air_equipment_upgrade_xp_cost"   , ("MODIFIER_AIR_EQUIPMENT_UPGRADE_XP_COST", MsgModifierPcNegReduced, Just 0)) --precision 0
+        ,("refit_ic_cost"                   , ("MODIFIER_INDUSTRIAL_REFIT_IC_COST_FACTOR", MsgModifierPcNegReduced, Just 0))
+        ,("air_equipment_upgrade_xp_cost"   , ("MODIFIER_AIR_EQUIPMENT_UPGRADE_XP_COST", MsgModifierPcNegReduced, Just 0))
         ,("special_forces_training_time_factor", ("MODIFIER_SPECIAL_FORCES_TRAINING_TIME_FACTOR", MsgModifierPcNegReduced, Just 1))
         ,("command_abilities_cost_factor"   , ("MODIFIER_COMMAND_ABILITIES_COST_FACTOR", MsgModifierPcNegReduced, Just 2))
         ,("special_forces_cap_flat"         ,("MODIFIER_SPECIAL_FORCES_CAP_FLAT", MsgModifierColourPos, Just 0))
@@ -198,8 +198,8 @@ modifiersTable = HM.fromList
         ,("army_fuel_consumption_factor"    , ("MODIFIER_ARMY_FUEL_CONSUMPTION_FACTOR", MsgModifierPcNegReduced, Just 2))
         ,("air_fuel_consumption_factor"     , ("MODIFIER_AIR_FUEL_CONSUMPTION_FACTOR", MsgModifierPcNegReduced, Just 2))
         ,("navy_fuel_consumption_factor"    , ("MODIFIER_NAVY_FUEL_CONSUMPTION_FACTOR", MsgModifierPcNegReduced, Just 2))
-        ,("supply_factor"                   , ("MODIFIER_SUPPLY_FACTOR", MsgModifierPcPosReduced, Just 0)) --precision 0
-        ,("supply_combat_penalties_on_core_factor" , ("supply_combat_penalties_on_core_factor", MsgModifierPcNegReduced, Just 1))
+        ,("supply_factor"                   , ("MODIFIER_SUPPLY_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("supply_combat_penalties_on_core_factor" , ("MODIFIER_SUPPLY_PENALTY_ON_CORE", MsgModifierPcNegReduced, Just 1))
         ,("supply_consumption_factor"       , ("MODIFIER_SUPPLY_CONSUMPTION_FACTOR", MsgModifierPcNegReduced, Just 1))
         ,("no_supply_grace"                 , ("MODIFIER_NO_SUPPLY_GRACE", MsgModifierColourPos, Just 1))
         ,("out_of_supply_factor"            , ("MODIFIER_OUT_OF_SUPPLY_FACTOR", MsgModifierPcNegReduced, Just 1))
@@ -224,7 +224,7 @@ modifiersTable = HM.fromList
         ,("global_building_slots_factor"    , ("MODIFIER_GLOBAL_BUILDING_SLOTS_FACTOR", MsgModifierPcPosReduced, Just 0))
         ,("industrial_capacity_dockyard"    , ("MODIFIER_INDUSTRIAL_CAPACITY_DOCKYARD_FACTOR", MsgModifierPcPosReduced, Just 2))
         ,("industrial_capacity_factory"     , ("MODIFIER_INDUSTRIAL_CAPACITY_FACTOR", MsgModifierPcPosReduced, Just 2))
-        ,("industry_air_damage_factor"      , ("MODIFIER_INDUSTRY_AIR_DAMAGE_FACTOR", MsgModifierPcNegReduced, Just 2)) --precision 2
+        ,("industry_air_damage_factor"      , ("MODIFIER_INDUSTRY_AIR_DAMAGE_FACTOR", MsgModifierPcNegReduced, Just 2))
         ,("industry_repair_factor"          , ("MODIFIER_INDUSTRY_REPAIR_FACTOR", MsgModifierPcPosReduced, Just 2))
         ,("line_change_production_efficiency_factor" , ("MODIFIER_LINE_CHANGE_PRODUCTION_EFFICIENCY_FACTOR", MsgModifierPcPosReduced, Just 2))
         ,("production_oil_factor"           , ("MODIFIER_PRODUCTION_OIL_FACTOR", MsgModifierPcPosReduced, Just 2))
@@ -295,14 +295,14 @@ modifiersTable = HM.fromList
         ,("ai_call_ally_desire_factor"      , ("MODIFIER_AI_GET_ALLY_DESIRE_FACTOR", MsgModifierSign, Just 0))
         ,("ai_desired_divisions_factor"     , ("MODIFIER_AI_DESIRED_DIVISIONS_FACTOR", MsgModifierPcReducedSign, Just 1))
         ,("ai_focus_aggressive_factor"      , ("MODIFIER_AI_FOCUS_AGGRESSIVE_FACTOR", MsgModifierPcReducedSign, Just 1))
-        ,("ai_focus_defense_factor"         , ("MODIFIER_AI_FOCUS_DEFENSE_FACTOR", MsgModifierPcReducedSign, Just 1)) --precision 1
+        ,("ai_focus_defense_factor"         , ("MODIFIER_AI_FOCUS_DEFENSE_FACTOR", MsgModifierPcReducedSign, Just 1))
         ,("ai_focus_aviation_factor"        , ("MODIFIER_AI_FOCUS_AVIATION_FACTOR", MsgModifierPcReducedSign, Just 1))
         ,("ai_focus_military_advancements_factor" , ("MODIFIER_AI_FOCUS_MILITARY_ADVANCEMENTS_FACTOR", MsgModifierPcReducedSign, Just 1))
         ,("ai_focus_military_equipment_factor" , ("MODIFIER_AI_FOCUS_MILITARY_EQUIPMENT_FACTOR", MsgModifierPcReducedSign, Just 1))
         ,("ai_focus_naval_air_factor"       , ("MODIFIER_AI_FOCUS_NAVAL_AIR_FACTOR", MsgModifierPcReducedSign, Just 1))
         ,("ai_focus_naval_factor"           , ("MODIFIER_AI_FOCUS_NAVAL_FACTOR", MsgModifierPcReducedSign, Just 1))
         ,("ai_focus_war_production_factor"  , ("MODIFIER_AI_FOCUS_WAR_PRODUCTION_FACTOR", MsgModifierPcReducedSign, Just 1))
-        ,("ai_focus_peaceful_factor"        , ("MODIFIER_AI_FOCUS_PEACEFUL_FACTOR", MsgModifierPcReducedSign, Just 1)) --precision 1
+        ,("ai_focus_peaceful_factor"        , ("MODIFIER_AI_FOCUS_PEACEFUL_FACTOR", MsgModifierPcReducedSign, Just 1))
         ,("ai_get_ally_desire_factor"       , ("MODIFIER_AI_GET_ALLY_DESIRE_FACTOR", MsgModifierSign, Just 0))
         ,("ai_join_ally_desire_factor"      , ("MODIFIER_AI_JOIN_ALLY_DESIRE_FACTOR", MsgModifierSign, Just 0))
         ,("ai_license_acceptance"           , ("MODIFIER_AI_LICENSE_ACCEPTANCE", MsgModifierSign, Just 0))
@@ -319,7 +319,7 @@ modifiersTable = HM.fromList
         ,("army_leader_start_logistics_level" , ("MODIFIER_ARMY_LEADER_START_LOGISTICS_LEVEL", MsgModifierColourPos, Just 0))
         ,("army_leader_start_planning_level" , ("MODIFIER_ARMY_LEADER_START_PLANNING_LEVEL", MsgModifierColourPos, Just 0))
         ,("military_leader_cost_factor"     , ("MODIFIER_MILITARY_LEADER_COST_FACTOR", MsgModifierPcNegReduced, Just 1))
-        ,("navy_leader_start_attack_level"  , ("MODIFIER_NAVY_LEADER_START_ATTACK_LEVEL", MsgModifierColourPos, Just 0)) --precision 0
+        ,("navy_leader_start_attack_level"  , ("MODIFIER_NAVY_LEADER_START_ATTACK_LEVEL", MsgModifierColourPos, Just 0))
         ,("grant_medal_cost_factor"         , ("MODIFIER_GRANT_MEDAL_COST_FACTOR", MsgModifierPcNegReduced, Just 1))
         ,("female_divisional_commander_chance", ("MODIFIER_FEMALE_DIVISIONAL_COMMANDER_CHANCE", MsgModifierPcReducedSign, Just 0))
 
@@ -367,9 +367,9 @@ modifiersTable = HM.fromList
         ,("coordination_bonus"              , ("MODIFIER_COORDINATION_BONUS", MsgModifierPcPosReduced, Just 1))
         ,("dig_in_speed"                    , ("MODIFIER_DIG_IN_SPEED", MsgModifierColourPos, Just 0))
         ,("dig_in_speed_factor"             , ("MODIFIER_DIG_IN_SPEED_FACTOR", MsgModifierPcPosReduced, Just 1))
-        ,("experience_gain_army_unit_factor" , ("MODIFIER_XP_GAIN_ARMY_UNIT_FACTOR", MsgModifierPcPosReduced, Just 1)) --precision 1
+        ,("experience_gain_army_unit_factor" , ("MODIFIER_XP_GAIN_ARMY_UNIT_FACTOR", MsgModifierPcPosReduced, Just 1))
         ,("experience_loss_factor"          , ("MODIFIER_EXPERIENCE_LOSS_FACTOR", MsgModifierPcNegReduced, Just 1))
-        ,("initiative_factor"               , ("MODIFIER_INITIATIVE_FACTOR", MsgModifierPcPosReduced, Just 1)) --precision 1
+        ,("initiative_factor"               , ("MODIFIER_INITIATIVE_FACTOR", MsgModifierPcPosReduced, Just 1))
         ,("land_night_attack"               , ("MODIFIER_LAND_NIGHT_ATTACK", MsgModifierPcPosReduced, Just 1))
         ,("max_dig_in"                      , ("MODIFIER_MAX_DIG_IN", MsgModifierColourPos, Just 1))
         ,("max_dig_in_factor"               , ("MODIFIER_MAX_DIG_IN_FACTOR", MsgModifierPcPosReduced, Just 1))
@@ -386,8 +386,8 @@ modifiersTable = HM.fromList
         ,("planning_speed"                  , ("MODIFIER_PLANNING_SPEED", MsgModifierPcPosReduced, Just 1))
 
             -- naval invasions
-        ,("naval_invasion_prep_speed"       , ("MODIFIER_NAVAL_INVASION_PREPARATION_SPEED", MsgModifierPcPosReduced, Just 1)) --precision 1
-        ,("naval_invasion_capacity"         , ("MODIFIER_NAVAL_INVASION_CAPACITY", MsgModifierColourPos, Just 0)) --precision 0
+        ,("naval_invasion_prep_speed"       , ("MODIFIER_NAVAL_INVASION_PREPARATION_SPEED", MsgModifierPcPosReduced, Just 1))
+        ,("naval_invasion_capacity"         , ("MODIFIER_NAVAL_INVASION_CAPACITY", MsgModifierColourPos, Just 0))
         ,("amphibious_invasion"             , ("MODIFIER_AMPHIBIOUS_INVASION", MsgModifierPcPosReduced, Just 1))
         ,("amphibious_invasion_defence"     , ("MODIFIER_NAVAL_INVASION_DEFENSE", MsgModifierPcPosReduced, Just 0))
         ,("invasion_preparation"            , ("MODIFIER_NAVAL_INVASION_PREPARATION", MsgModifierPcNegReduced, Just 1))
@@ -439,14 +439,14 @@ modifiersTable = HM.fromList
         ,("screening_without_screens"       , ("MODIFIER_SCREENING_WITHOUT_SCREENS", MsgModifierPcPosReduced, Just 1))
         ,("ships_at_battle_start"           , ("MODIFIER_SHIPS_AT_BATTLE_START_FACTOR", MsgModifierPcPosReduced, Just 0))
         ,("spotting_chance"                 , ("MODIFIER_SPOTTING_CHANCE", MsgModifierPcPosReduced, Just 0))
-        ,("strike_force_movement_org_loss"  , ("MODIFIER_STRIKE_FORCE_MOVING_ORG", MsgModifierPcNegReduced, Just 2))--precision 2
-        ,("sub_retreat_speed"               , ("MODIFIER_SUB_RETREAT_SPEED", MsgModifierPcPosReduced, Just 0)) --precision 0
+        ,("strike_force_movement_org_loss"  , ("MODIFIER_STRIKE_FORCE_MOVING_ORG", MsgModifierPcNegReduced, Just 2))
+        ,("sub_retreat_speed"               , ("MODIFIER_SUB_RETREAT_SPEED", MsgModifierPcPosReduced, Just 0))
 
             -- carriers and their planes
         ,("navy_carrier_air_agility_factor" , ("MODIFIER_NAVAL_CARRIER_AIR_AGILITY_FACTOR", MsgModifierPcPosReduced, Just 2))
         ,("navy_carrier_air_attack_factor"  , ("MODIFIER_NAVAL_CARRIER_AIR_ATTACK_FACTOR", MsgModifierPcPosReduced, Just 2))
         ,("navy_carrier_air_targetting_factor" , ("MODIFIER_NAVAL_CARRIER_AIR_TARGETTING_FACTOR", MsgModifierPcPosReduced, Just 2))
-        ,("air_carrier_night_penalty_reduction_factor" , ("MODIFIER_AIR_CARRIER_NIGHT_PENALTY_REDUCTION_FACTOR", MsgModifierPcPosReduced, Just 2)) --precision 2
+        ,("air_carrier_night_penalty_reduction_factor" , ("MODIFIER_AIR_CARRIER_NIGHT_PENALTY_REDUCTION_FACTOR", MsgModifierPcPosReduced, Just 2))
         ,("sortie_efficiency"               , ("MODIFIER_STAT_CARRIER_SORTIE_EFFICIENCY", MsgModifierPcPosReduced, Just 0))
         ,("fighter_sortie_efficiency"       , ("MODIFIER_CARRIER_FIGHTER_SORTIE_EFFICIENCY_FACTOR", MsgModifierPcPosReduced, Just 0))
 
@@ -484,21 +484,21 @@ modifiersTable = HM.fromList
         ,("air_intercept_efficiency"        , ("MODIFIER_AIR_INTERCEPT_EFFICIENCY", MsgModifierPcPosReduced, Just 0))
         ,("air_maximum_speed_factor"        , ("MODIFIER_AIR_MAX_SPEED_FACTOR", MsgModifierPcPosReduced, Just 0))
         ,("air_mission_efficiency"          , ("MODIFIER_AIR_MISSION_EFFICIENCY", MsgModifierPcPosReduced, Just 1))
-        ,("air_mission_xp_gain_factor"      , ("MODIFIER_AIR_MISSION_XP_FACTOR", MsgModifierPcPosReduced, Just 0)) --precision 0
-        ,("air_nav_efficiency"              , ("MODIFIER_AIR_NAV_EFFICIENCY", MsgModifierPcPosReduced, Just 0)) --precison 0
+        ,("air_mission_xp_gain_factor"      , ("MODIFIER_AIR_MISSION_XP_FACTOR", MsgModifierPcPosReduced, Just 0))
+        ,("air_nav_efficiency"              , ("MODIFIER_AIR_NAV_EFFICIENCY", MsgModifierPcPosReduced, Just 0))
         ,("air_night_penalty"               , ("MODIFIER_AIR_NIGHT_PENALTY", MsgModifierPcNegReduced, Just 2))
         ,("air_range_factor"                , ("MODIFIER_AIR_RANGE_FACTOR", MsgModifierPcPosReduced, Just 0))
         ,("air_strategic_bomber_bombing_factor" , ("MODIFIER_STRATEGIC_BOMBER_BOMBING_FACTOR", MsgModifierPcPosReduced, Just 1))
-        ,("air_strategic_bomber_night_penalty" , ("MODIFIER_AIR_STRAT_BOMBER_NIGHT_PENALTY", MsgModifierPcNegReduced, Just 2)) --precision 2
-        ,("air_superiority_efficiency"      , ("MODIFIER_AIR_SUPERIORITY_EFFICIENCY", MsgModifierPcPosReduced, Just 0)) --precision 0
+        ,("air_strategic_bomber_night_penalty" , ("MODIFIER_AIR_STRAT_BOMBER_NIGHT_PENALTY", MsgModifierPcNegReduced, Just 2))
+        ,("air_superiority_efficiency"      , ("MODIFIER_AIR_SUPERIORITY_EFFICIENCY", MsgModifierPcPosReduced, Just 0))
         ,("air_training_xp_gain_factor"     , ("MODIFIER_AIR_TRAINING_XP_FACTOR", MsgModifierPcPosReduced, Just 0))
         ,("air_weather_penalty"             , ("MODIFIER_AIR_WEATHER_PENALTY", MsgModifierPcNegReduced, Just 2))
-        ,("air_wing_xp_loss_when_killed_factor" , ("MODIFIER_AIR_WING_XP_LOSS_WHEN_KILLED_FACTOR", MsgModifierPcNegReduced, Just 0)) --precision 0
+        ,("air_wing_xp_loss_when_killed_factor" , ("MODIFIER_AIR_WING_XP_LOSS_WHEN_KILLED_FACTOR", MsgModifierPcNegReduced, Just 0))
         ,("army_bonus_air_superiority_factor" , ("MODIFIER_ARMY_BONUS_AIR_SUPERIORITY_FACTOR", MsgModifierPcPosReduced, Just 2))
         ,("enemy_army_bonus_air_superiority_factor" , ("MODIFIER_ENEMY_ARMY_BONUS_AIR_SUPERIORITY_FACTOR", MsgModifierPcNegReduced, Just 2))
-        ,("ground_attack_factor"            , ("MODIFIER_GROUND_ATTACK_FACTOR", MsgModifierPcPosReduced, Just 1)) --precision 1
+        ,("ground_attack_factor"            , ("MODIFIER_GROUND_ATTACK_FACTOR", MsgModifierPcPosReduced, Just 1))
         ,("mines_planting_by_air_factor"    , ("MODIFIER_MINES_PLANTING_BY_AIR_FACTOR", MsgModifierPcPosReduced, Just 0))
-        ,("strategic_bomb_visibility"       , ("MODIFIER_STRAT_BOMBING_VISIBILITY", MsgModifierPcNegReduced, Just 0)) --precison 0
+        ,("strategic_bomb_visibility"       , ("MODIFIER_STRAT_BOMBING_VISIBILITY", MsgModifierPcNegReduced, Just 0))
 
             -- targeted
         ,("extra_trade_to_target_factor"    , ("MODIFIER_TRADE_TO_TARGET_FACTOR", MsgModifierPcPosReduced, Just 2))
@@ -650,7 +650,7 @@ modifiersTable = HM.fromList
         ,("army_retreat_speed_factor"                                          , ("MODIFIER_ARMY_RETREAT_SPEED_FACTOR", MsgModifierPcPosReduced, Just 2))
         ,("assign_army_leader_cp_cost"                                         , ("MODIFIER_ASSIGN_ARMY_LEADER_CP_COST", MsgModifierColourNeg, Just 0))
         ,("assign_navy_leader_cp_cost"                                         , ("MODIFIER_ASSIGN_NAVY_LEADER_CP_COST", MsgModifierColourNeg, Just 0))
-        ,("automatic_grant_medal_chance"                                       , ("automatic_grant_medal_chance", MsgModifierColourPos, Just 0))
+        ,("automatic_grant_medal_chance"                                       , ("MODIFIER_GRANT_MEDAL_CHANCE", MsgModifierColourPos, Just 0))
         ,("autonomy_gain_ll_to_overlord_factor"                                , ("MODIFIER_AUTONOMY_GAIN_LL_TO_OVERLORD_FACTOR", MsgModifierPcReducedSign, Just 2))
         ,("autonomy_gain_ll_to_subject"                                        , ("MODIFIER_AUTONOMY_GAIN_LL_TO_SUBJECT", MsgModifierColourPos, Just 2))
         ,("autonomy_gain_ll_to_subject_factor"                                 , ("MODIFIER_AUTONOMY_GAIN_LL_TO_SUBJECT_FACTOR", MsgModifierPcPosReduced, Just 2))
@@ -696,7 +696,7 @@ modifiersTable = HM.fromList
         ,("forced_surrender_limit"                                             , ("MODIFIER_FORCED_SURRENDER_LIMIT", MsgModifierColourNeg, Just 2))
         ,("fuel_gain_from_states"                                              , ("MODIFIER_FUEL_GAIN_FROM_STATES", MsgModifierColourPos, Just 2))
         ,("ground_attack"                                                      , ("MODIFIER_GROUND_ATTACK", MsgModifierColourPos, Just 1))
-        ,("headquarters_experience_gain_factor"                                , ("headquarters_experience_gain_factor", MsgModifierPcPosReduced, Just 2))
+        ,("headquarters_experience_gain_factor"                                , ("MODIFIER_NAVAL_HQ_XP_GAIN_FACTOR", MsgModifierPcPosReduced, Just 2))
         ,("industrial_capacity_dockyard_powered"                               , ("MODIFIER_INDUSTRIAL_CAPACITY_DOCKYARD_POWERED_FACTOR", MsgModifierPcPosReduced, Just 2))
         ,("industrial_capacity_factory_powered"                                , ("MODIFIER_INDUSTRIAL_CAPACITY_POWERED_FACTOR", MsgModifierPcPosReduced, Just 2))
         ,("intelligence_operation_speed"                                       , ("MODIFIER_INTELLIGENCE_OPERATION_SPEED", MsgModifierColourPos, Just 0))
@@ -851,7 +851,7 @@ modifiersTable = HM.fromList
         ,("truck_attrition"                                                    , ("MODIFIER_TRUCK_ATTRITION", MsgModifierColourNeg, Just 2))
         ,("underway_replenishment_convoy_cost"                                 , ("MODIFIER_UNDERWAY_REPLENISHMENT_CONVOY_COST", MsgModifierPcNegReduced, Just 2))
         ,("underway_replenishment_range"                                       , ("MODIFIER_UNDERWAY_REPLENISHMENT_RANGE", MsgModifierPcPosReduced, Just 2))
-        ,("unit_medal_effectiveness"                                           , ("unit_medal_effectiveness", MsgModifierPcPosReduced, Just 0))
+        ,("unit_medal_effectiveness"                                           , ("MODIFIER_MEDAL_EFFECTIVENESS", MsgModifierPcPosReduced, Just 0))
         ,("unit_upkeep_attrition_factor"                                       , ("MODIFIER_UNIT_UPKEEP_ATTRITION_FACTOR", MsgModifierPcNegReduced, Just 0))
         ,("war_support_reduction_on_damage"                                    , ("MODIFIER_WAR_SUPPORT_REDUCTION_ON_DAMAGE", MsgModifierPcNegReduced, Just 1))
         ,("winter_attrition"                                                   , ("MODIFIER_WINTER_ATTRITION", MsgModifierPcNegReduced, Just 1))
