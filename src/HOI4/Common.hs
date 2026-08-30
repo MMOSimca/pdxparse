@@ -427,6 +427,7 @@ handlersCompound = Tr.fromList
         ,("every_country"               , scope HOI4Country     . compoundMessageScope MsgEveryCountry)
         ,("every_country_division"      , scope HOI4Division     . compoundMessageScope MsgEveryCountryDivision)
         ,("every_country_with_original_tag", scope HOI4Country  . compoundMessageExtractTag "original_tag_to_check" MsgEveryCountryWithOriginalTag)
+        ,("every_allied_country"         , scope HOI4Country     . compoundMessageScope MsgEveryAlliedCountry)
         ,("every_enemy_country"         , scope HOI4Country     . compoundMessageScope MsgEveryEnemyCountry)
         ,("every_navy_leader"           , scope HOI4UnitLeader  . compoundMessageScope MsgEveryNavyLeader)
         ,("every_military_industrial_organization" , compoundMessageScope MsgEveryMio)

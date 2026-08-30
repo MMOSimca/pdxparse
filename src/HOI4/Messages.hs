@@ -123,6 +123,7 @@ data ScriptMessage
     | MsgEveryCountry
     | MsgEveryCountryDivision
     | MsgEveryCountryWithOriginalTag {scriptMessageWho :: Text}
+    | MsgEveryAlliedCountry
     | MsgEveryEnemyCountry
     | MsgEveryNavyLeader
     | MsgEveryNeighborCountry
@@ -1046,6 +1047,8 @@ instance RenderMessage Script ScriptMessage where
                 , _who
                 , ":"
                 ]
+        MsgEveryAlliedCountry
+            -> "Every allied country:"
         MsgEveryEnemyCountry
             -> "Every enemy country:"
         MsgEveryNavyLeader
@@ -1063,7 +1066,7 @@ instance RenderMessage Script ScriptMessage where
         MsgEveryOwnedState
             -> "Every owned state:"
         MsgEveryPossibleCountry
-            -> "Every country that exist and could exist:"
+            -> "Every country that exists and could exist:"
         MsgEveryState
             -> "Every state:"
         MsgEveryStateDivision
