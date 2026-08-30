@@ -2726,9 +2726,9 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgRelationRuleOther {scriptMessageWhat = _what, scriptMessageYn = _yn, scriptMessageWhom = _whom}
             -> mconcat
-                [ "Relation rule <tt>"
-                , _what
-                , "</tt> is"
+                [ "Relation rule "
+                , toMessage (typewriterText _what)
+                , " is"
                 , toMessage (ifThenElseT _yn "" " ''not''")
                 , " allowed with "
                 , _whom

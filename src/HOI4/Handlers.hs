@@ -230,7 +230,7 @@ preStatement stmt = (:[]) <$> alsoIndent' (preMessage stmt)
 plainStatement :: (HOI4Info g, Monad m) =>
     Text -> GenericStatement -> PPT g m IndentedMessages
 plainStatement xtxt stmt =
-    plainMsg $ xtxt <> "<tt>" <> Doc.doc2text (genericStatement2doc stmt) <> "</tt>"
+    plainMsg $ xtxt <> typewriterText (Doc.doc2text (genericStatement2doc stmt))
 
 -- | Pretty-print a statement and wrap it in a @<pre>@ element.
 preStatementText :: GenericStatement -> Doc
@@ -1464,7 +1464,7 @@ textAtom whatlabel atomlabel msg loc stmt@[pdx| %_ = @scr |]
                 mwhat_loc <- loc what
                 atom_loc <- getGameL10n atom
                 let what_icon = iconText what
-                    what_loc = fromMaybe ("<tt>" <> what <> "</tt>") mwhat_loc
+                    what_loc = fromMaybe (typewriterText what) mwhat_loc
                 return $ msg what_icon what_loc atom_loc
             _ -> return $ preMessage stmt
 textAtom _ _ _ _ stmt = preStatement stmt
@@ -1483,7 +1483,7 @@ textAtomKey whatlabel atomlabel msg loc stmt@[pdx| %_ = @scr |]
             (Just what, Just atom) -> do
                 mwhat_loc <- loc what
                 atom_loc <- getGameL10n atom
-                let what_loc = fromMaybe ("<tt>" <> what <> "</tt>") mwhat_loc
+                let what_loc = fromMaybe (typewriterText what) mwhat_loc
                 return $ msg what_loc atom_loc what atom
             _ -> return $ preMessage stmt
 textAtomKey _ _ _ _ stmt = preStatement stmt
@@ -2077,7 +2077,7 @@ setVariable msgWW msgWV stmt@[pdx| %_ = @scr |]
             = sv { sv_which = Just (vartag <> ":" <> var), sv_which2 = Just val }
         addLine sv _ = trace ("failed to parse var: " ++ show stmt) sv
         toTT :: Text -> Text
-        toTT t = "<tt>" <> t <> "</tt>"
+        toTT = typewriterText
         -- A value script names as a script constant is a number like any other,
         -- and the same number every time, so it is written as that number rather
         -- than as a name only the script knows the meaning of.
@@ -2149,7 +2149,7 @@ clampVariable msgVV msgVW msgWV msgWW stmt@[pdx| %_ = @scr |]
             = clv { clv_var2 = Just var }
         addLine clv _ = clv
         toTT :: Text -> Text
-        toTT t = "<tt>" <> t <> "</tt>"
+        toTT = typewriterText
         pp_clv :: ClampVariable -> PPT g m ScriptMessage
         pp_clv clv = case (clv_value clv,  clv_value2 clv,
                              clv_var clv, clv_var2 clv) of
@@ -2229,7 +2229,7 @@ checkVariable msgWW msgWV stmt@[pdx| %_ = @scr |]
             = cv { cv_which = Just (a <> ":" <> b <> ":" <> c), cv_which2 = Just val, cv_comp = "equals" }
         addLine cv _ = cv
         toTT :: Text -> Text
-        toTT t = "<tt>" <> t <> "</tt>"
+        toTT = typewriterText
         pp_cv :: CheckVariable -> PPT g m ScriptMessage
         pp_cv cv = case (cv_which cv, cv_which2 cv, cv_value cv, cv_comp cv) of
             (Just v1, Just v2, Nothing, comp) -> do
@@ -2270,7 +2270,7 @@ exportVariable stmt@[pdx| %_ = @scr |] = msgToPP =<< pp_ev (foldl' addLine newEV
             = ev { ev_who = Just val }
         addLine ev stmt = trace ("Unknown in export_to_variable " ++ show stmt) ev
         toTT :: Text -> Text
-        toTT t = "<tt>" <> t <> "</tt>"
+        toTT = typewriterText
         pp_ev :: ExportVariable -> PPT g m ScriptMessage
         pp_ev ExportVariable { ev_which = Just which, ev_value = Just value, ev_who = Nothing } =
             return $ MsgExportVariable (toTT which) value
@@ -3672,7 +3672,7 @@ withRegion stmt@[pdx| %lhs = $vartag:$var |] = do
         Just tagloc -> msgToPP $ MsgRegion tagloc
         Nothing -> preStatement stmt
 withRegion stmt@[pdx| %lhs = $var |]
-    = msgToPP $ MsgRegion ("<tt>" <> var <> "</tt>" )
+    = msgToPP $ MsgRegion (typewriterText var)
 withRegion [pdx| %lhs = !stateid |]
     = msgToPP . MsgRegion =<< getRegionLoc stateid
 withRegion stmt = preStatement stmt

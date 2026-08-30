@@ -40,7 +40,7 @@ import Abstract -- everything
 import qualified Doc -- everything
 import HOI4.Messages -- everything
 import QQ (pdx)
-import MessageTools (iquotes)
+import MessageTools (iquotes, typewriterText)
 import SettingsTypes -- everything
 import StatementUtils -- everything
 import HOI4.Handlers -- everything
@@ -164,7 +164,7 @@ ppScriptedBlock what name [pdx| %_ = @scr |] stmt | not (null scr) = do
                     let base = minimum (map fst body)
                     bodyDoc <- imsg2doc_html [(i - base + 1, msg) | (i, msg) <- body]
                     plainMsg $ mconcat
-                        [ what, "<tt>", Doc.doc2text (genericStatement2doc stmt), "</tt> "
+                        [ what, typewriterText (Doc.doc2text (genericStatement2doc stmt)), " "
                         , "<div class=\"mw-collapsible mw-collapsed\""
                         , " data-expandtext=\"show\" data-collapsetext=\"hide\">"
                         , Doc.oneLine (Doc.doc2text bodyDoc)
@@ -1089,4 +1089,4 @@ ppEventLoc id = do
     loc <- getEventTitle id -- Note: Hidden events often have empty titles, see e.g. fetishist_flavor.400
     case loc of
         (Just t) | T.length (T.strip t) /= 0 -> return $ "<!-- " <> id <> " -->" <> iquotes't t -- TODO: Add link if possible
-        _ -> return $ "<tt>" <> id <> "</tt>"
+        _ -> return $ typewriterText id

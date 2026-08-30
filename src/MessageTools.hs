@@ -43,6 +43,7 @@ module MessageTools (
     ,   ifThenElse, ifThenElseT
     -- * General text formatting
     ,   iquotes, quotes, bold, boldText, italic, italicText, typewriterText
+    ,   softBreakToken
     -- * Wiki colour markup
     ,   wikifyLocColours, splitTemplate
     -- * The 'ppNumSep' number formatting method
@@ -51,6 +52,7 @@ module MessageTools (
     ,   module Text.PrettyPrint.Leijen.Text
     ) where
 
+import Data.Char (isSpace)
 import Data.List (intersperse, find)
 import Data.Maybe (fromMaybe)
 
@@ -413,8 +415,67 @@ boldText = Doc.doc2text . bold . Doc.strictText
 typewriter :: Doc -> Doc
 typewriter = PP.enclose "<tt>" "</tt>"
 
+-- | Set a name script calls something by in typewriter face, broken up so
+-- that a long one can wrap. See 'softBreakToken'.
 typewriterText :: Text -> Text
-typewriterText = Doc.doc2text . typewriter . Doc.strictText
+typewriterText t = "<tt>" <> softBreakToken t <> "</tt>"
+
+-- | Mark the places a long script name may be broken across lines.
+--
+-- Script names run their words together with underscores, so a browser reads
+-- one as a single unbreakable word, and a name like
+-- @TUR_put_new_safety_regulations_regarding_the_operation_of_aircraft@ is
+-- wider than the box it is written in. It pushes the box's edge out past
+-- where the page expects it, and the rest of the text, seeing the room,
+-- follows it out -- so one long name is enough to leave a page a mess.
+--
+-- A @\<wbr\>@ is a place a browser /may/ break a word, used only when the
+-- line would otherwise overflow, so marking them costs nothing when the name
+-- fits. Names short enough to fit anyway are left alone; longer ones are
+-- marked at the underscores between their words, about every twelve
+-- characters, and within any run that goes that far without one.
+softBreakToken :: Text -> Text
+softBreakToken name
+    | T.length name <= longestWhole = name
+    | otherwise = mconcat . rejoin 0 . concatMap chop . pieces $ name
+    where
+        -- A name no longer than this fits as it is.
+        longestWhole = 20
+        -- How far the text may run before another break is offered.
+        longestRun = 12
+
+        -- Split after each separator, so that each piece ends with the one
+        -- that follows it: @a_b.c@ becomes @["a_", "b.", "c"]@. Spaces count,
+        -- so that text of several words is only ever marked within a word.
+        pieces :: Text -> [Text]
+        pieces txt = case T.findIndex isSeparator txt of
+            Nothing -> [txt | not (T.null txt)]
+            Just i -> let (before, rest) = T.splitAt (i + 1) txt
+                      in before : pieces rest
+        isSeparator c = isSpace c || c `elem` ("_.:@" :: String)
+
+        -- A piece with no separator to break at is cut into lengths that fit.
+        -- The separator a piece ends with doesn't count towards its length,
+        -- so that a word right at the limit keeps the separator that follows
+        -- it and the break falls after the two, rather than between them.
+        chop :: Text -> [Text]
+        chop piece
+            | T.length (T.dropWhileEnd isSeparator piece) <= longestRun = [piece]
+            | otherwise = let (before, rest) = T.splitAt longestRun piece
+                          in before : chop rest
+
+        -- Offer a break wherever the text since the last one has run on far
+        -- enough to want another.
+        rejoin :: Int -> [Text] -> [Text]
+        rejoin _ [] = []
+        rejoin sinceBreak (piece:rest)
+            | sinceBreak >= longestRun = "<wbr>" : piece : rejoin (advance 0 piece) rest
+            | otherwise = piece : rejoin (advance sinceBreak piece) rest
+
+        -- Text after a space can break there, so the run starts over.
+        advance n piece
+            | T.any isSpace piece = 0
+            | otherwise = n + T.length piece
 
 -- | Produce output based on a boolean (i.e. if-then-else). Needed because the
 -- i18n templates don't understand this syntax, but instead interpret these

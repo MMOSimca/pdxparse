@@ -71,7 +71,7 @@ import SettingsTypes (PPT, LocArg (..), IsGame (..), withCurrentFile)
 import qualified SettingsTypes as S
 import Doc (Doc)
 import qualified Doc
-import MessageTools (boldText, ifThenElseT, plainNum, template)
+import MessageTools (boldText, ifThenElseT, plainNum, template, typewriterText)
 import HOI4.CountryNames (casualName)
 import HOI4.Messages (message, messageText, ScriptMessage (..))
 import HOI4.Types -- everything
@@ -504,7 +504,7 @@ tagged :: (HOI4Info g, Monad m) =>
     Text -> Text -> PPT g m (Maybe Text)
 tagged vartag var = case flip Tr.lookup varTags . TE.encodeUtf8 $ vartag of
     Just msg -> Just <$> messageText (msg var)
-    Nothing -> return $ Just $ "<tt>" <> vartag <> ":" <> var <> "</tt>" -- just let it pass
+    Nothing -> return $ Just $ typewriterText (vartag <> ":" <> var) -- just let it pass
 
 flagText :: (HOI4Info g, Monad m) =>
     Maybe HOI4Scope -> Text -> PPT g m Text
@@ -719,7 +719,7 @@ tryLocAndIcon :: (HOI4Info g, Monad m) => Text -> PPT g m (Text,Text)
 tryLocAndIcon atom = do
     loc <- tryLoc atom
     return (fromMaybe mempty (Just (iconText atom)),
-            fromMaybe ("<tt>" <> atom <> "</tt>") loc)
+            fromMaybe (typewriterText atom) loc)
 
 -- | Get localization for the atom given. Return atom
 -- if there is no localization.
@@ -816,7 +816,7 @@ mioName token = do
         Just loc -> return (Doc.oneLine loc)
         Nothing -> case HM.lookup token names of
             Just key -> Doc.oneLine <$> getGameL10n key
-            Nothing -> return ("<tt>" <> token <> "</tt>")
+            Nothing -> return (typewriterText token)
 
 -- | What kind of manufacturer an organization is, which is said by the archetype
 -- its entry is built out of rather than by anything of its own. An organization

@@ -72,7 +72,8 @@ import qualified Doc -- everything
 import HOI4.Messages -- everything
 import MessageTools (iquotes
                     , plainNum
-                    , formatDays)
+                    , formatDays
+                    , typewriterText)
 import QQ -- everything
 import SettingsTypes ( PPT, IsGameData (..), GameData (..), IsGameState (..), GameState (..)
                      , scope
@@ -922,12 +923,12 @@ addPowerBalanceModifier stmt@[pdx| %_ = @scr |] =
             (Just idpob, Just modi) -> do
                 mmod <- HM.lookup modi <$> getModifiers
                 midpob_loc <- getGameL10nIfPresent idpob
-                let idpob_loc = fromMaybe ("<tt>" <> idpob <> "</tt>") midpob_loc
+                let idpob_loc = fromMaybe (typewriterText idpob) midpob_loc
                 case mmod of
                     Just mod -> withCurrentIndent $ \i -> do
                         effect <- fold <$> indentUp (traverse (modifierMSG False "") (modEffects mod))
                         let name = modLocName mod
-                            locName = maybe ("<tt>" <> modi <> "</tt>") (Doc.doc2text . iquotes) name
+                            locName = maybe (typewriterText modi) (Doc.doc2text . iquotes) name
                         return ((i, MsgAddPowerBalanceModifier idpob_loc idpob locName modi) : effect)
                     _ -> trace ("add_power_balance_modifier: Modifier " ++ T.unpack modi ++ " not found") $ preStatement stmt
             _-> preStatement stmt
@@ -958,7 +959,7 @@ relationModifier msg witheffects stmt@[pdx| %_ = @scr |] =
                     effect <- if witheffects
                         then fold <$> indentUp (traverse (modifierMSG False "") (modEffects mod))
                         else return []
-                    let locName = maybe ("<tt>" <> modid <> "</tt>") (Doc.doc2text . iquotes) (modLocName mod)
+                    let locName = maybe (typewriterText modid) (Doc.doc2text . iquotes) (modLocName mod)
                     return ((i, msg locName whomflag) : effect)
                 Nothing -> trace ("relation modifier not found: " ++ T.unpack modid) $ preStatement stmt
         _ -> trace ("relation modifier: target or modifier missing: " ++ show stmt) $ preStatement stmt
@@ -1244,7 +1245,7 @@ doctrineLink kind theid = do
         -- page, has nothing to make a heading out of, so it is left as the id
         -- script called it by. That is also what says which key to go and fix.
         (Just name, Nothing) -> return name
-        _ -> return ("<tt>" <> theid <> "</tt>")
+        _ -> return (typewriterText theid)
 
 
 
@@ -1704,7 +1705,7 @@ tooltipText msg loc
 -- the token to apply it to.
 locKeyText :: (HOI4Info g, Monad m) => HashMap Text LocArg -> Text -> PPT g m Text
 locKeyText args key = case T.stripPrefix "|" rest of
-    Just token -> fromMaybe ("<tt>" <> key <> "</tt>") <$> locFormatter fmt token
+    Just token -> fromMaybe (typewriterText key) <$> locFormatter fmt token
     Nothing -> fillConstants =<< getGameL10nArgs args key
     where (fmt, rest) = T.breakOn "|" key
 
@@ -1827,7 +1828,7 @@ locArgValue val
         = case T.breakOn "." inner of
             (sid, _) | not (T.null sid), T.all isDigit sid
                 -> getStateLoc (read (T.unpack sid))
-            _ -> return ("<tt>" <> unquoted <> "</tt>")
+            _ -> return (typewriterText unquoted)
     | otherwise = locKeyText HM.empty unquoted
     where unquoted = T.dropAround (== '"') val
 
@@ -1947,7 +1948,7 @@ agencyUpgradeLink theid = do
         -- jump to; one we do not even have a name for is left as the id script
         -- called it by, which is also what says the key needs fixing.
         (Just name, Nothing) -> return name
-        _ -> return ("<tt>" <> theid <> "</tt>")
+        _ -> return (typewriterText theid)
 
 
 
@@ -1983,7 +1984,7 @@ focusLink theid = do
     case HM.lookup theid focuses of
         Just nf | Just page <- focusPage focuses nf -> msgToPP (MsgFocusLink page theid)
         Just nf -> msgToPP (MsgFocusNamed (nf_icon nf) theid (nf_name_loc nf))
-        Nothing -> msgToPP (MsgUnprocessed ("<tt>" <> theid <> "</tt>"))
+        Nothing -> msgToPP (MsgUnprocessed (typewriterText theid))
 
 -- | The wiki page a focus is written up on. Which file script keeps a focus in
 -- says which page it belongs to, bar three files the wiki writes up over two
