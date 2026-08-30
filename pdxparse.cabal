@@ -30,6 +30,7 @@ executable pdxparse
                        HOI4.Common,
                        HOI4.Decisions,
                        HOI4.Events,
+                       HOI4.EventSources,
                        HOI4.Handlers,
                        HOI4.Ideas,
                        HOI4.CountryNames,
@@ -44,6 +45,7 @@ executable pdxparse
                        HOI4.TechAndEquipment,
                        HOI4.Templates,
                        HOI4.Types,
+                       HOI4.WikiPage,
                        HOI4.WikiTables,
                        Interface
                        Localization,

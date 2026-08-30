@@ -1139,9 +1139,9 @@ instance RenderMessage Script ScriptMessage where
             -> "the currently considered unit leader"
 
         MsgPREVPREV
-            -> "[SCOPE]PREV.PREV<!-- manually check scope -->"
+            -> "PREV.PREV<!-- manually check scope -->"
         MsgPREVPREVPREV
-            -> "[SCOPE]PREV.PREV.PREV<!-- manually check scope -->"
+            -> "PREV.PREV.PREV<!-- manually check scope -->"
         MsgPREVSCOPECharacter
             -> "The previously mentioned character"
         MsgPREVSCOPECountry
@@ -1157,9 +1157,9 @@ instance RenderMessage Script ScriptMessage where
         MsgPREVSCOPEMisc
             -> "The previously mentioned var, event_target, array"
         MsgPREVSCOPECustom
-            -> "[SCOPE]Previously mentioned Custom Scope<!-- check game script for where it points to -->"
+            -> "Previously mentioned Custom Scope<!-- check game script for where it points to -->"
         MsgPREVSCOPECustom2
-            -> "[SCOPE]Custom Scope<!-- check game script for where it points to -->"
+            -> "Custom Scope<!-- check game script for where it points to -->"
         MsgPREVCharacter
             -> "the previously mentioned character"
         MsgPREVCountry
@@ -1193,11 +1193,11 @@ instance RenderMessage Script ScriptMessage where
         MsgFROM
             -> "FROM<!-- check game script for where it points to -->"
         MsgFROMSCOPE
-            -> "[SCOPE]FROM<!-- check game script for where it points to -->"
+            -> "FROM<!-- check game script for where it points to -->"
         MsgFROMFROMSCOPE
-            -> "[SCOPE]FROM.FROM<!-- check game script for where it points to -->"
+            -> "FROM.FROM<!-- check game script for where it points to -->"
         MsgFROMFROMFROMSCOPE
-            -> "[SCOPE]FROM.FROM.FROM<!-- check game script for where it points to -->"
+            -> "FROM.FROM.FROM<!-- check game script for where it points to -->"
 
         MsgMISC
             -> "MISC (scope of variable, event_target, array)"

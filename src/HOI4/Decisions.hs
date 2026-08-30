@@ -5,14 +5,6 @@ Description : Feature handler for Hearts of Iron IV decisions
 module HOI4.Decisions (
         parseHOI4Decisioncats, writeHOI4DecisionCats,
         parseHOI4Decisions, writeHOI4Decisions
-    ,   findActivatedDecisionsInEvents
-    ,   findActivatedDecisionsInDecisions
-    ,   findActivatedDecisionsInOnActions
-    ,   findActivatedDecisionsInNationalFocus
-    ,   findActivatedDecisionsInIdeas
-    ,   findActivatedDecisionsInCharacters
-    ,   findActivatedDecisionsInScriptedEffects
-    ,   findActivatedDecisionsInBops
     ) where
 
 import Debug.Trace (trace, traceM)
@@ -24,21 +16,26 @@ import Control.Monad.State (gets)
 import Control.Monad.Trans (MonadIO (..))
 
 import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
-import Data.List (intersperse, foldl', intercalate)
+import Data.List (intersperse, foldl', intercalate, nubBy, sortBy)
 
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
+import qualified Data.Map.Strict as M
 import Data.Text (Text)
 import qualified Data.Text as T
 import Text.PrettyPrint.Leijen.Text (Doc)
 import qualified Text.PrettyPrint.Leijen.Text as PP
-import System.FilePath ((</>))
+import System.FilePath ((</>), takeFileName)
 
 import Abstract -- everything
 import qualified Doc
-import FileIO (Feature (..), writeFeatures)
+import FileIO ( Feature (..), Consolidation (..), ConsolidatedFeature (..)
+              , naturalOrder, writeFeatures, writeFeaturesWith)
+import HOI4.WikiPage ( CountryIndex, buildCountryIndex
+                     , ppPageIntro, ppSectionHeader, boxWrapper)
+import HOI4.EventSources (ppSource)
 import HOI4.Messages -- everything
-import MessageTools (iquotes, italicText, formatDays)
+import MessageTools (italicText, formatDays)
 import QQ (pdx)
 import SettingsTypes ( PPT, Settings (..)
                      , IsGame (..), IsGameData (..), IsGameState (..)
@@ -425,19 +422,44 @@ decisionAddSection dec stmt
         decisionAddSection' dec _stmt = trace "unrecognised form for decision section" dec
 
 -- | Present the parsed decisions as wiki text and write them to the
--- appropriate files.
+-- appropriate files. Also write one consolidated file per decision category
+-- folder, with a wiki header before each decision so the page gets a usable
+-- table of contents.
 writeHOI4Decisions :: (HOI4Info g, MonadIO m) => PPT g m ()
 writeHOI4Decisions = do
     decisions <- getDecisions
+    countries <- buildCountryIndex
     let pathedDecisions :: [Feature HOI4Decision]
         pathedDecisions = map (\dec -> Feature {
                                         featurePath = Just $ dec_path dec
                                     ,   featureId = Just (dec_name dec) <> Just ".txt"
                                     ,   theFeature = Right dec })
                               (HM.elems decisions)
-    writeFeatures "decisions"
+    writeFeaturesWith "decisions"
                   pathedDecisions
                   (scope HOI4Country . ppdecision)
+                  (Just (ConsolidateInParent (ppDecisionsPage countries)))
+
+-- | Present one decision file's decisions as a single wiki page, a section
+-- per category, since each category is written to a folder of its own.
+ppDecisionsPage :: (HOI4Info g, Monad m) =>
+    CountryIndex -> FilePath -> [ConsolidatedFeature HOI4Decision] -> PPT g m Doc
+ppDecisionsPage countries srcPath cfs = do
+    intro <- ppPageIntro countries "decisions" srcPath
+    let byCategory = M.toAscList $
+            M.map (sortBy (\a b -> naturalOrder (cfId a) (cfId b))) $
+            M.fromListWith (++) [(T.pack (takeFileName (cfDir cf)), [cf]) | cf <- cfs]
+    sections <- mapM ppCategorySection byCategory
+    return . mconcat $ intersperse PP.line (intro : sections)
+
+-- | Present one category's decisions: a heading naming the category, then its
+-- decisions wrapped so their boxes flow together.
+ppCategorySection :: (HOI4Info g, Monad m) =>
+    (Text, [ConsolidatedFeature HOI4Decision]) -> PPT g m Doc
+ppCategorySection (catId, cfs) = do
+    mloc <- getGameL10nIfPresent catId
+    let header = ppSectionHeader (fromMaybe catId mloc) (Just catId)
+    return $ header <> PP.line <> boxWrapper (map cfDoc cfs)
 
 -- | Present a parsed decision.
 ppdecision :: forall g m. (HOI4Info g, MonadError Text m) => HOI4Decision -> PPT g m Doc
@@ -620,7 +642,9 @@ ppActivatedBy decisionId = do
     let mtriggers = HM.lookup decisionId decisionTriggers
     case mtriggers of
         Just triggers -> do
-            ts <- mapM ppDecisionSource triggers
+            -- The same source can activate a decision from several places in
+            -- its script; one mention is enough.
+            ts <- nubBy (\a b -> Doc.doc2text a == Doc.doc2text b) <$> mapM ppSource triggers
             -- FIXME: This is a bit ugly, but we only want a list if there's more than one trigger
             let ts' = if length ts < 2 then
                     ts
@@ -630,346 +654,3 @@ ppActivatedBy decisionId = do
         _ -> return [Doc.strictText ""]
 
 
-
-formatWeight :: HOI4DecisionWeight -> Text
-formatWeight Nothing = ""
-formatWeight (Just (n, d)) = T.pack (" (Base weight: " ++ show n ++ "/" ++ show d ++ ")")
-
-
-ppDecisionSource :: (HOI4Info g, Monad m) => HOI4DecisionSource -> PPT g m Doc
-ppDecisionSource (HOI4DecSrcOption eventId optionId) = do
-    eventLoc <- ppEventLoc eventId
-    optLoc <- getGameL10n optionId
-    return $ Doc.strictText $ mconcat [ "The event "
-        , eventLoc
-        , " option "
-        , iquotes't optLoc
-        ]
-ppDecisionSource (HOI4DecSrcImmediate eventId) = do
-    eventLoc <- ppEventLoc eventId
-    return $ Doc.strictText $ mconcat [ "As an immediate effect of the "
-        , eventLoc
-        , " event"
-        ]
-ppDecisionSource (HOI4DecSrcDecComplete id loc) = do
-    return $ Doc.strictText $ mconcat ["Taking the decision "
-        , "<!-- "
-        , id
-        , " -->"
-        , iquotes't loc
-        ]
-ppDecisionSource (HOI4DecSrcDecRemove id loc) = do
-    return $ Doc.strictText $ mconcat ["Finishing the decision "
-        , "<!-- "
-        , id
-        , " -->"
-        , iquotes't loc
-        ]
-ppDecisionSource (HOI4DecSrcDecCancel id loc) = do
-    return $ Doc.strictText $ mconcat ["Triggering the cancel trigger on the decision "
-        , "<!-- "
-        , id
-        , " -->"
-        , iquotes't loc
-        ]
-ppDecisionSource (HOI4DecSrcDecTimeout id loc) = do
-    return $ Doc.strictText $ mconcat ["Running out the timer on the decision "
-        , "<!-- "
-        , id
-        , " -->"
-        , iquotes't loc
-        ]
-ppDecisionSource (HOI4DecSrcOnAction act weight) = do
-    actn <- actionName act
-    return $ Doc.strictText $ actn <> formatWeight weight
-    where
-        actionName :: (HOI4Info g, Monad m) =>
-            Text -> PPT g m Text
-        actionName n
-            | "on_monthly_" `T.isPrefixOf` n = do
-                let tag = case T.stripPrefix "on_monthly_" n of
-                        Just nc -> nc
-                        _ -> "<!-- Check game Script -->"
-                let actmsg = "<!-- " <> n <>  " -->On every month for "
-                tagloc <- flagText (Just HOI4Country) tag
-                return $ actmsg <> tagloc
-            | "on_weekly_" `T.isPrefixOf` n = do
-                let tag = case T.stripPrefix "on_weekly_" n of
-                        Just nc -> nc
-                        _ -> "<!-- Check game Script -->"
-                let actmsg = "<!-- " <> n <>  " -->On every week for "
-                tagloc <- flagText (Just HOI4Country) tag
-                return $ actmsg <> tagloc
-            | "on_daily_" `T.isPrefixOf` n = do
-                let tag = case T.stripPrefix "on_daily_" n of
-                        Just nc -> nc
-                        _ -> "<!-- Check game Script -->"
-                let actmsg = "<!-- " <> n <>  " -->On every day for "
-                tagloc <- flagText (Just HOI4Country) tag
-                return $ actmsg <> tagloc
-            | otherwise =
-                return $ HM.findWithDefault ("<pre>" <> n <> "</pre>") n actionNameTable
-
-        actionNameTable :: HashMap Text Text
-        actionNameTable = HM.fromList
-            [("on_ace_killed","<!-- on_ace_killed -->On ace killed")
-            ,("on_ace_killed_by_ace","<!-- on_ace_killed_by_ace -->On ace killed by enemy ace")
-            ,("on_ace_killed_other_ace","<!-- on_ace_killed_other_ace -->On ace kills enemy ace")
-            ,("on_aces_killed_each_other","<!-- on_aces_killed_each_other -->On aces killed each other")
-            ,("on_ace_promoted","<!-- on_ace_promoted -->On ace promoted")
-            ,("on_annex", "<!-- on_annex -->On nation annexed")
-            ,("on_army_leader_daily","<!-- on_army_leader_daily -->On every day for army leader")
-            ,("on_army_leader_lost_combat","<!-- on_army_leader_lost_combat -->On army leader loses combat")
-            ,("on_army_leader_won_combat","<!-- on_army_leader_won_combat -->On army leader wins combat")
-            ,("on_border_war_lost","<!-- on_border_war_lost -->On lost border conflict war")
-            ,("on_capitulation","<!-- on_capitulation -->On nation capitulation")
-            ,("on_civil_war_end","<!-- on_civil_war_end -->On civil war end")
-            ,("on_civil_war_end_before_annexation","<!-- on_civil_war_end_before_annexation -->On civil war end before annexation")
-            ,("on_daily","<!-- on_daily -->On every day")
-            ,("on_declare_war","<!-- on_declare_war -->On declared war")
-            ,("on_faction_formed","<!-- on_faction_formed -->On faction formed")
-            ,("on_government_change","<!-- on_government_change -->On government changed")
-            ,("on_government_exiled","<!-- on_government_exiled -->On government exiled")
-            ,("on_join_faction","<!-- on_join_faction -->On faction joined")
-            ,("on_justifying_wargoal_pulse","<!-- on_justifying_wargoal_pulse -->On justifying wargoal")
-            ,("on_liberate","<!-- on_liberate -->On nation liberated")
-            ,("on_new_term_election","<!-- on_new_term_election -->On new term election")
-            ,("on_nuke_drop","<!-- on_nuke_drop -->On nuke dropped")
-            ,("on_monthly","<!-- on_monthly -->On every month")
-            ,("on_offer_join_faction","<!-- on_offer_join_faction -->On nation invited to faction")
-            ,("on_operative_captured","<!-- on_operative_captured -->On operative captured")
-            ,("on_operative_death","<!-- on_operative_death -->On operative death")
-            ,("on_operative_detected_during_operation","<!-- on_operative_detected_during_operation -->On operative detected during operation")
-            ,("on_peaceconference_ended","<!-- on_peaceconference_ended -->On peace conference ended")
-            ,("on_puppet","<!-- on_puppet -->On nation puppeted")
-            ,("on_release_as_free","<!-- on_release_as_free -->On nation released as free nation")
-            ,("on_release_as_puppet","<!-- on_release_as_puppet -->On nation released as puppet")
-            ,("on_ruling_party_change","<!-- on_ruling_party_change -->On ruling party change")
-            ,("on_state_control_changed","<!-- on_state_control_changed -->On state control changed")
-            ,("on_startup", "<!-- on_startup -->On startup")
-            ,("on_subject_annexed","<!-- on_subject_annexed -->On subject nation annexed")
-            ,("on_subject_free","<!-- on_subject_free -->On subject nation freed")
-            ,("on_unit_leader_created","<!-- on_unit_leader_created -->On army leader created")
-            ,("on_war_relation_added","<!-- on_war_relation_added -->On nation joined war")
-            ,("on_wargoal_expire","<!-- on_wargoal_expire -->On wargoal expired")
-            ,("on_weekly","<!-- on_weekly -->On every week")
-            ]
-ppDecisionSource (HOI4DecSrcNFComplete id loc icon) = do
-    iconnf <- do
-        iconname <- do
-            micon <- getGameInterfaceIfPresent ("GFX_focus_" <> id)
-            case micon of
-                Nothing -> getGameInterface "goal_unknown" icon
-                Just idicon -> return idicon
-        return $ "[[File:" <> iconname <> ".png|28px]]"
-    return $ Doc.strictText $ mconcat ["Completing the national focus "
-        , iconnf
-        , " <!-- "
-        , id
-        , " -->"
-        , iquotes't loc
-        ]
-ppDecisionSource (HOI4DecSrcNFSelect id loc icon) = do
-    iconnf <- do
-        iconname <- do
-            micon <- getGameInterfaceIfPresent ("GFX_focus_" <> id)
-            case micon of
-                Nothing -> getGameInterface "goal_unknown" icon
-                Just idicon -> return idicon
-        return $ "[[File:" <> iconname <> ".png|28px]]"
-    return $ Doc.strictText $ mconcat ["Selecting the national focus "
-        , iconnf
-        , " <!-- "
-        , id
-        , " -->"
-        , iquotes't loc
-        ]
-ppDecisionSource (HOI4DecSrcIdeaOnAdd id loc icon categ) = do
-    iconnf <- do
-        iconname <- do
-            micon <- getGameInterfaceIfPresent ("GFX_idea_" <> id)
-            case micon of
-                Nothing -> getGameInterfaceNamed icon
-                Just idicon -> return idicon
-        return $ "[[File:" <> iconname <> ".png|28px]]"
-    catloc <- getGameL10n categ
-    return $ Doc.strictText $ mconcat ["When the "
-        , catloc
-        , " "
-        , iconnf
-        , " <!-- "
-        , id
-        , " -->"
-        , iquotes't loc
-        , " is added"
-        ]
-ppDecisionSource (HOI4DecSrcIdeaOnRemove id loc icon categ) = do
-    iconnf <- do
-        iconname <- do
-            micon <- getGameInterfaceIfPresent ("GFX_idea_" <> id)
-            case micon of
-                Nothing -> getGameInterfaceNamed icon
-                Just idicon -> return idicon
-        return $ "[[File:" <> iconname <> ".png|28px]]"
-    catloc <- getGameL10n categ
-    return $ Doc.strictText $ mconcat ["When the "
-        , catloc
-        , " "
-        , iconnf
-        , " <!-- "
-        , id
-        , " -->"
-        , iquotes't loc
-        , " is removed"
-        ]
-ppDecisionSource (HOI4DecSrcCharacterOnAdd idtoken id name) = do
-    loc <- do
-        mloc <- getGameL10nIfPresent name
-        case mloc of
-            Just nloc -> return nloc
-            _-> getGameL10n idtoken
-    return $ Doc.strictText $ mconcat ["When the advisor "
-        , " <!-- "
-        , id
-        , " "
-        , idtoken
-        , " -->"
-        , iquotes't loc
-        , " is added"
-        ]
-ppDecisionSource (HOI4DecSrcCharacterOnRemove idtoken id name) = do
-    loc <- do
-        mloc <- getGameL10nIfPresent name
-        case mloc of
-            Just nloc -> return nloc
-            _-> getGameL10n idtoken
-    return $ Doc.strictText $ mconcat ["When the advisor "
-        , " <!-- "
-        , id
-        , " "
-        , idtoken
-        , " -->"
-        , iquotes't loc
-        , " is removed"
-        ]
-ppDecisionSource (HOI4DecSrcScriptedEffect id _weight) =
-    return $ Doc.strictText $ mconcat ["When scripted effect "
-        , iquotes't id
-        , " is activated"
-        ]
-ppDecisionSource (HOI4DecSrcBopOnActivate id) = do
-    loc <- getGameL10n id
-    return $ Doc.strictText $ mconcat ["When reaching the "
-        , "<!-- "
-        , id
-        , " -->"
-        , iquotes't loc
-        , " balance of power range"
-        ]
-ppDecisionSource (HOI4DecSrcBopOnDeactivate id) = do
-    loc <- getGameL10n id
-    return $ Doc.strictText $ mconcat ["When leaving the "
-        , "<!-- "
-        , id
-        , " -->"
-        , iquotes't loc
-        , " balance of power range"
-        ]
-
-
-findInStmt :: GenericStatement -> [(HOI4DecisionWeight, Text)]
-findInStmt [pdx| $lhs = $id |] | lhs == "activate_mission" = [(Nothing, id)]
-findInStmt [pdx| activate_targeted_decision = @scr |] = concatMap findInStmt' scr
-findInStmt [pdx| %_lhs = @scr |] = findInStmts scr
-findInStmt _ = []
-
-findInStmt' :: GenericStatement -> [(HOI4DecisionWeight, Text)]
-findInStmt' [pdx| $lhs = $id |] | lhs == "decision" = [(Nothing, id)]
-findInStmt' _ = []
-
-findInStmts :: [GenericStatement] -> [(HOI4DecisionWeight, Text)]
-findInStmts = concatMap findInStmt
-
-addDecisionSource :: (HOI4DecisionWeight -> HOI4DecisionSource) -> [(HOI4DecisionWeight, Text)] -> [(Text, HOI4DecisionSource)]
-addDecisionSource ds = map (\t -> (snd t, ds (fst t)))
-
-findInOptions :: Text -> [HOI4Option] -> [(Text, HOI4DecisionSource)]
-findInOptions decisionId = concatMap (\o ->
-    (\optName -> addDecisionSource (const (HOI4DecSrcOption decisionId optName)) (maybe [] (concatMap findInStmt) (hoi4opt_effects o)))
-    (fromMaybe "(Un-named option)" (hoi4opt_name o)))
-
-addDecisionTriggers :: HOI4DecisionTriggers -> [(Text, HOI4DecisionSource)] -> HOI4DecisionTriggers
-addDecisionTriggers hm l = foldl' ins hm l
-    where
-        ins :: HOI4DecisionTriggers -> (Text, HOI4DecisionSource) -> HOI4DecisionTriggers
-        ins hm (k, v) = HM.alter (\case
-            Just l -> Just $ l ++ [v]
-            Nothing -> Just [v]) k hm
-
-findActivatedDecisionsInEvents :: HOI4DecisionTriggers -> [HOI4Event] -> HOI4DecisionTriggers
-findActivatedDecisionsInEvents hm evts = addDecisionTriggers hm (concatMap findInEvent evts)
-    where
-        findInEvent :: HOI4Event -> [(Text, HOI4DecisionSource)]
-        findInEvent evt@HOI4Event{hoi4evt_id = Just eventId} =
-            (case hoi4evt_options evt of
-                Just opts -> findInOptions eventId opts
-                _ -> []) ++
-            addDecisionSource (const (HOI4DecSrcImmediate eventId)) (maybe [] findInStmts (hoi4evt_immediate evt))
-        findInEvent _ = []
-
-findActivatedDecisionsInDecisions :: HOI4DecisionTriggers -> [HOI4Decision] -> HOI4DecisionTriggers
-findActivatedDecisionsInDecisions hm ds = addDecisionTriggers hm (concatMap findInDecision ds)
-    where
-        findInDecision :: HOI4Decision -> [(Text, HOI4DecisionSource)]
-        findInDecision d =
-            addDecisionSource (const (HOI4DecSrcDecComplete (dec_name d) (dec_name_loc d))) (maybe [] findInStmts (dec_complete_effect d)) ++
-            addDecisionSource (const (HOI4DecSrcDecRemove (dec_name d) (dec_name_loc d))) (maybe [] findInStmts (dec_remove_effect d)) ++
-            addDecisionSource (const (HOI4DecSrcDecCancel (dec_name d) (dec_name_loc d))) (maybe [] findInStmts (dec_cancel_effect d)) ++
-            addDecisionSource (const (HOI4DecSrcDecTimeout (dec_name d) (dec_name_loc d))) (maybe [] findInStmts (dec_timeout_effect d))
-
-findActivatedDecisionsInOnActions :: HOI4DecisionTriggers -> [GenericStatement] -> HOI4DecisionTriggers
-findActivatedDecisionsInOnActions hm scr = foldl' findInAction hm scr
-    where
-        findInAction :: HOI4DecisionTriggers -> GenericStatement -> HOI4DecisionTriggers
-        findInAction hm [pdx|on_actions = @stmts |] = foldl' findInAction hm stmts
-        findInAction hm [pdx| $lhs = @scr |] = addDecisionTriggers hm (addDecisionSource (HOI4DecSrcOnAction lhs) (findInStmts scr))
-        findInAction hm stmt = trace ("Unknown on_actions statement: " ++ show stmt) hm
-
-findActivatedDecisionsInNationalFocus :: HOI4DecisionTriggers -> [HOI4NationalFocus] -> HOI4DecisionTriggers
-findActivatedDecisionsInNationalFocus hm nf = addDecisionTriggers hm (concatMap findInFocus nf)
-    where
-        findInFocus :: HOI4NationalFocus -> [(Text, HOI4DecisionSource)]
-        findInFocus f =
-            addDecisionSource (const (HOI4DecSrcNFComplete (nf_id f) (nf_name_loc f) (nf_icon f))) (maybe [] findInStmts (nf_completion_reward f)) ++
-            addDecisionSource (const (HOI4DecSrcNFSelect (nf_id f) (nf_name_loc f) (nf_icon f))) (maybe [] findInStmts (nf_select_effect f))
-
-findActivatedDecisionsInIdeas :: HOI4DecisionTriggers -> [HOI4Idea] -> HOI4DecisionTriggers
-findActivatedDecisionsInIdeas hm idea = addDecisionTriggers hm (concatMap findInIdea idea)
-    where
-        findInIdea :: HOI4Idea -> [(Text, HOI4DecisionSource)]
-        findInIdea idea =
-            addDecisionSource (const (HOI4DecSrcIdeaOnAdd (id_id idea) (id_name_loc idea) (id_picture idea) (id_category idea))) (maybe [] findInStmts (id_on_add idea)) ++
-            addDecisionSource (const (HOI4DecSrcIdeaOnRemove (id_id idea) (id_name_loc idea) (id_picture idea) (id_category idea))) (maybe [] findInStmts (id_on_remove idea))
-
-findActivatedDecisionsInCharacters :: HOI4DecisionTriggers -> [HOI4Advisor] -> HOI4DecisionTriggers
-findActivatedDecisionsInCharacters hm hChar = addDecisionTriggers hm (concatMap findInCharacter hChar)
-    where
-        findInCharacter :: HOI4Advisor -> [(Text, HOI4DecisionSource)]
-        findInCharacter hChar =
-            addDecisionSource (const (HOI4DecSrcCharacterOnAdd (adv_idea_token hChar) (adv_cha_id hChar) (adv_cha_name hChar))) (maybe [] findInStmts (adv_on_add hChar)) ++
-            addDecisionSource (const (HOI4DecSrcCharacterOnRemove (adv_idea_token hChar) (adv_cha_id hChar) (adv_cha_name hChar))) (maybe [] findInStmts (adv_on_remove hChar))
-
-findActivatedDecisionsInScriptedEffects :: HOI4DecisionTriggers -> [GenericStatement] -> HOI4DecisionTriggers
-findActivatedDecisionsInScriptedEffects hm scr = foldl' findInScriptEffect hm scr -- needs editing
-    where
-        findInScriptEffect :: HOI4DecisionTriggers -> GenericStatement -> HOI4DecisionTriggers
-        findInScriptEffect hm [pdx| $lhs = @scr |] = addDecisionTriggers hm (addDecisionSource (HOI4DecSrcScriptedEffect lhs) (findInStmts scr))
-        findInScriptEffect hm stmt = trace ("Unknown on_actions statement: " ++ show stmt) hm
-
-findActivatedDecisionsInBops :: HOI4DecisionTriggers -> [HOI4BopRange] -> HOI4DecisionTriggers
-findActivatedDecisionsInBops hm hBop = addDecisionTriggers hm (concatMap findInCharacter hBop)
-    where
-        findInCharacter :: HOI4BopRange -> [(Text, HOI4DecisionSource)]
-        findInCharacter hBop =
-            addDecisionSource (const (HOI4DecSrcBopOnActivate (bop_id hBop))) (maybe [] findInStmts (bop_on_activate hBop)) ++
-            addDecisionSource (const (HOI4DecSrcBopOnDeactivate (bop_id hBop))) (maybe [] findInStmts (bop_on_deactivate hBop))

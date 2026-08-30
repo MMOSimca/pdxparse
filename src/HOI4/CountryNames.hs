@@ -17,15 +17,33 @@ Formosa), and some name a country the game never does (Sakha).
 -}
 module HOI4.CountryNames (
         casualName
+    ,   casualNameTag
+    ,   looselyNamed
     ) where
 
+import Data.Char (isAlphaNum)
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
 import Data.Text (Text)
+import qualified Data.Text as T
 
 -- | The name the wiki knows a country by, for the tags it has settled one for.
 casualName :: Text -> Maybe Text
 casualName tag = HM.lookup tag casualNames
+
+-- | The tag whose wiki name is the given text, if any is. Matched loosely --
+-- case and anything that isn't a letter or digit are ignored -- so that a name
+-- taken from the name of a script file (@SovietUnion@, @New_Zealand@) still
+-- finds the country it means.
+casualNameTag :: Text -> Maybe Text
+casualNameTag name = HM.lookup (looselyNamed name) casualTags
+
+-- | Reduce a name to what is compared when matching one loosely.
+looselyNamed :: Text -> Text
+looselyNamed = T.filter isAlphaNum . T.toLower
+
+casualTags :: HashMap Text Text
+casualTags = HM.fromList [(looselyNamed name, tag) | (tag, name) <- HM.toList casualNames]
 
 casualNames :: HashMap Text Text
 casualNames = HM.fromList

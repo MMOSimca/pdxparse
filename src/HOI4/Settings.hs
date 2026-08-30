@@ -34,12 +34,8 @@ import Yaml (LocEntry (..))
 
 -- Handlers
 import HOI4.Decisions (parseHOI4Decisioncats, writeHOI4DecisionCats
-                      ,parseHOI4Decisions, writeHOI4Decisions
-                      ,findActivatedDecisionsInEvents, findActivatedDecisionsInDecisions
-                      ,findActivatedDecisionsInOnActions, findActivatedDecisionsInNationalFocus
-                      ,findActivatedDecisionsInIdeas, findActivatedDecisionsInCharacters
-                      ,findActivatedDecisionsInScriptedEffects
-                      ,findActivatedDecisionsInBops)
+                      ,parseHOI4Decisions, writeHOI4Decisions)
+import HOI4.EventSources -- everything
 import HOI4.Ideas (parseHOI4Ideas
     --, writeHOI4Ideas
     )
@@ -48,12 +44,7 @@ import HOI4.Modifiers (
                     , parseHOI4DynamicModifiers, writeHOI4DynamicModifiers
                     , parseHOI4Modifiers)
 import HOI4.NationalFocus(parseHOI4NationalFocuses, writeHOI4NationalFocuses)
-import HOI4.Events (parseHOI4Events, writeHOI4Events
-                   , findTriggeredEventsInEvents, findTriggeredEventsInDecisions
-                   , findTriggeredEventsInOnActions, findTriggeredEventsInNationalFocus
-                   , findTriggeredEventsInIdeas, findTriggeredEventsInCharacters
-                   , findTriggeredEventsInScriptedEffects
-                   , findTriggeredEventsInBops)
+import HOI4.Events (parseHOI4Events, writeHOI4Events)
 import HOI4.CharactersAndTraits (parseHOI4Characters, parseHOI4CountryLeaderTraits, parseHOI4UnitLeaderTraits)
 
 import HOI4.TechAndEquipment (parseHOI4TechnologiesPath, writeHOI4Technologies, parseHOI4UnitTags, parseHOI4Units)
@@ -161,6 +152,7 @@ instance IsGame HOI4 where
                 ,   hoi4scriptedloc = HM.empty
                 ,   hoi4scriptconstantScripts = HM.empty
                 ,   hoi4scriptconstants = HM.empty
+                ,   hoi4extraScripts = HM.empty
                 ,   hoi4lockeys = []
                 ,   hoi4modkeys = []
                 }))
@@ -372,6 +364,9 @@ instance HOI4Info HOI4 where
     getScriptConstants = do
         HOI4D ed <- get
         return (hoi4scriptconstants ed)
+    getExtraScripts = do
+        HOI4D ed <- get
+        return (hoi4extraScripts ed)
     getLocKeys = do
         HOI4D ed <- get
         return (hoi4lockeys ed)
@@ -439,6 +434,10 @@ readHOI4Scripts = do
                     "buildings" -> "common" </> "buildings"
                     "mio" -> "common" </> "military_industrial_organization" </> "organizations"
                     "script_constants" -> "common" </> "script_constants"
+                    "special_projects" -> "common" </> "special_projects" </> "projects"
+                    "operations" -> "common" </> "operations"
+                    "raids" -> "common" </> "raids"
+                    "resistance_compliance_modifiers" -> "common" </> "resistance_compliance_modifiers"
                     _          -> category
                 sourceDir = buildPath settings sourceSubdir
             direxist <- liftIO $ doesDirectoryExist sourceDir
@@ -480,6 +479,10 @@ readHOI4Scripts = do
     buildingscript <- readHOI4Script "buildings"
     mioscript <- readHOI4Script "mio"
     constantscript <- readHOI4Script "script_constants"
+    -- Read only to be searched for fired events and activated decisions.
+    extrascripts <- HM.fromList <$> forM
+        ["special_projects", "operations", "raids", "resistance_compliance_modifiers"]
+        (\cat -> (,) cat <$> readHOI4Script cat)
     lockeys <- gets (gameL10nKeys . getSettings)
 
     modify $ \(HOI4D s) -> HOI4D $ s {
@@ -514,6 +517,7 @@ readHOI4Scripts = do
         ,   hoi4mioScripts = mioscript
         ,   hoi4scriptedlocScripts = scripted_localisation
         ,   hoi4scriptconstantScripts = constantscript
+        ,   hoi4extraScripts = extrascripts
         ,   hoi4lockeys = lockeys
         }
 
@@ -563,6 +567,8 @@ parseHOI4Scripts = do
     constants <- parseHOI4ScriptConstants =<< getScriptConstantScripts
     modkeys <- parseHOI4LocKeys =<< getLocKeys
 
+    extraScripts <- getExtraScripts
+    let extra cat = concat (HM.elems (HM.lookupDefault HM.empty cat extraScripts))
     let te1 = findTriggeredEventsInEvents HM.empty (HM.elems events)
         te2 = findTriggeredEventsInDecisions te1 (HM.elems decisions)
         te3 = findTriggeredEventsInOnActions te2 (concat (HM.elems on_actions))
@@ -571,6 +577,10 @@ parseHOI4Scripts = do
         te6 = findTriggeredEventsInCharacters te5 (HM.elems chartoken)
         te7 = findTriggeredEventsInScriptedEffects te6 (HM.elems scriptedeffects)
         te8 = findTriggeredEventsInBops te7 (HM.elems bops)
+        te9 = findTriggeredEventsInGenericScripts HOI4SrcSpecialProject te8 (extra "special_projects")
+        te10 = findTriggeredEventsInGenericScripts HOI4SrcOperation te9 (extra "operations")
+        te11 = findTriggeredEventsInGenericScripts HOI4SrcRaid te10 (extra "raids")
+        te12 = findTriggeredEventsInGenericScripts HOI4SrcComplianceMod te11 (extra "resistance_compliance_modifiers")
     let td1 = findActivatedDecisionsInEvents HM.empty (HM.elems events)
         td2 = findActivatedDecisionsInDecisions td1 (HM.elems decisions)
         td3 = findActivatedDecisionsInOnActions td2 (concat (HM.elems on_actions))
@@ -579,6 +589,10 @@ parseHOI4Scripts = do
         td6 = findActivatedDecisionsInCharacters td5 (HM.elems chartoken)
         td7 = findActivatedDecisionsInScriptedEffects td6 (HM.elems scriptedeffects)
         td8 = findActivatedDecisionsInBops td7 (HM.elems bops)
+        td9 = findActivatedDecisionsInGenericScripts HOI4SrcSpecialProject td8 (extra "special_projects")
+        td10 = findActivatedDecisionsInGenericScripts HOI4SrcOperation td9 (extra "operations")
+        td11 = findActivatedDecisionsInGenericScripts HOI4SrcRaid td10 (extra "raids")
+        td12 = findActivatedDecisionsInGenericScripts HOI4SrcComplianceMod td11 (extra "resistance_compliance_modifiers")
     modify $ \(HOI4D s) -> HOI4D $
             s { hoi4events = events
             ,   hoi4decisioncats = decisioncats
@@ -586,8 +600,8 @@ parseHOI4Scripts = do
             ,   hoi4ideas = ideas
             ,   hoi4opmods = opinionModifiers
             ,   hoi4nationalfocus = nationalFocus
-            ,   hoi4eventTriggers = te8
-            ,   hoi4decisionTriggers = td8
+            ,   hoi4eventTriggers = te12
+            ,   hoi4decisionTriggers = td12
             ,   hoi4dynamicmodifiers = dynamicModifiers
             ,   hoi4modifiers = modifiers
 

@@ -8,9 +8,10 @@ module HOI4.Types (
     ,   HOI4Info (..)
         -- * Features
     ,   HOI4EvtTitle (..), HOI4EvtDesc (..), HOI4Event (..), HOI4Option (..)
-    ,   HOI4EventSource (..), HOI4EventTriggers, HOI4EventWeight
+    ,   HOI4Source (..), HOI4SourceWeight
+    ,   HOI4EventTriggers, HOI4EventWeight
     ,   HOI4Decision (..), HOI4DecisionCost(..), HOI4DecisionIcon(..), HOI4Decisioncat (..)
-    ,   HOI4DecisionSource (..), HOI4DecisionTriggers, HOI4DecisionWeight
+    ,   HOI4DecisionTriggers, HOI4DecisionWeight
     ,   HOI4Idea (..)
     ,   HOI4OpinionModifier (..)
     ,   HOI4DynamicModifier (..)
@@ -110,6 +111,10 @@ data HOI4Data = HOI4Data {
                                  --   tries them
     ,   hoi4scriptconstantScripts :: HashMap FilePath GenericScript
     ,   hoi4scriptconstants :: HashMap Text Double -- ^ dotted path -> value
+    ,   hoi4extraScripts :: HashMap String (HashMap FilePath GenericScript)
+            -- ^ Scripts read only to be searched for fired events and
+            --   activated decisions (special projects, operations, raids,
+            --   resistance/compliance modifiers), keyed on category
     ,   hoi4lockeys :: [Text]
     ,   hoi4modkeys :: [Text]
     }
@@ -258,6 +263,9 @@ class (IsGame g,
     -- | Get the numbers script can name instead of writing out, keyed on the
     -- dotted path that names each
     getScriptConstants :: Monad m => PPT g m (HashMap Text Double)
+    -- | Get the scripts that are read only to be searched for fired events
+    -- and activated decisions, keyed on category
+    getExtraScripts :: Monad m => PPT g m (HashMap String (HashMap FilePath GenericScript))
     -- | Get the lockeys
     getLocKeys :: Monad m => PPT g m [Text]
     -- | Get the modkeys parsed
@@ -332,51 +340,39 @@ data HOI4Option = HOI4Option
     ,   hoi4opt_effects :: Maybe GenericScript   -- ^ What happens if the player/AI chooses this option
     } deriving (Show)
 
-type HOI4EventWeight = Maybe (Integer, Integer) -- Rational reduces the number, which we don't want
+type HOI4SourceWeight = Maybe (Integer, Integer) -- Rational reduces the number, which we don't want
+type HOI4EventWeight = HOI4SourceWeight
+type HOI4DecisionWeight = HOI4SourceWeight
 
-data HOI4EventSource =
-      HOI4EvtSrcImmediate Text                      -- Immediate effect of an event (arg is event ID)
-    | HOI4EvtSrcOption Text Text                    -- Effect of choosing an event option (args are event ID and option ID)
-    | HOI4EvtSrcDecComplete Text Text               -- Effect of completing a decision (args are id and localized decision text)
-    | HOI4EvtSrcDecRemove Text Text                 -- Effect of taking a timed decision and letting it finish (args are id and localized decision text)
-    | HOI4EvtSrcDecCancel Text Text                 -- Effect of taking a decision and it being canceled (args are id and localized decision text)
-    | HOI4EvtSrcDecTimeout Text Text                -- Effect of taking a decision/mission and letting it timeout (args are id and localized decision text)
-    | HOI4EvtSrcOnAction Text HOI4EventWeight       -- An effect from on_actions (args are the trigger and weight)
-    | HOI4EvtSrcNFComplete Text Text Text           -- Effect of completing a national focus
-    | HOI4EvtSrcNFSelect Text Text Text             -- Effect of selecting a national focus
-    | HOI4EvtSrcIdeaOnAdd Text Text Text Text       -- Effect of adding an idea
-    | HOI4EvtSrcIdeaOnRemove Text Text Text Text    -- Effect of removing an idea
-    | HOI4EvtSrcCharacterOnAdd Text Text Text            -- Effect of adding an advisor
-    | HOI4EvtSrcCharacterOnRemove Text Text Text         -- Effect of removing an advisor
-    | HOI4EvtSrcScriptedEffect Text HOI4EventWeight -- Effect of a scripted effect
-    | HOI4EvtSrcBopOnActivate Text                  -- Effect of a balance of power range activation
-    | HOI4EvtSrcBopOnDeactivate Text                -- Effect of a balance of power range deactivation
+-- | A piece of game content that fires an event or activates a decision.
+-- Shared between the event "triggered by" and decision "activated by" tables.
+data HOI4Source =
+      HOI4SrcImmediate Text                      -- Immediate effect of an event (arg is event ID)
+    | HOI4SrcAfter Text                          -- After effect of an event, run when any option is chosen (arg is event ID)
+    | HOI4SrcOption Text Text                    -- Effect of choosing an event option (args are event ID and option ID)
+    | HOI4SrcDecComplete Text Text               -- Effect of completing a decision (args are id and localized decision text)
+    | HOI4SrcDecRemove Text Text                 -- Effect of taking a timed decision and letting it finish (args are id and localized decision text)
+    | HOI4SrcDecCancel Text Text                 -- Effect of taking a decision and it being canceled (args are id and localized decision text)
+    | HOI4SrcDecTimeout Text Text                -- Effect of taking a decision/mission and letting it timeout (args are id and localized decision text)
+    | HOI4SrcOnAction Text HOI4SourceWeight      -- An effect from on_actions (args are the trigger and weight)
+    | HOI4SrcNFComplete Text Text Text           -- Effect of completing a national focus
+    | HOI4SrcNFSelect Text Text Text             -- Effect of selecting a national focus
+    | HOI4SrcIdeaOnAdd Text Text Text Text       -- Effect of adding an idea
+    | HOI4SrcIdeaOnRemove Text Text Text Text    -- Effect of removing an idea
+    | HOI4SrcCharacterOnAdd Text Text Text       -- Effect of adding an advisor
+    | HOI4SrcCharacterOnRemove Text Text Text    -- Effect of removing an advisor
+    | HOI4SrcScriptedEffect Text HOI4SourceWeight -- Effect of a scripted effect
+    | HOI4SrcBopOnActivate Text                  -- Effect of a balance of power range activation
+    | HOI4SrcBopOnDeactivate Text                -- Effect of a balance of power range deactivation
+    | HOI4SrcSpecialProject Text                 -- Effect somewhere in a special project (arg is project ID)
+    | HOI4SrcOperation Text                      -- Effect somewhere in an intelligence operation (arg is operation ID)
+    | HOI4SrcRaid Text                           -- Effect somewhere in a raid (arg is raid ID)
+    | HOI4SrcComplianceMod Text                  -- Effect of a resistance/compliance modifier (arg is modifier ID)
     deriving Show
 
-type HOI4EventTriggers = HashMap Text [HOI4EventSource]
+type HOI4EventTriggers = HashMap Text [HOI4Source]
 
-type HOI4DecisionWeight = Maybe (Integer, Integer) -- Rational reduces the number, which we don't want
-
-data HOI4DecisionSource =
-      HOI4DecSrcImmediate Text                      -- Immediate effect of an decision (arg is decision ID)
-    | HOI4DecSrcOption Text Text                    -- Effect of choosing an decision option (args are decision ID and option ID)
-    | HOI4DecSrcDecComplete Text Text               -- Effect of completing a decision (args are id and localized decision text)
-    | HOI4DecSrcDecRemove Text Text                 -- Effect of taking a timed decision and letting it finish (args are id and localized decision text)
-    | HOI4DecSrcDecCancel Text Text                 -- Effect of taking a decision and it being canceled (args are id and localized decision text)
-    | HOI4DecSrcDecTimeout Text Text                -- Effect of taking a decision/mission and letting it timeout (args are id and localized decision text)
-    | HOI4DecSrcOnAction Text HOI4DecisionWeight    -- An effect from on_actions (args are the trigger and weight)
-    | HOI4DecSrcNFComplete Text Text Text           -- Effect of completing a national focus
-    | HOI4DecSrcNFSelect Text Text Text             -- Effect of selecting a national focus
-    | HOI4DecSrcIdeaOnAdd Text Text Text Text       -- Effect of adding an idea
-    | HOI4DecSrcIdeaOnRemove Text Text Text Text    -- Effect of removing an idea
-    | HOI4DecSrcCharacterOnAdd Text Text Text            -- Effect of adding an advisor
-    | HOI4DecSrcCharacterOnRemove Text Text Text         -- Effect of removing an advisor
-    | HOI4DecSrcScriptedEffect Text HOI4DecisionWeight -- Effect of a scripted effect
-    | HOI4DecSrcBopOnActivate Text                  -- Effect of a balance of power range activation
-    | HOI4DecSrcBopOnDeactivate Text                -- Effect of a balance of power range deactivation
-    deriving Show
-
-type HOI4DecisionTriggers = HashMap Text [HOI4DecisionSource]
+type HOI4DecisionTriggers = HashMap Text [HOI4Source]
 
 -- | Idea data.
 data HOI4Idea = HOI4Idea

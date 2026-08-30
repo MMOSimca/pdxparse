@@ -7,7 +7,12 @@ module FileIO (
     ,   readScript
     ,   readPathScript
     ,   Feature (..)
+    ,   Consolidation (..)
+    ,   ConsolidatedFeature (..)
+    ,   ConsolidationRender
+    ,   naturalOrder
     ,   writeFeatures
+    ,   writeFeaturesWith
     ) where
 
 import Debug.Trace (trace)
@@ -20,7 +25,9 @@ import Control.Exception (try)
 
 import qualified Data.ByteString as B
 
-import Data.Char (isSpace)
+import Data.Char (isSpace, isDigit)
+import Data.HashMap.Strict (HashMap)
+import qualified Data.HashMap.Strict as HM
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
@@ -28,7 +35,7 @@ import Data.Text.Encoding.Error (UnicodeException)
 import qualified Data.Text.Encoding as TE
 
 import System.Directory (createDirectoryIfMissing)
-import System.FilePath ((</>), takeDirectory, dropDrive)
+import System.FilePath ((</>), takeDirectory, takeFileName, takeBaseName, dropDrive)
 import System.IO (withFile, IOMode (..), hPutStrLn, stderr)
 
 import qualified Data.Attoparsec.Text as Ap
@@ -36,8 +43,9 @@ import Text.PrettyPrint.Leijen.Text (Doc)
 import qualified Text.PrettyPrint.Leijen.Text as PP
 
 import Abstract -- everything
+import qualified Doc
 import SettingsTypes (Settings (..), IsGameData (..), GameData (..), PPT, hoistExceptions)
-import Data.List (intercalate)
+import Data.List (intercalate, intersperse, sortBy)
 
 -- | Read a file as Text. Unfortunately script files use several incompatible
 -- encodings. Try the following encodings in order:
@@ -176,6 +184,32 @@ writeFeature path gamefold output = do
             Left err -> hPutStrLn stderr $
                 "Error writing " ++ show (err::IOError)
 
+-- | A feature as it goes into a consolidated file.
+data ConsolidatedFeature a = ConsolidatedFeature
+    {   cfDir :: FilePath -- ^ Directory the feature's own file was written to
+    ,   cfId :: Text      -- ^ Feature id, as its own file was named
+    ,   cfFeature :: a    -- ^ The feature itself
+    ,   cfDoc :: Doc      -- ^ Its rendering
+    }
+
+-- | Build the body of one consolidated file, given the directory it will be
+-- written to and every feature belonging in it, in no particular order.
+type ConsolidationRender g m a =
+    FilePath -> [ConsolidatedFeature a] -> PPT g (ExceptT Text m) Doc
+
+-- | How 'writeFeaturesWith' should build consolidated @_all.txt@ files. The
+-- constructor says where each one goes; the function it carries decides
+-- everything about what goes in it.
+data Consolidation g m a
+    = ConsolidateHere (ConsolidationRender g m a)
+        -- ^ One file per feature folder, named after that folder.
+    | ConsolidateInParent (ConsolidationRender g m a)
+        -- ^ One file in the parent of each feature folder, named after the
+        -- parent, holding the features of all of its subfolders. For features
+        -- written into a subfolder per group -- decisions, in a folder per
+        -- category -- this puts the whole script file on one page, with the
+        -- subfolders left to become its sections.
+
 -- | Given a list of features, present them and output to the appropriate files
 -- under the directory @./output@.
 writeFeatures :: (IsGameData (GameData g), MonadIO m) =>
@@ -184,7 +218,20 @@ writeFeatures :: (IsGameData (GameData g), MonadIO m) =>
         -> (a -> PPT g (ExceptT Text m) Doc) -- ^ Rendering function
         -- PPT g (ExceptT Text IO) = StateT Settings (ReaderT GameState (ExceptT Text IO))
         -> PPT g m ()
-writeFeatures featureName features pprint = do
+writeFeatures featureName features pprint =
+    writeFeaturesWith featureName features pprint Nothing
+
+-- | Like 'writeFeatures', but when given a 'Consolidation', also write
+-- consolidated @\<dirname\>_all.txt@ files holding every feature of a
+-- directory sorted by id, with wiki headers so the page gets a table of
+-- contents when put on the wiki.
+writeFeaturesWith :: (IsGameData (GameData g), MonadIO m) =>
+    Text -- ^ Name of feature (e.g. "idea groups")
+        -> [Feature a]
+        -> (a -> PPT g (ExceptT Text m) Doc) -- ^ Rendering function
+        -> Maybe (Consolidation g m a) -- ^ Whether and how to consolidate
+        -> PPT g m ()
+writeFeaturesWith featureName features pprint mconsolidate = do
     gamefoldr <- gets (gameOrModFolder . getSettings)
     efeatures_pathed_pp'd <- forM features $ \feature ->
         case theFeature feature of
@@ -192,24 +239,24 @@ writeFeatures featureName features pprint = do
                 -- Error was passed to us - report it
                 return (feature {
                         theFeature = Left $ "Error while parsing" <> featureName <> ":" <> err
-                    })
+                    }, Nothing)
             Right thing -> case (featurePath feature, featureId feature) of
                 (Just _, Just _) -> do
                     doc <- hoistExceptions (pprint thing)
-                    return (feature { theFeature = Right doc })
+                    return (feature { theFeature = Right doc }, Just thing)
                 (Nothing, Nothing) -> return (feature {
                         theFeature = Left $ "Error while writing " <> featureName
                                         <> ": missing path and id"
-                    })
+                    }, Nothing)
                 (Nothing, Just oid) -> return (feature {
                         theFeature = Left $ "Error while writing " <> featureName
                                         <> " " <> oid <> ": missing path"
-                    })
+                    }, Nothing)
                 (Just path, Nothing) -> return (feature {
                         theFeature = Left $ "Error while writing " <> featureName
                                         <> " " <> T.pack path <> ": missing id"
-                    })
-    liftIO $ forM_ efeatures_pathed_pp'd $ \feature -> case theFeature feature of
+                    }, Nothing)
+    liftIO $ forM_ (map fst efeatures_pathed_pp'd) $ \feature -> case theFeature feature of
         Right (Right output) -> case (featurePath feature, featureId feature) of
             (Just sourcePath, Just feature_id) ->
                 writeFeature (sourcePath </> T.unpack feature_id) gamefoldr output
@@ -223,5 +270,45 @@ writeFeatures featureName features pprint = do
             eitherError (Right (Right _)) = error "impossible: fall through in writeFeatures"
             eitherError (Right (Left err)) = err
             eitherError (Left err) = err
-    -- TODO: within each input file, sort by id, then write to a
-    -- consolidated file.
+    -- Consolidated files.
+    let rendered = [ ConsolidatedFeature path fid thing output
+                   | (feature, Just thing) <- efeatures_pathed_pp'd
+                   , Right (Right output) <- [theFeature feature]
+                   , Just path <- [featurePath feature]
+                   , Just fid <- [featureId feature]
+                   ]
+    case mconsolidate of
+        Nothing -> return ()
+        Just consolidation -> do
+            let (dirOf, render) = case consolidation of
+                    ConsolidateHere r -> (id, r)
+                    ConsolidateInParent r -> (takeDirectory, r)
+                entries = HM.fromListWith (++)
+                    [(dirOf (cfDir cf), [cf]) | cf <- rendered]
+            forM_ (HM.toList entries) $ \(dir, cfs) -> do
+                -- The body is built here rather than in IO because it needs
+                -- game data: localization, the version, and the like.
+                ebody <- hoistExceptions (render dir cfs)
+                case ebody of
+                    Left err -> liftIO . TIO.putStrLn $
+                        "Error while writing consolidated " <> featureName
+                            <> " in " <> T.pack dir <> ": " <> err
+                    Right body -> liftIO $
+                        writeFeature (dir </> aggFileName dir) gamefoldr body
+
+-- | Name of the consolidated file for an output directory.
+aggFileName :: FilePath -> FilePath
+aggFileName path =
+    let base = takeBaseName path
+    in (if null base then "all" else base ++ "_all") ++ ".txt"
+
+-- | Compare two feature ids so that runs of digits sort by value:
+-- "germany.2" before "germany.10".
+naturalOrder :: Text -> Text -> Ordering
+naturalOrder a b = compare (key a) (key b)
+    where
+        key :: Text -> [Either Integer Text]
+        key = map toChunk . T.groupBy (\x y -> isDigit x == isDigit y) . T.toLower
+        toChunk g
+            | T.all isDigit g = Left (read (T.unpack g))
+            | otherwise = Right g

@@ -16,11 +16,48 @@ module HOI4.WikiTables (
     ,   focusPages
     ,   focusPageSplits
     ,   focusTagPages
+    ,   expansionOfPrefix
     ) where
 
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
 import Data.Text (Text)
+import qualified Data.Text as T
+
+-- | The expansion whose content a script file holds, named as the wiki's
+-- @Expansion@ template names it, worked out from the prefix the file's name
+-- starts with (@MUN_Czechoslovakia.txt@ is Peace for Our Time content).
+--
+-- The game ships every expansion's script in the base folders, so the file
+-- name is the only thing that says which expansion added it. Each pairing
+-- below is the one the expansion's own folder under @dlc/@ shows, where its
+-- interface files carry the script prefix (@mun_portraits.gfx@) and its music
+-- files the name the wiki uses (@music_pfot.asset@).
+expansionOfPrefix :: Text -> Maybe Text
+expansionOfPrefix prefix = HM.lookup (T.toLower prefix) expansionPrefixes
+
+expansionPrefixes :: HashMap Text Text
+expansionPrefixes = HM.fromList
+    [ ("tfv",  "tfv")   -- Together for Victory
+    , ("dod",  "dod")   -- Death or Dishonor
+    , ("wtt",  "wtt")   -- Waking the Tiger
+    , ("mtg",  "mtg")   -- Man the Guns
+    , ("lar",  "lar")   -- La Resistance
+    , ("bftb", "bftb")  -- Battle for the Bosporus
+    , ("bfb",  "bftb")
+    , ("nsb",  "nsb")   -- No Step Back
+    , ("bba",  "bba")   -- By Blood Alone
+    , ("aat",  "aat")   -- Arms Against Tyranny
+    , ("toa",  "toa")   -- Trial of Allegiance
+    , ("wuw",  "gtd")   -- Gotterdammerung
+    , ("ww",   "gtd")
+    , ("got",  "gtd")
+    , ("goe",  "goe")   -- Graveyard of Empires
+    , ("sea",  "ncns")  -- No Compromise, No Surrender
+    , ("ncns", "ncns")
+    , ("mun",  "pfot")  -- Peace for Our Time
+    , ("taog", "taog")  -- Thunder at Our Gates
+    ]
 
 -- | Table of script atom -> icon key. Only ones that are different are listed.
 -- This is for buildings and the like named by a script atom; buildings named by
