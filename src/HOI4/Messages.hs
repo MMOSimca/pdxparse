@@ -6174,7 +6174,29 @@ imsg2doc msgs = do
     said <- mapM (\(i, rm) -> (,) i <$> messageText rm) msgs
     return . PP.vsep $
         [ PP.hsep [Doc.strictText (T.replicate i "*"), Doc.strictText line]
-        | (i, line) <- rollUpStates said ]
+        | (i, line) <- rollUpStates (rollUpHeaders said) ]
+
+-- | Draw a heading together with the lone line under it, so that the two read
+-- as one sentence rather than as a heading with a single item hanging off it.
+-- Script wraps a lot of single conditions and effects in blocks of their own
+-- -- a state, a scope, a branch -- and each wrapper is a line saying nothing
+-- but that another line follows. Only a line ending in a colon counts as a
+-- heading, and it is only joined once everything under it has itself folded
+-- to a single line, so a heading over a list keeps its list. Folding runs
+-- bottom up, so a chain of lone headings folds all the way to one line. A
+-- @\<pre\>@ is a statement we failed to read and keeps a line of its own to
+-- be seen on, as everywhere else.
+rollUpHeaders :: [(Int, Text)] -> [(Int, Text)]
+rollUpHeaders = go
+    where
+        go [] = []
+        go ((i, line) : rest) =
+            let (deeper, siblings) = span ((> i) . fst) rest
+            in case go deeper of
+                [(j, single)] | j == i + 1, ":" `T.isSuffixOf` line
+                              , not ("<pre>" `T.isPrefixOf` single) ->
+                    (i, line <> " " <> single) : go siblings
+                folded -> (i, line) : folded ++ go siblings
 
 -- | Draw together a run of lines that each say the very same thing of a single
 -- state, so that the states are named in one go rather than a line apiece.
