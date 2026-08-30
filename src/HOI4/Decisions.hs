@@ -35,7 +35,7 @@ import HOI4.WikiPage ( CountryIndex, buildCountryIndex
                      , ppPageIntro, ppSectionHeader, boxWrapper, requiresDebug)
 import HOI4.EventSources (ppSource)
 import HOI4.Messages -- everything
-import MessageTools (italicText, formatDays)
+import MessageTools (italicText, plainNum, typewriterText)
 import QQ (pdx)
 import SettingsTypes ( PPT, Settings (..)
                      , IsGame (..), IsGameData (..), IsGameState (..)
@@ -198,7 +198,7 @@ ppdecisioncat decc = setCurrentFile (decc_path decc) $ withCategoryIdents decc $
 -- | Empty decision. Starts off Nothing/empty everywhere, except id and name
 -- (which should get filled in immediately).
 newDecision :: HOI4Decision
-newDecision = HOI4Decision undefined undefined Nothing Nothing Nothing Nothing Nothing Nothing False Nothing Nothing False Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing False Nothing False Nothing Nothing False Nothing Nothing Nothing Nothing undefined undefined
+newDecision = HOI4Decision undefined undefined Nothing Nothing Nothing Nothing Nothing Nothing False Nothing Nothing False Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing False Nothing False Nothing Nothing False Nothing Nothing Nothing Nothing undefined undefined
 
 -- | Take the decisions scripts from game data and parse them into decision
 -- data structures.
@@ -208,7 +208,8 @@ parseHOI4Decisions scripts = HM.unions . HM.elems <$> do
     tryParse <- hoistExceptions $
         HM.traverseWithKey
             (\sourceFile scr ->
-                setCurrentFile sourceFile $ concat <$> mapM parseHOI4DecisionGroup scr)
+                setCurrentFile sourceFile $
+                    concat <$> mapM (parseHOI4DecisionGroup (fileVars scr)) scr)
             scripts
     case tryParse of
         Left err -> do
@@ -226,27 +227,29 @@ parseHOI4Decisions scripts = HM.unions . HM.elems <$> do
                       mkDecMap = HM.fromList . map (dec_name &&& id)
 
 -- | Parse one file's decision groups scripts into decision data structures.
+-- The constants the file defines for itself come along with them: a file often
+-- gives several of its decisions their cost by naming one of those.
 parseHOI4DecisionGroup :: (HOI4Info g, Monad m) =>
-    GenericStatement -> PPT g (ExceptT Text m) [Either Text (Maybe HOI4Decision)]
-parseHOI4DecisionGroup (StatementBare _) = throwError "bare statement at top level"
-parseHOI4DecisionGroup [pdx| $left = @scr |]
-    = forM scr $ \stmt -> (Right <$> parseHOI4Decision stmt left)
+    HashMap Text Double -> GenericStatement -> PPT g (ExceptT Text m) [Either Text (Maybe HOI4Decision)]
+parseHOI4DecisionGroup _ (StatementBare _) = throwError "bare statement at top level"
+parseHOI4DecisionGroup vars [pdx| $left = @scr |]
+    = forM scr $ \stmt -> (Right <$> parseHOI4Decision vars stmt left)
                             `catchError` (return . Left)
-parseHOI4DecisionGroup [pdx| %check = %_ |] = case check of
+parseHOI4DecisionGroup _ [pdx| %check = %_ |] = case check of
     AtLhs _ -> return [Right Nothing]
     _-> throwError "unrecognized form for decision block (LHS)"
-parseHOI4DecisionGroup _ = withCurrentFile $ \file ->
+parseHOI4DecisionGroup _ _ = withCurrentFile $ \file ->
     throwError ("unrecognised form for decision in " <> T.pack file)
 
 -- | Parse one decision script into a decision data structure.
 parseHOI4Decision :: (HOI4Info g, Monad m) =>
-    GenericStatement -> Text -> PPT g (ExceptT Text m) (Maybe HOI4Decision)
-parseHOI4Decision [pdx| $decName = %rhs |] category = case rhs of
+    HashMap Text Double -> GenericStatement -> Text -> PPT g (ExceptT Text m) (Maybe HOI4Decision)
+parseHOI4Decision vars [pdx| $decName = %rhs |] category = case rhs of
     CompoundRhs parts -> do
         decName_loc <- wikifyLocColours <$> getGameL10n decName
         decDesc <- getGameL10nIfPresent (decName <> "_desc")
         withCurrentFile $ \sourcePath ->
-            foldM decisionAddSection
+            foldM (decisionAddSection vars)
                   (Just (newDecision { dec_name = decName
                               , dec_name_loc = decName_loc
                               , dec_desc = decDesc
@@ -254,25 +257,32 @@ parseHOI4Decision [pdx| $decName = %rhs |] category = case rhs of
                               , dec_cat = category}))
                   parts
     _ -> throwError "unrecognized form for decision (RHS)"
-parseHOI4Decision [pdx| %check = %_ |] _ = case check of
+parseHOI4Decision _ [pdx| %check = %_ |] _ = case check of
     AtLhs _ -> return Nothing
     _-> throwError "unrecognized form for decision block (LHS)"
-parseHOI4Decision _ _ = throwError "unrecognized form for decision (LHS)"
+parseHOI4Decision _ _ _ = throwError "unrecognized form for decision (LHS)"
 
 -- | Add a sub-clause of the decision script to the data structure.
 decisionAddSection :: (HOI4Info g, MonadError Text m) =>
-    Maybe HOI4Decision -> GenericStatement -> PPT g m (Maybe HOI4Decision)
-decisionAddSection Nothing _ = return Nothing
+    HashMap Text Double -> Maybe HOI4Decision -> GenericStatement -> PPT g m (Maybe HOI4Decision)
+decisionAddSection _ Nothing _ = return Nothing
 -- desc needs localization, so it can't be handled in the pure code below
-decisionAddSection dec [pdx| desc = %rhs |] = case rhs of
+decisionAddSection _ dec [pdx| desc = %rhs |] = case rhs of
     GenericRhs txt [] -> do
         mloc <- getGameL10nIfPresent txt
         return $ (\d -> d { dec_desc = maybe (dec_desc d) Just mloc }) <$> dec
     -- compound desc (text with triggers); keep the default localization
     _ -> return dec
-decisionAddSection dec stmt
+decisionAddSection vars dec stmt
     = return $ (`decisionAddSection'` stmt) <$> dec
     where -- the QQ pdx patternmatching takes to long to compile with this many patterns so using case of here
+        -- A cost the script names rather than writes out. A name beginning with
+        -- @\@@ is a constant the file itself defines, and stands for the number
+        -- it was given there; anything else is a variable the game works out as
+        -- it draws the decision, which nothing but its own name can say.
+        namedCost txt = case HM.lookup (fromMaybe txt (T.stripPrefix "@" txt)) vars of
+            Just num -> HOI4DecisionCostSimple (round num)
+            Nothing -> HOI4DecisionCostVariable txt
         decisionAddSection' dec stmt@[pdx| $lhs = %rhs |] = case T.toLower lhs of
             "icon" -> case rhs of
                 GenericRhs txt _ ->
@@ -313,14 +323,14 @@ decisionAddSection dec stmt
                 GenericRhs "no" [] -> dec { dec_fire_only_once = False }
                 _ -> trace "DEBUG: bad decisions fire_only_once" dec
             "cost" -> case rhs of --var or num
-                GenericRhs txt [] -> dec { dec_cost = Just (HOI4DecisionCostVariable txt) }
-                GenericRhs _var [txt] -> dec { dec_cost = Just (HOI4DecisionCostVariable txt) }
+                GenericRhs txt [] -> dec { dec_cost = Just (namedCost txt) }
+                GenericRhs vartag [txt] -> dec { dec_cost = Just (HOI4DecisionCostVariable (vartag <> ":" <> txt)) }
                 (floatRhs -> Just num)  -> dec { dec_cost = Just (HOI4DecisionCostSimple num) }
                 _ -> trace "DEBUG: bad decisions costt" dec
-            "custom_cost_trigger" -> case rhs of
-                CompoundRhs [] -> dec -- empty, treat as if it wasn't there
-                CompoundRhs scr -> dec { dec_custom_cost_trigger = Just scr }
-                _ -> trace "DEBUG: bad decisions custom_cost_trigger" dec
+            -- What a custom cost checks and takes. The template says only what
+            -- the cost is called, and the script behind that name tells a
+            -- reader nothing the name has not already, so it is left out.
+            "custom_cost_trigger" -> dec
             "custom_cost_text" -> case rhs of
                 GenericRhs txt _ -> -- localizable
                     dec { dec_custom_cost_text = Just txt }
@@ -562,12 +572,12 @@ ppdecision dec = setCurrentFile (dec_path dec) $ withDecisionIdents dec $ do
     cancelEffect_pp'd <- setIsInEffect True (decArg "cancel_effect" dec_cancel_effect ppScript)
     timeoutEffect_pp'd <- setIsInEffect True (decArg "timeout_effect" dec_timeout_effect ppScript)
     mawd_pp'd   <- setIsInEffect True (mapM (imsg2doc <=< ppAiWillDo) (dec_ai_will_do dec))
+    cost_pp <- case dec_cost dec of
+        Just (HOI4DecisionCostSimple num) -> return $ Just $ T.pack $ show num
+        Just (HOI4DecisionCostVariable txt) -> Just <$> ppCostVariable txt
+        Nothing -> return Nothing
     let name = dec_name dec
         nameD = Doc.strictText name
-        cost_pp = case dec_cost dec of
-            Just (HOI4DecisionCostSimple num) -> Just $ T.pack $ show num
-            Just (HOI4DecisionCostVariable txt) -> Just txt
-            _ -> Nothing
         isFireOnlyOnce = dec_fire_only_once dec
         isGood = dec_is_good dec
         isSelectableMission = dec_selectable_mission dec
@@ -578,12 +588,13 @@ ppdecision dec = setCurrentFile (dec_path dec) $ withDecisionIdents dec $ do
     -- else has to go through custom_cost, which replaces the whole phrase.
     custom_cost_loc_pp'd <- case dec_custom_cost_text dec of
             Just custom_cost_text -> do
-                custom_cost_text_loc <- wikifyLocColours <$> getGameL10n custom_cost_text
+                -- The text says what the cost is in numbers the game works out
+                -- as it draws it. A constant is the same number every time and
+                -- is filled in; a variable is not, and is shown by its name.
+                custom_cost_text_loc <- showLocVariables . wikifyLocColours
+                                            <$> (fillConstants =<< getGameL10n custom_cost_text)
                 return ["| custom_cost = ", Doc.strictText custom_cost_text_loc, PP.line]
             _ -> return []
-    -- What the custom cost actually checks and takes. The template says only
-    -- what the cost is called, so this is noted rather than passed.
-    custom_cost_trigger_note <- decNote "custom_cost_trigger" dec_custom_cost_trigger ppScript
     activation_pp'd <- decNoArg dec_activation ppScript "<!-- activation -->"
     modifier_pp'd <- setIsInEffect True (decNoArg dec_modifier ppStatement "")
     targetedModifier_pp'd <- setIsInEffect True (decNoArg dec_targeted_modifier ppScript "")
@@ -616,15 +627,9 @@ ppdecision dec = setCurrentFile (dec_path dec) $ withDecisionIdents dec $ do
         custom_cost_loc_pp'd ++
         [maybe mempty (\txt -> if txt /= "0" then mconcat ["| cost = ", Doc.strictText txt, PP.line] else mconcat [])
                cost_pp
-        ,maybe mempty
-               (\num -> mconcat ["| cooldown = ", Doc.strictText $ formatDays $ fromIntegral num, PP.line])
-               days_re_enable
-        ,maybe mempty
-               (\num -> mconcat ["| days_mission_timeout = ", Doc.strictText $ formatDays $ fromIntegral num, PP.line])
-               days_mission_timeout
-        ,maybe mempty
-               (\num -> mconcat ["| days_remove = ", Doc.strictText $ formatDays $ fromIntegral num, PP.line])
-               days_remove] ++
+        ,ppDays "cooldown" days_re_enable
+        ,ppDays "days_mission_timeout" days_mission_timeout
+        ,ppDays "days_remove" days_remove] ++
         ( if isGood then
             ["| is_good = yes", PP.line]
         else []) ++
@@ -666,7 +671,7 @@ ppdecision dec = setCurrentFile (dec_path dec) $ withDecisionIdents dec $ do
         targetedModifier_pp'd ++
         -- Everything the template has no parameter of its own for goes into
         -- the one comment it takes, which can only be given once.
-        (let notes = custom_cost_trigger_note ++ removeTrigger_note
+        (let notes = removeTrigger_note
                         ++ (if targetsDynamic then ["<!-- targets_dynamic = yes -->", PP.line] else [])
                         ++ maybe [] (\awd_pp'd ->
                                 ["<!-- AI decision factors:", PP.line
@@ -682,6 +687,35 @@ ppdecision dec = setCurrentFile (dec_path dec) $ withDecisionIdents dec $ do
         extractTargetsStates [pdx| state = !e |] = Just e
         extractTargetsStates stmt = trace ("Unknown in targets states array statement: " ++ show stmt) Nothing
 
+
+-- | A count of days written the way the decision templates want it: the number
+-- alone, the template writing "days" after it itself. A count below zero says
+-- the decision has no timer rather than naming a length of time, so nothing is
+-- passed for it.
+ppDays :: Text -> Maybe Int -> Doc
+ppDays param = \case
+    Just num | num >= 0 ->
+        mconcat ["| ", Doc.strictText param, " = ", Doc.strictText (T.pack (show num)), PP.line]
+    _ -> mempty
+
+-- | How a cost the script names rather than writes out is shown. A constant the
+-- file defines for itself is already a number by the time it gets here, so what
+-- is left is a variable the game works out as it draws the decision: nothing
+-- outside the game can say what it holds, so it is shown by its name, in the
+-- typewriter face every variable this program cannot resolve is written in.
+-- Script may give a variable a number to fall back on when nothing has set it,
+-- written after a @?@, and that number is worth saying.
+ppCostVariable :: (HOI4Info g, Monad m) => Text -> PPT g m Text
+ppCostVariable raw = do
+    mnum <- constantValue var
+    return $ case mnum of
+        Just num -> Doc.doc2text (plainNum num)
+        Nothing -> typewriterText var <> fallback
+    where
+        (var, rest) = T.breakOn "?" raw
+        fallback = case T.drop 1 rest of
+            dflt | T.null dflt -> ""
+                 | otherwise -> " (" <> dflt <> " if unset)"
 
 ppActivatedBy :: (HOI4Info g, Monad m) => Text -> PPT g m [Doc]
 ppActivatedBy decisionId = do

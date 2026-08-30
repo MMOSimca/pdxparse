@@ -103,14 +103,6 @@ parseHOI4NationalFocuses scripts = HM.unions . HM.elems <$> do
             [pdx| joint_focus = @_ |] -> [(Nothing, scr)]
             _ -> []
 
--- | Collect the file-local script constants (@var = 10 at top level of a
--- file). These are used e.g. for focus costs shared between several focuses.
-fileVars :: GenericScript -> HashMap Text Double
-fileVars = HM.fromList . mapMaybe getvar
-    where
-        getvar (Statement (AtLhs var) OpEq rhs) = (,) var <$> floatRhs rhs
-        getvar _ = Nothing
-
 -- | Parse a statement in an national focus file. Some statements aren't
 -- national focus'; for those, and for any obvious errors, return Right Nothing.
 -- | The country a focus tree is written for, where it is written for just the

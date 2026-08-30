@@ -45,6 +45,7 @@ module HOI4.Localization (
     ,   tryLocMaybe
     ,   flagMaybeText
     ,   fillConstants
+    ,   showLocVariables
     ,   getCharacterName
     ,   getCharacterRole
     ,   advisorName
@@ -797,6 +798,31 @@ fillConstants text = do
                     -- Whatever this refers to, the marker itself is done with, so
                     -- what follows is searched without it and the recursion ends.
                     _ -> before <> marker <> fill constants afterMarker
+
+-- | Show every game variable a piece of localization still names in brackets by
+-- its own name. What is left in brackets by the time this is reached is a value
+-- the game works out as it draws the text -- a variable some effect sets while
+-- the game is being played -- and nothing outside the game can say what it
+-- holds, so the name is all there is to show. It is written the way every other
+-- variable this program cannot resolve is, in a typewriter face.
+--
+-- The format a reference may carry after a @|@ says how the game writes the
+-- number it finds, which says nothing about a name, so it is dropped.
+showLocVariables :: Text -> Text
+showLocVariables = go
+    where
+        marker = "[?"
+        go t = case T.breakOn marker t of
+            (_, rest) | T.null rest -> t
+            (before, rest) ->
+                let body = T.drop (T.length marker) rest
+                    (inner, closing) = T.breakOn "]" body
+                in case T.stripPrefix "]" closing of
+                    -- Unterminated: the marker itself is done with, so what
+                    -- follows is searched without it and the recursion ends.
+                    Nothing -> before <> marker <> go body
+                    Just after ->
+                        before <> typewriterText (T.takeWhile (/= '|') inner) <> go after
 
 getCharacterName :: (Monad m, HOI4Info g) =>
     Text -> PPT g m Text

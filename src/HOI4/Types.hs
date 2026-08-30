@@ -478,7 +478,6 @@ data HOI4Decision = HOI4Decision
     ,   dec_days_re_enable :: Maybe Int
     ,   dec_fire_only_once :: Bool
     ,   dec_cost :: Maybe HOI4DecisionCost
-    ,   dec_custom_cost_trigger  :: Maybe GenericScript
     ,   dec_custom_cost_text :: Maybe Text
     ,   dec_days_remove :: Maybe Int
     ,   dec_remove_effect :: Maybe GenericScript

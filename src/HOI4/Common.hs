@@ -11,6 +11,7 @@ module HOI4.Common (
     ,   AIWillDo (..), AIModifier (..)
     ,   ppAiWillDo, ppAiMod
     ,   ppEventLoc, iquotes't
+    ,   fileVars
     ,   module HOI4.Types
     ) where
 
@@ -20,7 +21,7 @@ import Control.Monad.State (gets)
 
 import Data.Char (isDigit)
 import Data.List (foldl')
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Void (Void)
 
 
@@ -51,6 +52,15 @@ import HOI4.SpecialHandlers -- everything
 import HOI4.Types -- everything
 
 -- no particular order from here... TODO: organize this!
+
+-- | The file-local script constants a file defines, written @\@var = 10@ at its
+-- top level. Script uses them for numbers shared between the entries of one
+-- file, such as the cost several decisions or focuses are all given.
+fileVars :: GenericScript -> HM.HashMap Text Double
+fileVars = HM.fromList . mapMaybe getvar
+    where
+        getvar (Statement (AtLhs var) OpEq rhs) = (,) var <$> floatRhs rhs
+        getvar _ = Nothing
 
 -- | Format a script as wiki text.
 ppScript :: (HOI4Info g, Monad m) =>
