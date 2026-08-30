@@ -3010,7 +3010,7 @@ foldCompound "diplomaticRelation" "DiplomaticRelation" "dr"
                 _ -> True
             relation = case _relation of
                 "non_aggression_pact" -> if active then "Enters a {{icon|nap|1}} with " else "Disbands the {{icon|nap|1}} with "
-                "guarantee" -> if active then "Grants a guarantee of independence for " else "Cancels it's guarantee of independence for "
+                "guarantee" -> if active then "Guarantee " else "Revokes guarantee for "
                 "puppet" -> if active then "Becomes a subject of " else "Is no longer a subject of "
                 "military_access" -> if active then "Grants military access for " else "Revokes military access for "
                 "docking_rights" -> if active then "Grants docking rights for " else "Revokes docking rights for "
