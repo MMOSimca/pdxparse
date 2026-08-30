@@ -383,7 +383,20 @@ ppTitles _ [] eid = return $ "| event_name = " <> Doc.strictText eid
 ppTitles False [HOI4EvtTitleSimple key] eid = ("| event_name = " <>) . Doc.strictText . Doc.nl2br . wikifyLocColours <$> getGameL10n key
 ppTitles True [HOI4EvtTitleSimple key]eid  = ("| event_name = (Hidden) " <>) . Doc.strictText . Doc.nl2br . wikifyLocColours <$> getGameL10n key
 ppTitles True _ eid = return "| event_name = (This event is hidden and has no title.)"
-ppTitles _ titles eid = (("| event_name = " <> Doc.strictText eid <> PP.line <>"| cond_event_name = yes" <> PP.line <> "| cond_name = ") <>) . PP.vsep <$> mapM ppTitle titles where
+-- The wiki's event template has no parameter for a conditional title, so the
+-- name it shows has to be one title rather than the conditions between them:
+-- the one the event falls back on when no condition holds, or failing that the
+-- first it can be given. The conditions are still written out below it.
+ppTitles _ titles eid = do
+    defaultTitle <- case [key | HOI4EvtTitleSimple key <- titles]
+                        ++ [key | HOI4EvtTitleConditional _ key <- titles] of
+        (key:_) -> Doc.nl2br . wikifyLocColours <$> getGameL10n key
+        [] -> return eid
+    conditions <- PP.vsep <$> mapM ppTitle titles
+    return $ "| event_name = " <> Doc.strictText defaultTitle <> PP.line
+        <> "| cond_event_name = yes" <> PP.line
+        <> "| cond_name = " <> conditions
+  where
     ppTitle (HOI4EvtTitleSimple key) = ("Otherwise:<br>:" <>) <$> fmtTitle key
     ppTitle (HOI4EvtTitleConditional scr key) = mconcat <$> sequenceA
         [pure "The following title is used if:", pure PP.line
@@ -511,7 +524,7 @@ ppEvent evt = maybe
             -- mean_time_to_happen is only really mtth if it's *not*
             -- triggered only.
             (if isTriggeredOnly then [] else case mmtth_pp'd of
-                Nothing -> if not $ null trigger_pp'd then [] else ["| triggered_only =", PP.line
+                Nothing -> if not $ null trigger_pp'd then [] else ["| triggered only =", PP.line
                         ,"* Unknown (Missing MTTH and is_triggered_only)", PP.line]
                 Just mtth_pp'd ->
                     ["| mtth = ", PP.line

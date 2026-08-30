@@ -486,6 +486,19 @@ ppdecision dec = setCurrentFile (dec_path dec) $ do
                         [opttext, content_pp'd
                         ,PP.line])
                 (field dec)
+    -- Script the wiki's decision template has no parameter for. Passing it as
+    -- one anyway only has the template drop it, so it is written into the
+    -- page's source as a note, where an editor can still find it.
+    let decNote :: Text -> (HOI4Decision -> Maybe a) -> (a -> PPT g m Doc) -> PPT g m [Doc]
+        decNote label field fmt
+            = maybe (return [])
+                (\field_content -> do
+                    content_pp'd <- fmt field_content
+                    return
+                        ["<!-- ", Doc.strictText label, ":", PP.line
+                        ,content_pp'd, PP.line
+                        ,"-->", PP.line])
+                (field dec)
     targets <- case (dec_targets dec, dec_target_array dec, dec_state_target dec) of
         (Just array, _, Just trgt) -> do
             let targetlist = mapMaybe extractTargetsStates array
@@ -513,7 +526,9 @@ ppdecision dec = setCurrentFile (dec_path dec) $ do
     visible_pp'd <- decNoArg dec_visible ppScript "<!-- visible -->"
     targetTrigger_pp'd <- decNoArg dec_target_trigger ppScript "<!-- target_trigger -->" --checks FROM and ROOT and makes decision visible if true
     available_pp'd <- decArg "available" dec_available ppScript
-    removeTrigger_pp'd <- decArg "remove_trigger" dec_remove_trigger ppScript --removes decision? and ends modifier effect and triggers remove_effect?
+    -- Removes a timed decision early, ending its modifier and triggering its
+    -- remove_effect. The template has no parameter for it, so it is noted.
+    removeTrigger_note <- decNote "remove_trigger" dec_remove_trigger ppScript
     cancelTrigger_pp'd <- decArg "cancel_trigger" dec_cancel_trigger ppScript -- cancels missions, triggers canceleffect
     effect_pp'd <- setIsInEffect True (decArg "select_effect" dec_complete_effect ppScript)
     removeEffect_pp'd <- setIsInEffect True (decArg "remove_effect" dec_remove_effect ppScript)
@@ -531,12 +546,17 @@ ppdecision dec = setCurrentFile (dec_path dec) $ do
         isSelectableMission = dec_selectable_mission dec
         cancelIfNotVisible = dec_cancel_if_not_visible dec
         targetsDynamic = dec_targets_dynamic dec
+    -- A cost that isn't political power. The template's own cost parameter
+    -- writes a political power icon after whatever it is given, so anything
+    -- else has to go through custom_cost, which replaces the whole phrase.
     custom_cost_loc_pp'd <- case dec_custom_cost_text dec of
             Just custom_cost_text -> do
                 custom_cost_text_loc <- wikifyLocColours <$> getGameL10n custom_cost_text
-                return ["| cost = ", Doc.strictText custom_cost_text_loc, "<!-- custom cost -->" ,PP.line]
+                return ["| custom_cost = ", Doc.strictText custom_cost_text_loc, PP.line]
             _ -> return []
-    custom_cost_trigger_pp'd  <- decArg "custom_cost_trigger" dec_custom_cost_trigger ppScript
+    -- What the custom cost actually checks and takes. The template says only
+    -- what the cost is called, so this is noted rather than passed.
+    custom_cost_trigger_note <- decNote "custom_cost_trigger" dec_custom_cost_trigger ppScript
     activation_pp'd <- decNoArg dec_activation ppScript "<!-- activation -->"
     modifier_pp'd <- setIsInEffect True (decNoArg dec_modifier ppStatement "")
     targetedModifier_pp'd <- setIsInEffect True (decNoArg dec_targeted_modifier ppScript "")
@@ -567,7 +587,6 @@ ppdecision dec = setCurrentFile (dec_path dec) $ do
                dec_text_loc
         ] ++
         custom_cost_loc_pp'd ++
-        custom_cost_trigger_pp'd ++
         [maybe mempty (\txt -> if txt /= "0" then mconcat ["| cost = ", Doc.strictText txt, PP.line] else mconcat [])
                cost_pp
         ,maybe mempty
@@ -591,9 +610,6 @@ ppdecision dec = setCurrentFile (dec_path dec) $ do
         ( if cancelIfNotVisible then
             ["| cancel_if_not_visible = yes", PP.line]
         else []) ++
-        ( if targetsDynamic then
-            ["| targets_dynamic = yes", PP.line]
-        else []) ++
         (if not $ all null [allow_pp'd
             ,targetRootTrigger_pp'd
             ,visible_pp'd
@@ -609,7 +625,6 @@ ppdecision dec = setCurrentFile (dec_path dec) $ do
 
         available_pp'd ++
         ppActivatedBy_pp'd ++
-        removeTrigger_pp'd ++
         cancelTrigger_pp'd ++
         targets ++
         effect_pp'd ++
@@ -622,9 +637,14 @@ ppdecision dec = setCurrentFile (dec_path dec) $ do
         else []) ++
         modifier_pp'd ++
         targetedModifier_pp'd ++
-        maybe [] (\awd_pp'd ->
-            ["| comment = <!-- AI decision factors:", PP.line
-            ,awd_pp'd, " -->", PP.line]) mawd_pp'd ++
+        -- Everything the template has no parameter of its own for goes into
+        -- the one comment it takes, which can only be given once.
+        (let notes = custom_cost_trigger_note ++ removeTrigger_note
+                        ++ (if targetsDynamic then ["<!-- targets_dynamic = yes -->", PP.line] else [])
+                        ++ maybe [] (\awd_pp'd ->
+                                ["<!-- AI decision factors:", PP.line
+                                ,awd_pp'd, PP.line, "-->", PP.line]) mawd_pp'd
+         in if null notes then [] else ["| comment = ", PP.line] ++ notes) ++
         ["}}", PP.line
         ,"<section end=", nameD, "/>", PP.line
         ]
