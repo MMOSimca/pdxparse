@@ -6180,10 +6180,39 @@ capitalise t = case T.uncons t of
 
 imsg2doc :: (IsGameData (GameData g), Monad m) => IndentedMessages -> PPT g m Doc
 imsg2doc msgs = do
-    said <- mapM (\(i, rm) -> (,) i <$> messageText rm) msgs
+    said <- mapM (\(i, rm) -> (\line -> SaidLine i line (offersChoice rm)) <$> messageText rm) msgs
     return . PP.vsep $
-        [ PP.hsep [Doc.strictText (T.replicate i "*"), Doc.strictText line]
-        | (i, line) <- rollUpStates (rollUpHeaders said) ]
+        [ PP.hsep [Doc.strictText (listMarks (saidLevel line)), Doc.strictText (saidText line)]
+        | line <- rollUpStates (rollUpHeaders said) ]
+
+-- | The marks that stand a line at its level in the wiki's list. Only the last
+-- of them opens a list item; the rest are colons, which indent without opening
+-- one. A run of asterisks would be the plainer way to write it, but the wiki
+-- draws a fresh bullet for every asterisk of a line whose list has already been
+-- closed above it, stacking them one on another: Template:EffectBox keeps no
+-- list of its own and only takes the level it is to be drawn at, so every line
+-- after one ends the list it stood in. Colons indent the same and stack nothing.
+listMarks :: Int -> Text
+listMarks i
+    | i <= 0 = ""
+    | otherwise = T.replicate (i - 1) ":" <> "*"
+
+-- | One line as it is to be written out: how deep it stands, what it says, and
+-- whether what stands under it is a choice among itself rather than a list of
+-- what must all hold.
+data SaidLine = SaidLine
+    { saidLevel :: Int
+    , saidText :: Text
+    , saidChoice :: Bool
+    }
+
+-- | Whether a line puts what stands under it to the reader as alternatives.
+-- @OR@ asks for any one of them and @NOT@ denies every one, and either way a
+-- run of lines drawn together into a single list is read down as a choice.
+offersChoice :: ScriptMessage -> Bool
+offersChoice MsgOr = True
+offersChoice MsgNot = True
+offersChoice _ = False
 
 -- | Draw a heading together with the lone line under it, so that the two read
 -- as one sentence rather than as a heading with a single item hanging off it.
@@ -6195,17 +6224,18 @@ imsg2doc msgs = do
 -- bottom up, so a chain of lone headings folds all the way to one line. A
 -- @\<pre\>@ is a statement we failed to read and keeps a line of its own to
 -- be seen on, as everywhere else.
-rollUpHeaders :: [(Int, Text)] -> [(Int, Text)]
+rollUpHeaders :: [SaidLine] -> [SaidLine]
 rollUpHeaders = go
     where
         go [] = []
-        go ((i, line) : rest) =
-            let (deeper, siblings) = span ((> i) . fst) rest
+        go (line : rest) =
+            let i = saidLevel line
+                (deeper, siblings) = span ((> i) . saidLevel) rest
             in case go deeper of
-                [(j, single)] | j == i + 1, ":" `T.isSuffixOf` line
-                              , not ("<pre>" `T.isPrefixOf` single) ->
-                    (i, line <> " " <> single) : go siblings
-                folded -> (i, line) : folded ++ go siblings
+                [single] | saidLevel single == i + 1, ":" `T.isSuffixOf` saidText line
+                         , not ("<pre>" `T.isPrefixOf` saidText single) ->
+                    line { saidText = saidText line <> " " <> saidText single } : go siblings
+                folded -> line : folded ++ go siblings
 
 -- | Draw together a run of lines that each say the very same thing of a single
 -- state, so that the states are named in one go rather than a line apiece.
@@ -6217,28 +6247,56 @@ rollUpHeaders = go
 -- list of its own under it is a heading, and two headings saying the same need
 -- not head the same thing; those are 'HOI4.SpecialHandlers.chunkStates' to draw
 -- together, where what stands under them can be seen.
-rollUpStates :: [(Int, Text)] -> [(Int, Text)]
-rollUpStates said = map rejoin (groupBy alike (zip said standalone))
+rollUpStates :: [SaidLine] -> [SaidLine]
+rollUpStates said = map rejoin (groupBy alike (zip3 said standalone choices))
     where
         -- A line is a heading if the line after it is written deeper than it is.
-        standalone = zipWith (\(i, _) mnext -> maybe True (<= i) mnext)
+        standalone = zipWith (\line mnext -> maybe True (<= saidLevel line) mnext)
                              said
-                             (map (Just . fst) (drop 1 said) ++ [Nothing])
-        alike ((i, one), aloneone) ((j, two), alonetwo) =
-            aloneone && alonetwo && i == j && case (oneState one, oneState two) of
+                             (map (Just . saidLevel) (drop 1 said) ++ [Nothing])
+        -- Whether the line a line stands under offers a choice, found by
+        -- keeping the lines still open above it and reading off the innermost.
+        choices = ancestry [] said
+        ancestry _ [] = []
+        ancestry open (line : rest) =
+            let above = dropWhile ((>= saidLevel line) . saidLevel) open
+            in any saidChoice (take 1 above) : ancestry (line : above) rest
+        alike (one, aloneone, _) (two, alonetwo, _) =
+            aloneone && alonetwo && saidLevel one == saidLevel two
+            && case (oneState (saidText one), oneState (saidText two)) of
                 (Just (beforeone, _, afterone), Just (beforetwo, _, aftertwo)) ->
                     beforeone == beforetwo && afterone == aftertwo
                 _ -> False
-        rejoin run@(((i, line), _) : _ : _)
-            | Just (before, _, after) <- oneState line
-            = (i, mconcat
+        -- Template:States writes "and" between the last two states it names
+        -- unless it is told otherwise, which says every one of them where the
+        -- line above asks only for one.
+        rejoin run@((line, _, choice) : _ : _)
+            | Just (before, _, after) <- oneState (saidText line)
+            = line { saidText = mconcat
                 [ before
-                , Doc.doc2text (template "states" (mapMaybe stateOf run))
+                , Doc.doc2text (template "states"
+                    (mapMaybe stateOf run ++ ["conj=or" | choice]))
                 , after
-                ])
-        rejoin (((i, line), _) : _) = (i, line)
-        rejoin [] = (0, "")
-        stateOf ((_, line), _) = (\(_, sid, _) -> sid) <$> oneState line
+                ] }
+        rejoin ((line, _, choice) : _) = line { saidText = anyOfStates choice (saidText line) }
+        rejoin [] = SaidLine 0 "" False
+        stateOf (line, _, _) = (\(_, sid, _) -> sid) <$> oneState (saidText line)
+
+-- | Tell Template:States to write "or" between the last two states it names,
+-- where a line naming a run of them stands under a heading that asks only for
+-- one of them. 'HOI4.SpecialHandlers.chunkStates' draws such a run together
+-- where what stands under it can be seen, and it reaches here as a template
+-- already written out rather than as a run of lines to be drawn together.
+anyOfStates :: Bool -> Text -> Text
+anyOfStates False line = line
+anyOfStates True line = case T.breakOn "{{states|" line of
+    (before, rest)
+        | not (T.null rest)
+        , (named, closing) <- T.breakOn "}}" rest
+        , not (T.null closing)
+        , not ("|conj=" `T.isInfixOf` named)
+        -> before <> named <> "|conj=or" <> closing
+    _ -> line
 
 -- | A line that names a single state, split into what it says before that state,
 -- the state's id, and what it says after. A line naming no state, or naming
