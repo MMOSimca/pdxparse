@@ -47,7 +47,7 @@ import qualified Data.HashMap.Strict as HM
 import Data.HashSet (HashSet)
 import qualified Data.HashSet as HS
 import Data.List (groupBy, sortOn)
-import Data.Maybe (catMaybes, mapMaybe)
+import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
 
@@ -6234,10 +6234,10 @@ capitalise t = case T.uncons t of
 
 imsg2doc :: (IsGameData (GameData g), Monad m) => IndentedMessages -> PPT g m Doc
 imsg2doc msgs = do
-    said <- mapM (\(i, rm) -> (\line -> SaidLine i line (offersChoice rm)) <$> messageText rm) msgs
+    said <- mapM (\(i, rm) -> (\line -> SaidLine i line (offersChoice rm) Nothing) <$> messageText rm) msgs
     return . PP.vsep $
         [ PP.hsep [Doc.strictText (listMarks (saidLevel line)), Doc.strictText (saidText line)]
-        | line <- rollUpStates (rollUpHeaders said) ]
+        | line <- rollUpStates (rollUpHeaders (markAnyOfStates said)) ]
 
 -- | The marks that stand a line at its level in the wiki's list. Only the last
 -- of them opens a list item; the rest are colons, which indent without opening
@@ -6258,6 +6258,12 @@ data SaidLine = SaidLine
     { saidLevel :: Int
     , saidText :: Text
     , saidChoice :: Bool
+    -- | The innermost heading 'rollUpHeaders' has folded onto the front of this
+    -- line, and whether it offers a choice; 'Nothing' until one is folded on.
+    -- A line that reads @None of: ...@ heads a choice as much as one with the
+    -- same words standing above it does, and the states it goes on to name are
+    -- read under it just the same.
+    , saidFolded :: Maybe Bool
     }
 
 -- | Whether a line puts what stands under it to the reader as alternatives.
@@ -6267,6 +6273,33 @@ offersChoice :: ScriptMessage -> Bool
 offersChoice MsgOr = True
 offersChoice MsgNot = True
 offersChoice _ = False
+
+-- | For each line, whether the line it stands under offers a choice among what
+-- it heads, found by keeping the lines still open above it and reading off the
+-- innermost.
+choicesAbove :: [SaidLine] -> [Bool]
+choicesAbove = go []
+    where
+        go _ [] = []
+        go open (line : rest) =
+            let above = dropWhile ((>= saidLevel line) . saidLevel) open
+            in any saidChoice (take 1 above) : go (line : above) rest
+
+-- | Tell Template:States to write "or" between the last two states it names,
+-- wherever the line naming them stands under a heading that asks for only one.
+-- 'HOI4.SpecialHandlers.chunkStates' draws such a run together where what
+-- stands under it can be seen, and it reaches here as a template already
+-- written out rather than as a run of lines still to be drawn together.
+--
+-- This runs before 'rollUpHeaders', while every line still stands under the
+-- heading it was written under: a heading with a single line beneath it is
+-- folded onto that line, and an @OR@ over one such run is folded away with it,
+-- leaving the states with nothing above them to say they are alternatives.
+markAnyOfStates :: [SaidLine] -> [SaidLine]
+markAnyOfStates said = zipWith mark said (choicesAbove said)
+    where
+        mark line True = line { saidText = orConj (saidText line) }
+        mark line False = line
 
 -- | Draw a heading together with the lone line under it, so that the two read
 -- as one sentence rather than as a heading with a single item hanging off it.
@@ -6288,7 +6321,9 @@ rollUpHeaders = go
             in case go deeper of
                 [single] | saidLevel single == i + 1, ":" `T.isSuffixOf` saidText line
                          , not ("<pre>" `T.isPrefixOf` saidText single) ->
-                    line { saidText = saidText line <> " " <> saidText single } : go siblings
+                    line { saidText = saidText line <> " " <> saidText single
+                         , saidFolded = Just (fromMaybe (saidChoice line) (saidFolded single))
+                         } : go siblings
                 folded -> line : folded ++ go siblings
 
 -- | Draw together a run of lines that each say the very same thing of a single
@@ -6308,13 +6343,10 @@ rollUpStates said = map rejoin (groupBy alike (zip3 said standalone choices))
         standalone = zipWith (\line mnext -> maybe True (<= saidLevel line) mnext)
                              said
                              (map (Just . saidLevel) (drop 1 said) ++ [Nothing])
-        -- Whether the line a line stands under offers a choice, found by
-        -- keeping the lines still open above it and reading off the innermost.
-        choices = ancestry [] said
-        ancestry _ [] = []
-        ancestry open (line : rest) =
-            let above = dropWhile ((>= saidLevel line) . saidLevel) open
-            in any saidChoice (take 1 above) : ancestry (line : above) rest
+        -- A run stands under the heading it was written under even after the
+        -- headers are folded: folding needs a lone line beneath a heading, and
+        -- a run is never that.
+        choices = choicesAbove said
         alike (one, aloneone, _) (two, alonetwo, _) =
             aloneone && alonetwo && saidLevel one == saidLevel two
             && case (oneState (saidText one), oneState (saidText two)) of
@@ -6329,21 +6361,18 @@ rollUpStates said = map rejoin (groupBy alike (zip3 said standalone choices))
             = line { saidText = mconcat
                 [ before
                 , Doc.doc2text (template "states"
-                    (mapMaybe stateOf run ++ ["conj=or" | choice]))
+                    (mapMaybe stateOf run
+                        ++ ["conj=or" | choice || saidFolded line == Just True]))
                 , after
                 ] }
-        rejoin ((line, _, choice) : _) = line { saidText = anyOfStates choice (saidText line) }
-        rejoin [] = SaidLine 0 "" False
+        rejoin ((line, _, _) : _) = line
+        rejoin [] = SaidLine 0 "" False Nothing
         stateOf (line, _, _) = (\(_, sid, _) -> sid) <$> oneState (saidText line)
 
--- | Tell Template:States to write "or" between the last two states it names,
--- where a line naming a run of them stands under a heading that asks only for
--- one of them. 'HOI4.SpecialHandlers.chunkStates' draws such a run together
--- where what stands under it can be seen, and it reaches here as a template
--- already written out rather than as a run of lines to be drawn together.
-anyOfStates :: Bool -> Text -> Text
-anyOfStates False line = line
-anyOfStates True line = case T.breakOn "{{states|" line of
+-- | Tell the one Template:States a line names, if it names one at all, to write
+-- "or" between the last two states rather than "and".
+orConj :: Text -> Text
+orConj line = case T.breakOn "{{states|" line of
     (before, rest)
         | not (T.null rest)
         , (named, closing) <- T.breakOn "}}" rest
