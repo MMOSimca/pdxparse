@@ -770,7 +770,7 @@ data ScriptMessage
     | MsgDamageBuilding {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmt :: Double, scriptMessageProvince :: Double}
     | MsgDamageBuildingVar {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmtText :: Text, scriptMessageProvince :: Double}
     | MsgDivisionTemplate {scriptMessageWhat :: Text}
-    | MsgDeleteUnit {scriptMessageYn :: Bool, scriptMessageWhat :: Text, scriptMessage_where :: Text}
+    | MsgDeleteUnit {scriptMessageYn :: Bool, scriptMessageWhat :: Text, scriptMessageWhere :: Text}
     | MsgDeleteUnitTemplateAndUnits {scriptMessageYn :: Bool, scriptMessageWhat :: Text, scriptMessage_where :: Text}
     | MsgDeleteUnits {scriptMessageYn :: Bool, scriptMessageWhat :: Text, scriptMessage_where :: Text}
     | MsgArmyManpowerInState {scriptMessageComp :: Text, scriptMessageAmt :: Double, scriptMessageWhat :: Text, scriptMessageWhere :: Text, scriptMessage_where2 :: Text}
@@ -881,7 +881,7 @@ data ScriptMessage
     | MsgFightingArmyStrengthRatio {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageCompare :: Text, scriptMessageAmt :: Double}
     | MsgFightingArmyStrengthRatioVar {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageCompare :: Text, scriptMessageAmtText :: Text}
     | MsgHasResourcesAmount {scriptMessageYn :: Bool, scriptMessageCompare :: Text, scriptMessageAmt :: Double, scriptMessageIcon :: Text, scriptMessageWhere :: Text}
-    | MsgAnyProvinceBuildingLevel {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageCompare :: Text, scriptMessageAmt :: Double, scriptMessageWhere :: Text}
+    | MsgAnyProvinceBuildingLevel {scriptMessageIcon :: Text, scriptMessageCompare :: Text, scriptMessageAmt :: Double, scriptMessageWhere :: Text}
     | MsgCompareAutonomyState {scriptMessageCompare :: Text, scriptMessageWhat :: Text}
     | MsgIsInArray {scriptMessageVar1 :: Text, scriptMessageVar2 :: Text}
     | MsgAddToTempArray {scriptMessageVar1 :: Text, scriptMessageVar2 :: Text}
@@ -5680,7 +5680,7 @@ instance RenderMessage Script ScriptMessage where
                 , " "
                 , _icon
                 ]
-        MsgAnyProvinceBuildingLevel {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageCompare = _comp, scriptMessageAmt = _amt, scriptMessageWhere = _where}
+        MsgAnyProvinceBuildingLevel {scriptMessageIcon = _icon, scriptMessageCompare = _comp, scriptMessageAmt = _amt, scriptMessageWhere = _where}
             -> mconcat
                 [ "Any province of the state "
                 , ifThenElseT (T.null _where) "" (_where <> " ")
@@ -5690,8 +5690,6 @@ instance RenderMessage Script ScriptMessage where
                 , toMessage (bold (plainNumMin _amt))
                 , " "
                 , _icon
-                , " "
-                , _what
                 ]
         MsgCompareAutonomyState {scriptMessageCompare = _comp, scriptMessageWhat = _what}
             -> mconcat
