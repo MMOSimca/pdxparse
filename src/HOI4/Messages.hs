@@ -47,7 +47,7 @@ import qualified Data.HashMap.Strict as HM
 import Data.HashSet (HashSet)
 import qualified Data.HashSet as HS
 import Data.List (groupBy, sortOn)
-import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
+import Data.Maybe (catMaybes, mapMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
 
@@ -6234,7 +6234,7 @@ capitalise t = case T.uncons t of
 
 imsg2doc :: (IsGameData (GameData g), Monad m) => IndentedMessages -> PPT g m Doc
 imsg2doc msgs = do
-    said <- mapM (\(i, rm) -> (\line -> SaidLine i line (offersChoice rm) Nothing) <$> messageText rm) msgs
+    said <- mapM (\(i, rm) -> (\line -> SaidLine i line (offersChoice rm) False) <$> messageText rm) msgs
     return . PP.vsep $
         [ PP.hsep [Doc.strictText (listMarks (saidLevel line)), Doc.strictText (saidText line)]
         | line <- rollUpStates (rollUpHeaders (markAnyOfStates said)) ]
@@ -6258,12 +6258,13 @@ data SaidLine = SaidLine
     { saidLevel :: Int
     , saidText :: Text
     , saidChoice :: Bool
-    -- | The innermost heading 'rollUpHeaders' has folded onto the front of this
-    -- line, and whether it offers a choice; 'Nothing' until one is folded on.
-    -- A line that reads @None of: ...@ heads a choice as much as one with the
-    -- same words standing above it does, and the states it goes on to name are
-    -- read under it just the same.
-    , saidFolded :: Maybe Bool
+    -- | Whether the outermost heading 'rollUpHeaders' has folded onto the front
+    -- of this line offers a choice. A line reading @None of: ...@ heads a
+    -- choice as much as one with those words standing above it, and the states
+    -- it goes on to name are read under it just the same. The outermost is the
+    -- one that counts: folding runs from the inside out, and the heading the
+    -- line is read as being under is the one it now begins with.
+    , saidFolded :: Bool
     }
 
 -- | Whether a line puts what stands under it to the reader as alternatives.
@@ -6322,7 +6323,7 @@ rollUpHeaders = go
                 [single] | saidLevel single == i + 1, ":" `T.isSuffixOf` saidText line
                          , not ("<pre>" `T.isPrefixOf` saidText single) ->
                     line { saidText = saidText line <> " " <> saidText single
-                         , saidFolded = Just (fromMaybe (saidChoice line) (saidFolded single))
+                         , saidFolded = saidChoice line
                          } : go siblings
                 folded -> line : folded ++ go siblings
 
@@ -6362,11 +6363,11 @@ rollUpStates said = map rejoin (groupBy alike (zip3 said standalone choices))
                 [ before
                 , Doc.doc2text (template "states"
                     (mapMaybe stateOf run
-                        ++ ["conj=or" | choice || saidFolded line == Just True]))
+                        ++ ["conj=or" | choice || saidFolded line]))
                 , after
                 ] }
         rejoin ((line, _, _) : _) = line
-        rejoin [] = SaidLine 0 "" False Nothing
+        rejoin [] = SaidLine 0 "" False False
         stateOf (line, _, _) = (\(_, sid, _) -> sid) <$> oneState (saidText line)
 
 -- | Tell the one Template:States a line names, if it names one at all, to write
