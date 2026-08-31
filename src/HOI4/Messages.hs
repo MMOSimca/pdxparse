@@ -550,6 +550,8 @@ data ScriptMessage
     | MsgHasArmySize {scriptMessageCompare :: Text, scriptMessageAmt :: Double, scriptMessageWhat :: Text}
     | MsgHasNavySize {scriptMessageCompare :: Text, scriptMessageAmt :: Double, scriptMessageWhat :: Text}
     | MsgHasNavySizeVar {scriptMessageCompare :: Text, scriptMessageAmtText :: Text, scriptMessageWhat :: Text}
+    | MsgHasDeployedAirForceSize {scriptMessageCompare :: Text, scriptMessageAmt :: Double, scriptMessageWhat :: Text}
+    | MsgHasDeployedAirForceSizeVar {scriptMessageCompare :: Text, scriptMessageAmtText :: Text, scriptMessageWhat :: Text}
     | MsgSetCapital {scriptMessageWhat :: Text, scriptMessageWhere :: Text}
     | MsgSetCharacterName {scriptMessageWhat :: Text}
     | MsgSetCharacterNameType {scriptMessageWho :: Text, scriptMessageWhat :: Text}
@@ -3335,6 +3337,24 @@ instance RenderMessage Script ScriptMessage where
                 , typewriterText _amtT
                 , _what
                 , " ships"
+                ]
+        MsgHasDeployedAirForceSize {scriptMessageCompare = _comp, scriptMessageAmt = _amt, scriptMessageWhat = _what}
+            -> mconcat
+                [ "Has deployed at "
+                , _comp
+                , " "
+                , toMessage (bold (plainNumMin _amt))
+                , ifThenElseT (T.null _what) "" (" " <> _what)
+                , " aircraft"
+                ]
+        MsgHasDeployedAirForceSizeVar {scriptMessageCompare = _comp, scriptMessageAmtText = _amtT, scriptMessageWhat = _what}
+            -> mconcat
+                [ "Has deployed at "
+                , _comp
+                , " "
+                , typewriterText _amtT
+                , ifThenElseT (T.null _what) "" (" " <> _what)
+                , " aircraft"
                 ]
         MsgSetCapital {scriptMessageWhat = _what, scriptMessageWhere = _where}
             -> mconcat

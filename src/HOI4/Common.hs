@@ -802,6 +802,7 @@ handlersSpecialComplex = Tr.fromList
         ,("free_building_slots"          , freeBuildingSlots)
         ,("has_army_size"                , hasArmySize)
         ,("has_navy_size"                , hasNavySize)
+        ,("has_deployed_air_force_size"  , hasDeployedAirForceSize)
         ,("has_opinion"                  , hasOpinion MsgHasOpinion)
         ,("has_country_leader"           , hasCountryLeader)
         ,("is_power_balance_in_range"    , powerBalanceRange)

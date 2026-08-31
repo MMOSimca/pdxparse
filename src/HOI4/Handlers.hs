@@ -149,6 +149,7 @@ module HOI4.Handlers (
     ,   addAce
     ,   divisionTemplate
     ,   hasNavySize
+    ,   hasDeployedAirForceSize
     ,   locandid
     ,   thisContext
     ,   createUnit
@@ -3625,6 +3626,46 @@ hasNavySize stmt@[pdx| %_ = @scr |]
                 (_, Just amt) -> return $ MsgHasNavySizeVar (ns_comp ns) amt typed
                 _ -> return $ preMessage stmt
 hasNavySize stmt = preStatement stmt
+
+----------------------------------------------
+-- Handler for has_deployed_air_force_size --
+----------------------------------------------
+
+data AirForceSize = AirForceSize
+        {   afs_size :: Maybe Double
+        ,   afs_sizevar :: Maybe Text
+        ,   afs_comp :: Text
+        ,   afs_type :: Maybe Text
+        }
+
+newAFS :: AirForceSize
+newAFS = AirForceSize Nothing Nothing "least" Nothing
+
+-- | Handler for @has_deployed_air_force_size@, which asks after the aircraft a
+-- country has in the air. The game reads the comparison as a bound rather than
+-- a strict one -- at least so many, at most so many -- and names the kind of
+-- aircraft where the trigger is given one.
+hasDeployedAirForceSize :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+hasDeployedAirForceSize stmt@[pdx| %_ = @scr |]
+    = msgToPP =<< ppAFS =<< foldM addLine newAFS scr
+    where
+        addLine :: AirForceSize -> GenericStatement -> PPT g m AirForceSize
+        addLine afs [pdx| size < !num |] = return afs { afs_comp = "most", afs_size = Just num }
+        addLine afs [pdx| size > !num |] = return afs { afs_comp = "least", afs_size = Just num }
+        addLine afs [pdx| size = !num |] = return afs { afs_comp = "least", afs_size = Just num }
+        addLine afs [pdx| size < $num |] = return afs { afs_comp = "most", afs_sizevar = Just num }
+        addLine afs [pdx| size > $num |] = return afs { afs_comp = "least", afs_sizevar = Just num }
+        addLine afs [pdx| size = $num |] = return afs { afs_comp = "least", afs_sizevar = Just num }
+        addLine afs [pdx| type = ?txt |] = return afs { afs_type = Just txt }
+        addLine afs [pdx| $other = %_ |] = trace ("unknown section in has_deployed_air_force_size: " ++ show other) $ return afs
+        addLine afs stmt = trace ("unknown form in has_deployed_air_force_size: " ++ show stmt) $ return afs
+        ppAFS afs = do
+            typed <- maybe (return "") getGameL10n (afs_type afs)
+            case (afs_size afs, afs_sizevar afs) of
+                (Just amt, _) -> return $ MsgHasDeployedAirForceSize (afs_comp afs) amt typed
+                (_, Just amt) -> return $ MsgHasDeployedAirForceSizeVar (afs_comp afs) amt typed
+                _ -> return $ preMessage stmt
+hasDeployedAirForceSize stmt = preStatement stmt
 
 -----------------------------------
 -- Handler for division_template --
