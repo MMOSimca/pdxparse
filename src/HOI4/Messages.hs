@@ -770,7 +770,8 @@ data ScriptMessage
     | MsgDamageBuilding {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmt :: Double, scriptMessageProvince :: Double}
     | MsgDamageBuildingVar {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmtText :: Text, scriptMessageProvince :: Double}
     | MsgDivisionTemplate {scriptMessageWhat :: Text}
-    | MsgDeleteUnitTemplateAndunits {scriptMessageYn :: Bool, scriptMessageWhat :: Text, scriptMessage_where :: Text}
+    | MsgDeleteUnit {scriptMessageYn :: Bool, scriptMessageWhat :: Text, scriptMessage_where :: Text}
+    | MsgDeleteUnitTemplateAndUnits {scriptMessageYn :: Bool, scriptMessageWhat :: Text, scriptMessage_where :: Text}
     | MsgDeleteUnits {scriptMessageYn :: Bool, scriptMessageWhat :: Text, scriptMessage_where :: Text}
     | MsgArmyManpowerInState {scriptMessageComp :: Text, scriptMessageAmt :: Double, scriptMessageWhat :: Text, scriptMessageWhere :: Text, scriptMessage_where2 :: Text}
     | MsgDivisionsInState {scriptMessageComp :: Text, scriptMessageAmt :: Double, scriptMessageWhat :: Text, scriptMessageWhere :: Text, scriptMessage_where2 :: Text}
@@ -4956,7 +4957,14 @@ instance RenderMessage Script ScriptMessage where
                 , " levels of damage"
                 , ifThenElseT (_prov > 0) (" in province (" <> roundNumNoSpace _prov <> ")") ""
                 ]
-        MsgDeleteUnitTemplateAndunits {scriptMessageYn = _yn, scriptMessageWhat = _what}
+        MsgDeleteUnit {scriptMessageYn = _yn, scriptMessageWhat = _what, scriptMessageWhere = _where}
+            -> mconcat
+                [ ifThenElseT _yn "Disband" "Delete"
+                , " all units"
+                , ifThenElseT (T.null _what) "" (" created from template " <> toMessage (iquotes _what))
+                , ifThenElseT (T.null _where) "" (" in " <> _where)
+                ]
+        MsgDeleteUnitTemplateAndUnits {scriptMessageYn = _yn, scriptMessageWhat = _what}
             -> mconcat
                 [ "Delete template "
                 , toMessage (iquotes _what)
@@ -4967,7 +4975,7 @@ instance RenderMessage Script ScriptMessage where
         MsgDeleteUnits {scriptMessageYn = _yn, scriptMessageWhat = _what}
             -> mconcat
                 [ ifThenElseT _yn "Disband" "Delete"
-                , " all units created from template"
+                , " all units created from template "
                 , toMessage (iquotes _what)
                 ]
         MsgDivisionTemplate {scriptMessageWhat = _what}
