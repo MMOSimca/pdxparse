@@ -6187,11 +6187,6 @@ substColoured names = go
         -- building's, such as "[?built_a_dockyard]", is left alone.
         isWordChar c = isAlphaNum c || c == '_'
 
-
-
-
-
-
 -- | Select correct icon for balance of power
 bopicon :: Double -> Text
 bopicon i
@@ -6227,11 +6222,6 @@ templateColor' td = rr
     where
         gr = T.replace "{{green" "{{color|green" (Doc.doc2text td)
         rr = T.replace "{{red" "{{color|red" gr
-
-
--- | Convert a list of messages zipped with their indentation levels to a Doc.
--- Each message is prepended with a number of asterisks (levels of bullet
--- list) equal to its indentation level.
 
 -- | Capitalize a label for the front of a sentence without touching the rest of
 -- it. A flag type is a common noun -- "unit leader" -- and title-casing every
