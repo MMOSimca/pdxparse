@@ -403,7 +403,7 @@ ppTitles _ titles eid = do
         <> "| cond_event_name = yes" <> PP.line
         <> "| cond_name = " <> conditions
   where
-    ppTitle (HOI4EvtTitleSimple key) = ("Otherwise:<br>:" <>) <$> fmtTitle key
+    ppTitle (HOI4EvtTitleSimple key) = (("Otherwise:" <> PP.line <> ":") <>) <$> fmtTitle key
     ppTitle (HOI4EvtTitleConditional scr key) = mconcat <$> sequenceA
         [pure "The following title is used if:", pure PP.line
         ,imsg2doc =<< ppMany scr, pure PP.line
@@ -422,7 +422,7 @@ ppDescs True _ = return "| cond_event_text = (This event is hidden and has no de
 ppDescs _ [] = return "| event_text = (No description)"
 ppDescs _ [HOI4EvtDescSimple key] = ("| event_text = " <>) . Doc.strictText . Doc.nl2br . wikifyLocColours <$> getGameL10n key
 ppDescs _ descs = (("| cond_event_text = yes" <> PP.line <> "| event_text = ") <>) . PP.vsep <$> mapM ppDesc descs where
-    ppDesc (HOI4EvtDescSimple key) = ("Otherwise:<br>:" <>) <$> fmtDesc key
+    ppDesc (HOI4EvtDescSimple key) = (("Otherwise:" <> PP.line <> ":") <>) <$> fmtDesc key
     ppDesc (HOI4EvtDescConditional scr key) = mconcat <$> sequenceA
         [pure "The following description is used if:", pure PP.line
         ,imsg2doc =<< ppMany scr, pure PP.line
