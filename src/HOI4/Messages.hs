@@ -507,7 +507,11 @@ data ScriptMessage
     | MsgAddIdea {scriptMessageWhat :: Text, scriptMessageIcon :: Text, scriptMessageKey :: Text, scriptMessageLoc :: Text}
     | MsgRemoveIdea {scriptMessageWhat :: Text, scriptMessageIcon :: Text, scriptMessageKey :: Text, scriptMessageLoc :: Text}
     | MsgAddTimedIdea {scriptMessageWhat :: Text, scriptMessageIcon :: Text, scriptMessageKey :: Text, scriptMessageLoc :: Text, scriptMessageDays :: Double}
+    | MsgAddTimedIdeaMonths {scriptMessageWhat :: Text, scriptMessageIcon :: Text, scriptMessageKey :: Text, scriptMessageLoc :: Text, scriptMessageMonths :: Double}
+    | MsgAddTimedIdeaVar {scriptMessageWhat :: Text, scriptMessageIcon :: Text, scriptMessageKey :: Text, scriptMessageLoc :: Text, scriptMessageAmtText :: Text, scriptMessageWhat2 :: Text}
     | MsgModifyTimedIdea {scriptMessageWhat :: Text, scriptMessageIcon :: Text, scriptMessageKey :: Text, scriptMessageLoc :: Text, scriptMessageDays :: Double}
+    | MsgModifyTimedIdeaMonths {scriptMessageWhat :: Text, scriptMessageIcon :: Text, scriptMessageKey :: Text, scriptMessageLoc :: Text, scriptMessageMonths :: Double}
+    | MsgModifyTimedIdeaVar {scriptMessageWhat :: Text, scriptMessageIcon :: Text, scriptMessageKey :: Text, scriptMessageLoc :: Text, scriptMessageAmtText :: Text, scriptMessageWhat2 :: Text}
     | MsgModifyIdea {scriptMessageCategory :: Text, scriptMessageIcon :: Text, scriptMessageKey :: Text, scriptMessageLoc :: Text, scriptMessageCategory2 :: Text, scriptMessageIcon2 :: Text, scriptMessageKey2 :: Text, scriptMessageLoc2 :: Text}
     | MsgReplaceIdea {scriptMessageCategory :: Text, scriptMessageIcon :: Text, scriptMessageKey :: Text, scriptMessageLoc :: Text, scriptMessageCategory2 :: Text, scriptMessageIcon2 :: Text, scriptMessageKey2 :: Text, scriptMessageLoc2 :: Text}
     | MsgEffectBox {scriptMessageLoc :: Text, scriptMessageKey :: Text, scriptMessageIcon :: Text, scriptMessageDesc :: Text}
@@ -2993,6 +2997,26 @@ instance RenderMessage Script ScriptMessage where
                 ," for "
                 , toMessage (formatDays _days)
                 ]
+        MsgAddTimedIdeaMonths {scriptMessageWhat = _what, scriptMessageIcon = _icon, scriptMessageKey = _key, scriptMessageLoc = _loc, scriptMessageMonths = _months}
+            -> mconcat
+                [ "Gets the "
+                , _what
+                , " "
+                , namedIdea _icon _key _loc
+                ," for "
+                , toMessage (formatMonths _months)
+                ]
+        MsgAddTimedIdeaVar {scriptMessageWhat = _what, scriptMessageIcon = _icon, scriptMessageKey = _key, scriptMessageLoc = _loc, scriptMessageAmtText = _amtT, scriptMessageWhat2 = _unit}
+            -> mconcat
+                [ "Gets the "
+                , _what
+                , " "
+                , namedIdea _icon _key _loc
+                ," for "
+                , typewriterText _amtT
+                , " "
+                , _unit
+                ]
         MsgModifyTimedIdea {scriptMessageWhat = _what, scriptMessageIcon = _icon, scriptMessageKey = _key, scriptMessageLoc = _loc, scriptMessageDays = _days}
             -> mconcat
                 [ "Extend the "
@@ -3001,6 +3025,26 @@ instance RenderMessage Script ScriptMessage where
                 , namedIdea _icon _key _loc
                 ," by "
                 , toMessage (formatDays _days)
+                ]
+        MsgModifyTimedIdeaMonths {scriptMessageWhat = _what, scriptMessageIcon = _icon, scriptMessageKey = _key, scriptMessageLoc = _loc, scriptMessageMonths = _months}
+            -> mconcat
+                [ "Extend the "
+                , _what
+                , " "
+                , namedIdea _icon _key _loc
+                ," by "
+                , toMessage (formatMonths _months)
+                ]
+        MsgModifyTimedIdeaVar {scriptMessageWhat = _what, scriptMessageIcon = _icon, scriptMessageKey = _key, scriptMessageLoc = _loc, scriptMessageAmtText = _amtT, scriptMessageWhat2 = _unit}
+            -> mconcat
+                [ "Extend the "
+                , _what
+                , " "
+                , namedIdea _icon _key _loc
+                ," by "
+                , typewriterText _amtT
+                , " "
+                , _unit
                 ]
         MsgModifyIdea { scriptMessageKey = _key, scriptMessageCategory2 = _cat2, scriptMessageIcon2 = _icon2, scriptMessageKey2 = _key2, scriptMessageLoc2 = _loc2}
             -> mconcat

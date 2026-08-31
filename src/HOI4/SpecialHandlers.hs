@@ -141,18 +141,62 @@ ppIdeaMsg msg _ (Just (category, ideaIcon, ideaKey, idea_loc, meffectbox)) = do
     idmsg <- msgToPP $ msg category ideaIcon ideaKey idea_loc
     return $ idmsg ++ fromMaybe [] meffectbox
 
+-- | The unit a timed idea's run is counted in. Script gives it in any of the
+-- three, and each is written out in the unit it was given in rather than turned
+-- into another: a run of months is a run of months to the reader as much as to
+-- the game.
+data TimedIdeaUnit = InDays | InMonths | InYears
+
+unitName :: TimedIdeaUnit -> Text
+unitName InDays = "days"
+unitName InMonths = "months"
+unitName InYears = "years"
+
+-- | What script says of a timed idea: which idea it is, how long it is held
+-- for, and the unit that length is counted in. The length is either given
+-- outright or held in a variable, which is named where the number would stand.
+data TimedIdea = TimedIdea
+    {   ti_idea :: Maybe Text
+    ,   ti_length :: Maybe Double
+    ,   ti_lengthvar :: Maybe Text
+    ,   ti_unit :: TimedIdeaUnit
+    }
+
+newTI :: TimedIdea
+newTI = TimedIdea Nothing Nothing Nothing InDays
+
+-- | Handler for @add_timed_idea@ and @modify_timed_idea@.
 handleTimedIdeas :: forall g m. (HOI4Info g, Monad m) =>
-        (Text -> Text -> Text -> Text -> Double -> ScriptMessage) -- ^ Message constructor, if abs value >= 1
+        (Text -> Text -> Text -> Text -> Double -> ScriptMessage) -- ^ Message constructor for a run of days
+        -> (Text -> Text -> Text -> Text -> Double -> ScriptMessage) -- ^ Message constructor for a run of months
+        -> (Text -> Text -> Text -> Text -> Text -> Text -> ScriptMessage) -- ^ Message constructor for a run held in a variable, told the unit it is counted in
         -> StatementHandler g m
-handleTimedIdeas msg stmt@[pdx| %_ = @scr |]
-    = pp_idda (parseTV "idea" "days" scr)
+handleTimedIdeas msgdays msgmonths msgvar stmt@[pdx| %_ = @scr |]
+    = case (ti_idea ti, mrun) of
+        (Just what, Just msg) -> ppIdeaMsg msg stmt =<< handleIdea True what
+        _ -> preStatement stmt
     where
-        pp_idda :: TextValue -> PPT g m IndentedMessages
-        pp_idda tv = case (tv_what tv, tv_value tv) of
-            (Just what, Just value) ->
-                ppIdeaMsg (\c i k l -> msg c i k l value) stmt =<< handleIdea True what
-            _ -> preStatement stmt
-handleTimedIdeas _ stmt = preStatement stmt
+        ti = foldl' addLine newTI scr
+        addLine :: TimedIdea -> GenericStatement -> TimedIdea
+        addLine t [pdx| idea = ?txt |] = t { ti_idea = Just txt }
+        addLine t [pdx| days = !n |] = t { ti_length = Just n, ti_unit = InDays }
+        addLine t [pdx| months = !n |] = t { ti_length = Just n, ti_unit = InMonths }
+        addLine t [pdx| years = !n |] = t { ti_length = Just n, ti_unit = InYears }
+        addLine t [pdx| days = ?txt |] = t { ti_lengthvar = Just txt, ti_unit = InDays }
+        addLine t [pdx| months = ?txt |] = t { ti_lengthvar = Just txt, ti_unit = InMonths }
+        addLine t [pdx| years = ?txt |] = t { ti_lengthvar = Just txt, ti_unit = InYears }
+        addLine t _ = t
+        -- A year is twelve months, which is the one turn between units that
+        -- loses nothing. A run held in a variable is left in the unit it was
+        -- given in, there being no number to turn.
+        mrun = case (ti_length ti, ti_lengthvar ti) of
+            (Just n, _) -> Just $ case ti_unit ti of
+                InDays -> \c i k l -> msgdays c i k l n
+                InMonths -> \c i k l -> msgmonths c i k l n
+                InYears -> \c i k l -> msgmonths c i k l (n * 12)
+            (_, Just var) -> Just (\c i k l -> msgvar c i k l var (unitName (ti_unit ti)))
+            _ -> Nothing
+handleTimedIdeas _ _ _ stmt = preStatement stmt
 
 handleIdeas :: forall g m. (HOI4Info g, Monad m) =>
     Bool ->

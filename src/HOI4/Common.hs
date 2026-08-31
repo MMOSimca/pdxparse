@@ -933,8 +933,8 @@ handlersIdeas = Tr.fromList
         [("has_idea"                    , handleIdeas False MsgHasIdea)
         ,("add_ideas"                   , handleIdeas True MsgAddIdea)
         ,("remove_ideas"                , handleIdeas False MsgRemoveIdea)
-        ,("add_timed_idea"              , handleTimedIdeas MsgAddTimedIdea)
-        ,("modify_timed_idea"           , handleTimedIdeas MsgModifyTimedIdea)
+        ,("add_timed_idea"              , handleTimedIdeas MsgAddTimedIdea MsgAddTimedIdeaMonths MsgAddTimedIdeaVar)
+        ,("modify_timed_idea"           , handleTimedIdeas MsgModifyTimedIdea MsgModifyTimedIdeaMonths MsgModifyTimedIdeaVar)
         ,("swap_ideas"                  , handleSwapIdeas)
         ,("show_ideas_tooltip"          , showIdea)
         ]
