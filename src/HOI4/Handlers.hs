@@ -2992,7 +2992,13 @@ setNationality stmt = withFlag MsgSetNationality stmt
 
 hasWarGoalAgainst :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
 hasWarGoalAgainst stmt@[pdx| %_ = $txt |] = withFlag MsgHasWargoalAgainst stmt
-hasWarGoalAgainst stmt@[pdx| %_ = @scr |] = textAtom "target" "type" MsgHasWargoalAgainstType (fmap Just . flagText (Just HOI4Country)) stmt
+-- A war goal of no named type is only the country it is held against, which is
+-- what the trigger's plain form says of it.
+hasWarGoalAgainst stmt@[pdx| %_ = @scr |] = case extractStmt (matchLhsText "type") scr of
+    (Just _, _) -> textAtom "target" "type" MsgHasWargoalAgainstType (fmap Just . flagText (Just HOI4Country)) stmt
+    _ -> case extractStmt (matchLhsText "target") scr of
+        (Just target, _) -> withFlag MsgHasWargoalAgainst target
+        _ -> preStatement stmt
 hasWarGoalAgainst stmt = preStatement stmt
 
 -------------------------------------
