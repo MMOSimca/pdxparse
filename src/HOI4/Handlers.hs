@@ -812,8 +812,7 @@ compoundMessagePronoun stmt@[pdx| $head = @scr |] = withCurrentIndent $ \i -> do
             "from" -> return (Just HOI4From, Just MsgFROMSCOPE) -- FROM / Should be some way to have different message depending on if it is event or decison, etc.
             "from.from" -> return (Just HOI4From, Just MsgFROMFROMSCOPE)
             "from.from.from" -> return (Just HOI4From, Just MsgFROMFROMFROMSCOPE)
-            _ -> trace (f ++ ": compoundMessagePronoun: don't know how to handle head " ++ T.unpack head)
-                 $ return (Nothing, undefined)
+            _ -> return (Nothing, Nothing)
         -- What ROOT stands for is what THIS stands for just inside a ROOT
         -- block. The other pronouns known by name were already peeled off.
         mrootval <- case T.toLower head of
