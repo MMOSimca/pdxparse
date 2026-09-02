@@ -83,6 +83,7 @@ module HOI4.Handlers (
     ,   addScientistXp
     ,   gainXp
     ,   hasResourcesInCountry
+    ,   numericOrVar
     ,   opinion
     ,   hasOpinion
     ,   triggerEvent
@@ -102,6 +103,7 @@ module HOI4.Handlers (
     ,   checkVariable
     ,   rhsAlways
     ,   rhsAlwaysYes
+    ,   rhsYesOrScope
     ,   rhsIgnored
     ,   exportVariable
     ,   addBuildingConstruction
@@ -941,6 +943,17 @@ numeric :: (IsGameState (GameState g), Monad m) =>
 numeric msg [pdx| %_ = !n |] = msgToPP $ msg n
 numeric _ stmt = plainMsg $ preStatementText' stmt
 
+-- | As 'numeric', for statements script also writes with a variable holding the
+-- number instead of the number itself.
+numericOrVar :: (HOI4Info g, Monad m) =>
+    (Double -> ScriptMessage)
+        -> (Text -> ScriptMessage)
+        -> StatementHandler g m
+numericOrVar msg _ [pdx| %_ = !n |] = msgToPP $ msg n
+numericOrVar _ msgvar [pdx| %_ = $vartag:$var |] = msgToPP $ msgvar (vartag <> ":" <> var)
+numericOrVar _ msgvar [pdx| %_ = $var |] = msgToPP $ msgvar var
+numericOrVar _ _ stmt = plainMsg $ preStatementText' stmt
+
 -- | Handler for numeric compare statements.
 numericCompare :: (HOI4Info g, Monad m) =>
     Text -> Text ->
@@ -1618,6 +1631,16 @@ rhsAlways _ _ stmt = trace ("Expectation is wrong in statement " ++ show stmt) $
 
 rhsAlwaysYes :: (HOI4Info g, Monad m) => ScriptMessage -> StatementHandler g m
 rhsAlwaysYes = rhsAlways "yes"
+
+-- | As 'rhsAlwaysYes', for effects that the game's script sometimes writes with
+-- a scope on the right instead of @yes@. The effect works on the scope it is
+-- written in whatever stands there, so the name says nothing the message needs
+-- -- but @no@ still turns it off.
+rhsYesOrScope :: (HOI4Info g, Monad m) => ScriptMessage -> StatementHandler g m
+rhsYesOrScope msg stmt@[pdx| %_ = ?rhs |]
+    | T.toLower rhs /= "no" = msgToPP msg
+    | otherwise = return []
+rhsYesOrScope _ stmt = preStatement stmt
 
 rhsIgnored :: (IsGameState (GameState g), Monad m) =>
     ScriptMessage -> p -> PPT g m IndentedMessages
