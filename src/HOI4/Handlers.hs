@@ -4532,11 +4532,14 @@ data DamageBuilding = DamageBuilding
         {   db_type :: Text
         ,   db_damage :: Maybe Double
         ,   db_damagevar :: Maybe Text
-        ,   db_province :: Maybe Double
+        ,   db_province :: Maybe Int
+        ,   db_provincevar :: Maybe Text
+        ,   db_state :: Maybe Int
+        ,   db_repair :: Maybe Double
         }
 
 newDB :: DamageBuilding
-newDB = DamageBuilding "" Nothing Nothing Nothing
+newDB = DamageBuilding "" Nothing Nothing Nothing Nothing Nothing Nothing
 
 damageBuilding :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
 damageBuilding stmt@[pdx| %_ = @scr |]
@@ -4549,14 +4552,28 @@ damageBuilding stmt@[pdx| %_ = @scr |]
         addLine db [pdx| damage = !num |] = return db { db_damage = Just num }
         addLine db [pdx| damage = $txt |] = return db { db_damagevar = Just txt }
         addLine db [pdx| province = !num |] = return db {db_province = Just num}
+        -- A province picked at run time out of a variable.
+        addLine db [pdx| province = $vartag:$var |] = return db {db_provincevar = Just (vartag <> ":" <> var)}
+        -- A building of a state rather than of a province (a fort sits in a
+        -- province, a factory in a state).
+        addLine db [pdx| state = !num |] = return db {db_state = Just num}
+        -- How the damage repairs: negative slows the rebuild down.
+        addLine db [pdx| repair_speed_modifier = !num |] = return db {db_repair = Just num}
         addLine db stmt = warn (UnknownSection "damage_building" stmt) $ return db
         ppDB db = do
             let typeicon = iconText (db_type db)
-                prov = fromMaybe (-1) (db_province db)
+            whereloc <- case (db_state db, db_province db, db_provincevar db) of
+                (Just state, _, _) -> getStateLoc state
+                (_, Just prov, _) -> getProvinceLoc prov
+                (_, _, Just provvar) -> return $ "province " <> typewriterText provvar
+                _ -> return ""
+            let repairtext = case db_repair db of
+                    Just r -> " (repair speed " <> templateColor' (reducedNum (colourPc False) r) <> ")"
+                    _ -> ""
             typeloc <- getGameL10n (db_type db)
             case (db_damage db, db_damagevar db) of
-                (Just amt, _) -> return $ MsgDamageBuilding typeicon typeloc amt prov
-                (_, Just amt) -> return $ MsgDamageBuildingVar typeicon typeloc amt prov
+                (Just amt, _) -> return $ MsgDamageBuilding typeicon typeloc amt whereloc repairtext
+                (_, Just amt) -> return $ MsgDamageBuildingVar typeicon typeloc amt whereloc repairtext
                 _ -> return $ preMessage stmt
 damageBuilding stmt = preStatement stmt
 

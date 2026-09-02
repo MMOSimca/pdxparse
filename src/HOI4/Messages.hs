@@ -774,8 +774,8 @@ data ScriptMessage
     | MsgAddCountryLeaderRolePromoted {scriptMessageWho :: Text, scriptMessageWhat :: Text}
     | MsgPromoteCharacter {scriptMessageWho :: Text}
     | MsgCreateOperativeLeader {scriptMessageWho :: Text, scriptMessageWhat :: Text, scriptMessageGender :: Text, scriptMessageYn :: Bool, scriptMessageYn2 :: Bool}
-    | MsgDamageBuilding {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmt :: Double, scriptMessageProvince :: Double}
-    | MsgDamageBuildingVar {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmtText :: Text, scriptMessageProvince :: Double}
+    | MsgDamageBuilding {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmt :: Double, scriptMessage_where :: Text, scriptMessageRepair :: Text}
+    | MsgDamageBuildingVar {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmtText :: Text, scriptMessage_where :: Text, scriptMessageRepair :: Text}
     | MsgDivisionTemplate {scriptMessageWhat :: Text}
     | MsgDeleteUnit {scriptMessageYn :: Bool, scriptMessageWhat :: Text, scriptMessageWhere :: Text}
     | MsgDeleteUnitTemplateAndUnits {scriptMessageYn :: Bool, scriptMessageWhat :: Text, scriptMessage_where :: Text}
@@ -5228,7 +5228,7 @@ instance RenderMessage Script ScriptMessage where
                 , ifThenElseT _yn " and recruit them" ""
                 , ifThenElseT _yn2 " and can be recruited by the spymaster" ""
                 ]
-        MsgDamageBuilding {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageAmt = _amt, scriptMessageProvince = _prov}
+        MsgDamageBuilding {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageAmt = _amt, scriptMessage_where = _where, scriptMessageRepair = _repair}
             -> mconcat
                 [ "The "
                 ,  _icon
@@ -5237,16 +5237,18 @@ instance RenderMessage Script ScriptMessage where
                 , " "
                 , plural _amt "level" "levels"
                 , " of damage"
-                , ifThenElseT (_prov > 0) (" in province (" <> roundNumNoSpace _prov <> ")") ""
+                , ifThenElseT (T.null _where) "" (" in " <> _where)
+                , _repair
                 ]
-        MsgDamageBuildingVar {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageAmtText = _amtT, scriptMessageProvince = _prov}
+        MsgDamageBuildingVar {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageAmtText = _amtT, scriptMessage_where = _where, scriptMessageRepair = _repair}
             -> mconcat
                 [ "The "
                 ,  _icon
                 , " receives "
                 , typewriterText _amtT
                 , " levels of damage"
-                , ifThenElseT (_prov > 0) (" in province (" <> roundNumNoSpace _prov <> ")") ""
+                , ifThenElseT (T.null _where) "" (" in " <> _where)
+                , _repair
                 ]
         MsgDeleteUnit {scriptMessageYn = _yn, scriptMessageWhat = _what, scriptMessageWhere = _where}
             -> mconcat
