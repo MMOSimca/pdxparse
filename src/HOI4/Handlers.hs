@@ -1276,11 +1276,13 @@ parseTV :: Foldable t => Text -> Text -> t GenericStatement -> TextValue
 parseTV whatlabel vallabel = foldl' addLine newTV
     where
         addLine :: TextValue -> GenericStatement -> TextValue
-        addLine tv [pdx| $label = ?what |] | label == whatlabel
+        addLine tv [pdx| $label = ?what |] | sameKey label whatlabel
             = tv { tv_what = Just what }
-        addLine tv [pdx| $label = !val |] | label == vallabel
+        addLine tv [pdx| $label = !val |] | sameKey label vallabel
             = tv { tv_value = Just val }
-        addLine tv [pdx| $label = $val |] | label == vallabel
+        addLine tv [pdx| $label = $vartag:$val |] | sameKey label vallabel
+            = tv { tv_var = Just (vartag <> ":" <> val) }
+        addLine tv [pdx| $label = $val |] | sameKey label vallabel
             = tv { tv_var = Just val }
         addLine nor _ = nor
 
@@ -1298,14 +1300,20 @@ parseTVC :: Foldable t =>
 parseTVC whatlabel vallabel gt lt = foldl' addLine newTVC
     where
         addLine :: TextValueComp -> GenericStatement -> TextValueComp
-        addLine tvc [pdx| $label = ?what |] | label == whatlabel
+        addLine tvc [pdx| $label = ?what |] | sameKey label whatlabel
             = tvc { tvc_what = Just what }
-        addLine tvc [pdx| $label = !val |] | label == vallabel
+        addLine tvc [pdx| $label = !val |] | sameKey label vallabel
             = tvc { tvc_value = Just val, tvc_comp = Just ("equal to or " <> gt) }
-        addLine tvc [pdx| $label > !val |] | label == vallabel
+        addLine tvc [pdx| $label > !val |] | sameKey label vallabel
             = tvc { tvc_value = Just val, tvc_comp = Just gt }
-        addLine tvc [pdx| $label < !val |] | label == vallabel
+        addLine tvc [pdx| $label < !val |] | sameKey label vallabel
             = tvc { tvc_value = Just val, tvc_comp = Just lt  }
+        addLine tvc [pdx| $label = $vartag:$val |] | sameKey label vallabel
+            = tvc { tvc_var = Just (vartag <> ":" <> val), tvc_comp = Just ("equal to or " <> gt) }
+        addLine tvc [pdx| $label > $vartag:$val |] | sameKey label vallabel
+            = tvc { tvc_var = Just (vartag <> ":" <> val), tvc_comp = Just gt }
+        addLine tvc [pdx| $label < $vartag:$val |] | sameKey label vallabel
+            = tvc { tvc_var = Just (vartag <> ":" <> val), tvc_comp = Just lt }
         addLine tvc [pdx| $label = $val |] | label == vallabel
             = tvc { tvc_var = Just val, tvc_comp = Just ("equal to or " <> gt) }
         addLine tvc [pdx| $label > $val |] | label == vallabel
@@ -1461,10 +1469,10 @@ parseTA whatlabel atomlabel scr = foldl' addLine newTA scr
     where
         addLine :: TextAtom -> GenericStatement -> TextAtom
         addLine ta [pdx| $label = ?what |]
-            | label == whatlabel
+            | sameKey label whatlabel
             = ta { ta_what = Just what }
         addLine ta [pdx| $label = ?at |]
-            | label == atomlabel
+            | sameKey label atomlabel
             = ta { ta_atom = Just at }
         addLine ta scr = trace ("parseTA: Ignoring " ++ show scr) ta
 
