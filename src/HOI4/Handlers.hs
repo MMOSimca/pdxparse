@@ -83,12 +83,33 @@ module HOI4.Handlers (
     ,   addScientistXp
     ,   gainXp
     ,   hasResourcesInCountry
+    ,   hasResourcesInCollection
+    ,   hasResourcesRights
+    ,   damageUnits
+    ,   numDivisionsInStates
+    ,   setVariableToRandom
+    ,   addRandomTrait
+    ,   forceEnableResistance
+    ,   thisScope
+    ,   arrayLoop
+    ,   collectionSize
+    ,   createRailwayGun
+    ,   addHistoryEntry
+    ,   setCountryLeaderName
+    ,   generateScientistCharacter
+    ,   setStateProvinceController
+    ,   numPlanesStationedInRegions
+    ,   listedScope
+    ,   listedState
+    ,   addMines
+    ,   setDivisionForceAllowRecruiting
     ,   numericOrVar
     ,   opinion
     ,   hasOpinion
     ,   triggerEvent
     ,   random
     ,   randomList
+    ,   forLoopEffect
     ,   hasDlc
     ,   effectTooltip
     ,   limitClause
@@ -112,6 +133,7 @@ module HOI4.Handlers (
     ,   setBuildingLevel
     ,   addNamedThreat
     ,   createWargoal
+    ,   removeWargoal
     ,   declareWarOn
     ,   annexCountry
     ,   addTechBonus
@@ -140,6 +162,13 @@ module HOI4.Handlers (
     ,   sendEquipment
     ,   buildRailway
     ,   canBuildRailway
+    ,   hasRailwayConnection
+    ,   stateResource
+    ,   addIntel
+    ,   addDecryption
+    ,   countryLockAllDivisionTemplate
+    ,   changeDivisionTemplate
+    ,   hasLicense
     ,   addResource
     ,   modifyBuildingResources
     ,   handleDate
@@ -160,6 +189,14 @@ module HOI4.Handlers (
     ,   divisionsInState
     ,   deleteUnits
     ,   startBorderWar
+    ,   cancelBorderWar
+    ,   finalizeBorderWar
+    ,   setBorderWarData
+    ,   teleportArmies
+    ,   transferNavy
+    ,   shipsIn
+    ,   anyStateIn
+    ,   countTriggers
     ,   addProvinceModifier
     ,   powerBalanceRange
     ,   navalStrengthComparison
@@ -181,7 +218,7 @@ import qualified Data.HashMap.Strict as HM
 
 import qualified Text.PrettyPrint.Leijen.Text as PP
 
-import Data.List (foldl', intersperse, intercalate, findIndex)
+import Data.List (foldl', intersperse, intercalate, findIndex, partition)
 import Data.Maybe
 
 import Control.Applicative (liftA2, (<|>))
@@ -196,7 +233,7 @@ import qualified Doc -- everything
 import HOI4.Messages -- everything
 import HOI4.WikiTables (scriptIconTable, iconTerm, scriptIconFileTable, iconKey, doctrineFolderIds)
 import MessageTools (plural, iquotes, italicText, boldText, typewriterText
-                    , plainNum, colourNumSign, plainPc, colourPc, reducedNum
+                    , plainNum, plainNumMin, colourNumSign, plainPc, colourPc, reducedNum
                     , formatDays, formatHours)
 import QQ -- everything
 -- everything
@@ -916,6 +953,12 @@ withNonlocAtom _ stmt = preStatement stmt
 
 
 
+-- | Handler for a resource's own name used as a trigger, which compares how
+-- much of the resource the state has.
+stateResource :: (HOI4Info g, Monad m) => Text -> StatementHandler g m
+stateResource res = numericCompare "more than" "less than"
+    (MsgStateResource (iconText res)) (MsgStateResourceVar (iconText res))
+
 -- | Handler for a building's own name used as a trigger, which compares how many
 -- levels of the building the state has.
 buildingLevel :: (HOI4Info g, Monad m) => Text -> StatementHandler g m
@@ -1021,7 +1064,12 @@ numericCompareCompoundLoc :: (HOI4Info g, Monad m) =>
     (Text -> Text -> Text -> ScriptMessage)
         -> StatementHandler g m
 numericCompareCompoundLoc gt lt msg msgvar stmt@[pdx| %_ = %rhs |] = case rhs of
-    CompoundRhs [scr] -> numericCompareLoc gt lt msg msgvar scr
+    -- @show_current@ only asks the game to put the amount held into the
+    -- tooltip, and says nothing about what is being compared. What is left is
+    -- one comparison per line, each said in turn.
+    CompoundRhs scr -> case snd (extractStmt (matchLhsText "show_current") scr) of
+        [] -> preStatement stmt
+        comparisons -> concat <$> traverse (numericCompareLoc gt lt msg msgvar) comparisons
     _ -> preStatement stmt
 numericCompareCompoundLoc _ _ _ _ stmt = preStatement stmt
 
@@ -1704,27 +1752,54 @@ opinion _ _ _ stmt = preStatement stmt
 --
 -- Resources come in whole units, so a test for more than forty-nine of something
 -- is a test for fifty, and reads better written that way.
-hasResourcesInCountry :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
-hasResourcesInCountry stmt@[pdx| %_ = @scr |] =
-    case foldl' addLine (Nothing, Nothing, "") scr of
-        (Just res, Just (comp, amt), qualifier) ->
-            msgToPP $ MsgHasResourcesInCountry qualifier comp amt (iconText res)
-        _ -> preStatement stmt
+-- | How much of a resource is asked for, and of what kind of stock. The same
+-- fields are written whether the question is put to one country or to a
+-- collection of them.
+data ResourceCheck = ResourceCheck
+        {   rc_resource :: Maybe Text
+        ,   rc_amount :: Maybe (Text, Double)
+        ,   rc_qualifier :: Text
+        ,   rc_collection :: Maybe Text
+        }
+
+parseResourceCheck :: String -> GenericScript -> ResourceCheck
+parseResourceCheck what = foldl' addLine (ResourceCheck Nothing Nothing "" Nothing)
     where
-        addLine (res, cmp, q) [pdx| resource = ?r |] = (Just r, cmp, q)
-        addLine (res, cmp, q) [pdx| amount > !n |] = (res, Just ("at least", n + 1), q)
-        addLine (res, cmp, q) [pdx| amount < !n |] = (res, Just ("less than", n), q)
-        addLine (res, cmp, q) [pdx| amount = !n |] = (res, Just ("exactly", n), q)
+        addLine rc [pdx| resource = ?r |] = rc { rc_resource = Just r }
+        addLine rc [pdx| amount > !n |] = rc { rc_amount = Just ("at least", n + 1) }
+        addLine rc [pdx| amount < !n |] = rc { rc_amount = Just ("less than", n) }
+        addLine rc [pdx| amount = !n |] = rc { rc_amount = Just ("exactly", n) }
         -- Whether what the country digs up itself counts, or only what it buys.
-        addLine (res, cmp, q) [pdx| extracted = yes |] = (res, cmp, "extracted ")
-        addLine (res, cmp, q) [pdx| only_imported = yes |] = (res, cmp, "imported ")
-        addLine acc [pdx| extracted = no |] = acc
-        addLine acc [pdx| only_imported = no |] = acc
+        addLine rc [pdx| extracted = yes |] = rc { rc_qualifier = "extracted " }
+        addLine rc [pdx| only_imported = yes |] = rc { rc_qualifier = "imported " }
+        addLine rc [pdx| extracted = no |] = rc
+        addLine rc [pdx| only_imported = no |] = rc
         -- Counts what the country's buildings take rather than what it holds.
         -- Nothing in the wording tells the two apart as yet.
-        addLine acc [pdx| buildings = %_ |] = acc
-        addLine acc stmt = trace ("unknown section in has_resources_in_country: " ++ show stmt) acc
+        addLine rc [pdx| buildings = %_ |] = rc
+        addLine rc [pdx| collection = ?coll |] = rc { rc_collection = Just coll }
+        addLine rc stmt = trace ("unknown section in " ++ what ++ ": " ++ show stmt) rc
+
+hasResourcesInCountry :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+hasResourcesInCountry stmt@[pdx| %_ = @scr |] =
+    case parseResourceCheck "has_resources_in_country" scr of
+        ResourceCheck (Just res) (Just (comp, amt)) qualifier _ ->
+            msgToPP $ MsgHasResourcesInCountry qualifier comp amt (iconText res)
+        _ -> preStatement stmt
 hasResourcesInCountry stmt = preStatement stmt
+
+-- | As 'hasResourcesInCountry', over every country a named collection gathers
+-- rather than the one in scope. Script writes the collection as @collection:@
+-- and its name, which is localized under that name in capitals.
+hasResourcesInCollection :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+hasResourcesInCollection stmt@[pdx| %_ = @scr |] =
+    case parseResourceCheck "has_resources_in_collection" scr of
+        ResourceCheck (Just res) (Just (comp, amt)) qualifier (Just coll) -> do
+            let collkey = fromMaybe coll (T.stripPrefix "collection:" coll)
+            collloc <- getGameL10n ("COLLECTION_" <> T.toUpper collkey)
+            msgToPP $ MsgHasResourcesInCollection qualifier comp amt (iconText res) collloc
+        _ -> preStatement stmt
+hasResourcesInCollection stmt = preStatement stmt
 
 -- | Handler for @amount_taken_ideas@, which counts how many of a country's idea
 -- slots of a kind are filled. An advisor, a theorist and the rest are all ideas
@@ -1882,8 +1957,26 @@ random stmt@[pdx| %_ = @scr |]
       = compoundMessage
           (MsgRandomChance chance)
           [pdx| %undefined = @(front ++ tail back) |]
+    | (front, back) <- break
+                        (\case
+                            [pdx| chance = %_ |] -> True
+                            _ -> False)
+                        scr
+      , not (null back)
+      , [pdx| %_ = %rhs |] <- head back
+      , Just chancevar <- varName rhs
+      = compoundMessage
+          (MsgRandomChanceVar chancevar)
+          [pdx| %undefined = @(front ++ tail back) |]
     | otherwise = compoundMessage MsgRandom stmt
 random stmt = preStatement stmt
+
+-- | The name of the variable a right-hand side holds, where it holds one
+-- rather than a number.
+varName :: GenericRhs -> Maybe Text
+varName (GenericRhs vartag [var]) = Just (vartag <> ":" <> var)
+varName (GenericRhs var []) = Just var
+varName _ = Nothing
 
 
 toPct :: Double -> Double
@@ -1959,6 +2052,12 @@ randomList stmt@[pdx| %_ = @scr |] =
                                     Just [pdx| %_ = !add |] -> do
                                         cond <- ppMany sa'
                                         liftA2 (++) (msgToPP $ MsgRandomListAddModifier add) (pure cond)
+                                    Just [pdx| %_ = $vartag:$var |] -> do
+                                        cond <- ppMany sa'
+                                        liftA2 (++) (msgToPP $ MsgRandomListAddModifierVar (vartag <> ":" <> var)) (pure cond)
+                                    Just [pdx| %_ = $var |] -> do
+                                        cond <- ppMany sa'
+                                        liftA2 (++) (msgToPP $ MsgRandomListAddModifierVar var) (pure cond)
                                     _ -> preStatement s
                 s -> preStatement s) (rm_mod rm))
 
@@ -2599,6 +2698,20 @@ createWargoal stmt@[pdx| %_ = @scr |] =
                 (Just wgtype, Nothing, Just target_flag, Nothing) -> MsgCreateWG wgtype target_flag states
 createWargoal stmt = preStatement stmt
 
+-- | Takes away a war goal the country holds. It names the goal and whoever it
+-- is held against exactly as @create_wargoal@ does.
+removeWargoal :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+removeWargoal stmt@[pdx| %_ = @scr |] =
+    msgToPP . pp_remove_wg =<< parseWarGoal "remove_wargoal" scr
+    where
+        pp_remove_wg :: WarGoal -> ScriptMessage
+        pp_remove_wg wg = case (war_type wg, war_type_loc wg, war_target_flag wg) of
+            (Nothing, _, _) -> preMessage stmt -- need WG type
+            (_, _, Nothing) -> preMessage stmt -- need target
+            (_, Just wgtype_loc, Just target_flag) -> MsgRemoveWargoal wgtype_loc target_flag
+            (Just wgtype, Nothing, Just target_flag) -> MsgRemoveWargoal wgtype target_flag
+removeWargoal stmt = preStatement stmt
+
 declareWarOn :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
 declareWarOn stmt@[pdx| %_ = @scr |] =
     msgToPP . pp_declare_war =<< parseWarGoal "declare_war_on" scr
@@ -3114,8 +3227,12 @@ setRule :: forall g m. (HOI4Info g, Monad m) =>
     -> StatementHandler g m
 setRule header [pdx| %_ = @scr |]
     = withCurrentIndent $ \i -> do
-        rules_pp'd <- ppRules scr
-        let numrules = fromIntegral $ length scr
+        -- @desc@ names a piece of text the game shows in place of the wording a
+        -- rule would otherwise be given. It is not a rule and is not one of the
+        -- ones counted.
+        let (_, rules) = extractStmt (matchLhsText "desc") scr
+        rules_pp'd <- ppRules rules
+        let numrules = fromIntegral $ length rules
         return ((i, header numrules) : rules_pp'd)
     where
         ppRules :: GenericScript -> PPT g m IndentedMessages
@@ -3381,6 +3498,116 @@ canBuildRailway stmt@[pdx| %_ = @scr |]
                     _ -> preMessage stmt
 canBuildRailway stmt = preStatement stmt
 
+-- | Whether the railway @can_build_railway@ would build is already there. The
+-- two are written with the same fields.
+hasRailwayConnection :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+hasRailwayConnection stmt@[pdx| %_ = @scr |]
+    = msgToPP . pp_hrc =<< parseRailway "has_railway_connection" scr
+    where
+        pp_hrc hrc = case rail_path hrc of
+            Just path ->
+                let paths = T.pack $ concat ["on the provinces (" , intercalate "), (" (map (show . round) path),")"]
+                in MsgHasRailwayConnectionPath paths
+            _ -> case (rail_start_state hrc, rail_target_state hrc,
+                       rail_start_province hrc, rail_target_province hrc) of
+                    (Just start, Just end, _,_) -> MsgHasRailwayConnection start end
+                    (_,_, Just start, Just end) -> MsgHasRailwayConnectionProv start end
+                    _ -> preMessage stmt
+hasRailwayConnection stmt = preStatement stmt
+
+------------------------------
+-- handler for has_license  --
+------------------------------
+
+-- | Whether the country holds a production license, which names either an
+-- archetype or one exact piece of equipment, and may name who granted it.
+hasLicense :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+hasLicense stmt@[pdx| %_ = @scr |] = do
+    let (mfrom, s1) = extractStmt (matchLhsText "from") scr
+        (marchetype, s2) = extractStmt (matchLhsText "archetype") s1
+        (mequipment, _) = extractStmt (matchLhsText "equipment") s2
+    whoflag <- case mfrom of
+        Just [pdx| %_ = ?who |] -> flagText (Just HOI4Country) who
+        _ -> return ""
+    mwhat <- case (marchetype, mequipment) of
+        (Just [pdx| %_ = ?arch |], _) -> Just <$> getGameL10n arch
+        (_, Just [pdx| %_ = @equip |]) ->
+            case fst (extractStmt (matchLhsText "type") equip) of
+                Just [pdx| %_ = ?ty |] -> Just <$> getGameL10n ty
+                _ -> return Nothing
+        _ -> return Nothing
+    case mwhat of
+        Just what -> msgToPP $ MsgHasLicense whoflag what
+        Nothing -> preStatement stmt
+hasLicense stmt = preStatement stmt
+
+------------------------------------------------
+-- handlers for the intelligence effects       --
+------------------------------------------------
+
+-- | Intel gained on another country, which is counted separately for each of
+-- the four branches.
+addIntel :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+addIntel stmt@[pdx| %_ = @scr |] = do
+    let (mtarget, kinds) = extractStmt (matchLhsText "target") scr
+    case mtarget of
+        Just [pdx| %_ = ?who |] -> do
+            whoflag <- flagText (Just HOI4Country) who
+            header <- msgToPP $ MsgAddIntel whoflag
+            branches <- indentUp (concat <$> traverse ppKind kinds)
+            return $ header ++ branches
+        _ -> preStatement stmt
+    where
+        ppKind :: GenericStatement -> PPT g m IndentedMessages
+        ppKind [pdx| $kind = !num |] = do
+            kindloc <- getGameL10n (intelKey kind)
+            msgToPP $ MsgAddIntelKind kindloc num
+        ppKind st = preStatement st
+        -- The ledger the game names these on calls the air branch AIR_INTEL,
+        -- where script writes airforce_intel.
+        intelKey "airforce_intel" = "AIR_INTEL"
+        intelKey kind = T.toUpper kind
+addIntel stmt = preStatement stmt
+
+-- | Decryption gained against another country, given either as a flat amount or
+-- as a share of what the target has to defend with.
+addDecryption :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+addDecryption stmt@[pdx| %_ = @scr |] = do
+    let (mtarget, rest) = extractStmt (matchLhsText "target") scr
+        (mratio, rest') = extractStmt (matchLhsText "ratio") rest
+        (mamount, _) = extractStmt (matchLhsText "amount") rest'
+    whoflag <- case mtarget of
+        Just [pdx| %_ = ?who |] -> flagText (Just HOI4Country) who
+        _ -> return ""
+    case (mratio, mamount) of
+        (Just [pdx| %_ = !num |], _) -> msgToPP $ MsgAddDecryptionRatio whoflag num
+        (_, Just [pdx| %_ = !num |]) -> msgToPP $ MsgAddDecryptionAmount whoflag num
+        _ -> preStatement stmt
+addDecryption stmt = preStatement stmt
+
+--------------------------------------------------------
+-- handlers for the country-wide division template locks --
+--------------------------------------------------------
+
+countryLockAllDivisionTemplate :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+-- The reason the lock is given is a localization key the game shows in place of
+-- the wording it would otherwise use, which says nothing of what changes.
+countryLockAllDivisionTemplate [pdx| %_ = @scr |] =
+    msgToPP $ MsgLockDivision (null [() | [pdx| is_locked = no |] <- scr])
+countryLockAllDivisionTemplate [pdx| %_ = no |] = msgToPP $ MsgLockDivision False
+countryLockAllDivisionTemplate [pdx| %_ = yes |] = msgToPP $ MsgLockDivision True
+countryLockAllDivisionTemplate stmt = preStatement stmt
+
+-- | Which template a division is built to. Script writes the name either bare
+-- or in a field of a block.
+changeDivisionTemplate :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+changeDivisionTemplate stmt@[pdx| %_ = @scr |] =
+    case fst (extractStmt (matchLhsText "division_template") scr) of
+        Just [pdx| %_ = ?tmpl |] -> msgToPP $ MsgChangeDivisionTemplate tmpl
+        _ -> preStatement stmt
+changeDivisionTemplate [pdx| %_ = ?tmpl |] = msgToPP $ MsgChangeDivisionTemplate tmpl
+changeDivisionTemplate stmt = preStatement stmt
+
 ------------------------------
 -- Handler for add_resource --
 ------------------------------
@@ -3437,22 +3664,34 @@ foldCompound "modifyBuildingResources" "ModifyBuildingResources" "mbr"
 
 handleDate :: (Monad m, HOI4Info g) =>
     Text -> Text -> StatementHandler g m
-handleDate after before  stmt@[pdx| %_ = %date |] = case date of
-    DateRhs Date {year = year, month = month, day = day} -> do
+handleDate after before  stmt@[pdx| %_ = %date |] = case dateParts date of
+    Just (year, month, day) -> do
         monthloc <- isMonth month
         msgToPP $ MsgDate after monthloc (fromIntegral day) (fromIntegral year)
     _ -> preStatement stmt
-handleDate after before stmt@[pdx| %_ > %date |] = case date of
-    DateRhs Date {year = year, month = month, day = day} ->  do
+handleDate after before stmt@[pdx| %_ > %date |] = case dateParts date of
+    Just (year, month, day) ->  do
         monthloc <- isMonth month
         msgToPP $ MsgDate after monthloc (fromIntegral day) (fromIntegral year)
     _ -> preStatement stmt
-handleDate after before stmt@[pdx| %_ < %date |] = case date of
-    DateRhs Date {year = year, month = month, day = day} ->  do
+handleDate after before stmt@[pdx| %_ < %date |] = case dateParts date of
+    Just (year, month, day) ->  do
         monthloc <- isMonth month
         msgToPP $ MsgDate before monthloc (fromIntegral day) (fromIntegral year)
     _ -> preStatement stmt
 handleDate _ _ stmt = preStatement stmt
+
+-- | The year, month and day a right-hand side holds. Script writes a date
+-- either bare, where the parser reads it as a date of its own, or in quotes,
+-- where it comes through as the text of one.
+dateParts :: GenericRhs -> Maybe (Int, Int, Int)
+dateParts (DateRhs Date {year = year, month = month, day = day}) = Just (year, month, day)
+dateParts rhs = do
+    text <- textRhs rhs
+    case map (T.unpack . T.strip) (T.splitOn "." text) of
+        [y, m, d] | all (all isDigit) [y, m, d], not (any null [y, m, d]) ->
+            Just (read y, read m, read d)
+        _ -> Nothing
 
 
 isMonth :: (HOI4Info g, Monad m) =>
@@ -3605,6 +3844,407 @@ giveResourceRights stmt@[pdx| %_ = @scr |]
         getbareRess (StatementBare (GenericLhs e [])) = Just e
         getbareRess stmt = trace ("Unknown in give_resource_rights array statement: " ++ show stmt) Nothing
 giveResourceRights stmt = preStatement stmt
+
+-- | Whether anyone holds the rights to a state's resources. The receiver and
+-- the state may each be left out where the scope already names one of them.
+hasResourcesRights :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+hasResourcesRights stmt@[pdx| %_ = @scr |] = do
+    let (mreceiver, s1) = extractStmt (matchLhsText "receiver") scr
+        (mstate, s2) = extractStmt (matchLhsText "state") s1
+        (mresources, _) = extractStmt (matchLhsText "resources") s2
+    whoflag <- case mreceiver of
+        Just [pdx| %_ = ?who |] -> flagText (Just HOI4Country) who
+        _ -> return ""
+    -- With no state named the trigger asks about the state in scope.
+    whereloc <- case mstate of
+        Just st -> statedFrom (Just st)
+        _ -> return "the state"
+    resloc <- case mresources of
+        Just [pdx| %_ = @ress |] -> do
+            locs <- traverse getGameL10n (mapMaybe bareAtom ress)
+            return $ if null locs then "" else T.intercalate ", " locs <> " "
+        _ -> return ""
+    msgToPP $ MsgHasResourcesRights whoflag whereloc resloc
+hasResourcesRights stmt = preStatement stmt
+
+-- | The name written bare inside an array, as script writes a list of resources
+-- or of traits.
+bareAtom :: GenericStatement -> Maybe Text
+bareAtom (StatementBare (GenericLhs atom [])) = Just atom
+bareAtom stmt = trace ("Unknown in bare array statement: " ++ show stmt) Nothing
+
+-------------------------------
+-- handler for damage_units  --
+-------------------------------
+
+-- | Hurts the units somewhere without a word from the game about it. The
+-- @limit@ is a condition on whoever owns them, so it keeps a block of its own
+-- under the line saying what is damaged.
+damageUnits :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+damageUnits [pdx| %_ = @scr |] = do
+    let isField st = any (`matchLhsText` st)
+            ["province", "state", "region", "damage", "org_damage", "str_damage"
+            ,"ratio", "template", "army", "navy"]
+        (fields, rest) = partition isField scr
+        field k = listToMaybe [st | st <- fields, matchLhsText k st]
+        saidYes k = not (null [() | [pdx| $lbl = yes |] <- fields, sameKey lbl k])
+        amount k = case field k of
+            Just [pdx| %_ = !n |] -> Just (n :: Double)
+            _ -> Nothing
+        -- A ratio is a share of what the unit has, anything else a flat amount.
+        ratio = saidYes "ratio"
+        showAmt n = boldText (Doc.doc2text (if ratio then reducedNum plainPc n else plainNum n))
+        parts = [ showAmt n <> " of their " <> lbl
+                | (k, lbl) <- [ ("damage", "organisation and strength")
+                              , ("org_damage", "organisation")
+                              , ("str_damage", "strength") ]
+                , Just n <- [amount k] ]
+        what | saidYes "army" && not (saidYes "navy") = "armies"
+             | saidYes "navy" && not (saidYes "army") = "navies"
+             | otherwise = "units"
+    whereloc <- case (field "province", field "state", field "region") of
+        (Just [pdx| %_ = !prov |], _, _) -> return $ "province " <> T.pack (show (prov :: Int))
+        (_, Just st, _) -> statedFrom (Just st)
+        (_, _, Just [pdx| %_ = !reg |]) -> getRegionLoc reg
+        _ -> return ""
+    header <- msgToPP $ MsgDamageUnits what whereloc
+        (if null parts then "an unstated amount" else T.intercalate " and " parts)
+    script_pp'd <- ppMany rest
+    return (header ++ script_pp'd)
+damageUnits stmt = preStatement stmt
+
+-----------------------------------------
+-- handler for num_divisions_in_states --
+-----------------------------------------
+
+numDivisionsInStates :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+numDivisionsInStates stmt@[pdx| %_ = @scr |] = do
+    let (mcount, s1) = extractStmt (matchLhsText "count") scr
+        (mstates, _) = extractStmt (matchLhsText "states") s1
+    stateslocs <- case mstates of
+        Just [pdx| %_ = @sts |] -> traverse getStateLoc (mapMaybe bareState sts)
+        _ -> return []
+    let whereloc = if null stateslocs then "the states named"
+                   else T.intercalate ", " stateslocs
+    case mcount of
+        Just [pdx| %_ > !num |] -> msgToPP $ MsgNumDivisionsInStates "more than" num whereloc
+        Just [pdx| %_ < !num |] -> msgToPP $ MsgNumDivisionsInStates "fewer than" num whereloc
+        Just [pdx| %_ = !num |] -> msgToPP $ MsgNumDivisionsInStates "exactly" num whereloc
+        _ -> preStatement stmt
+    where
+        bareState (StatementBare (IntLhs n)) = Just n
+        bareState st = trace ("Unknown in num_divisions_in_states array: " ++ show st) Nothing
+numDivisionsInStates stmt = preStatement stmt
+
+------------------------------------
+-- handler for set_variable_to_random --
+------------------------------------
+
+-- | Puts a random number in a variable. Written bare it is a number from 0 up
+-- to 1; the block form gives the range and says whether it is a whole number.
+setVariableToRandom :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+setVariableToRandom [pdx| %_ = @scr |] = do
+    let (mvar, s1) = extractStmt (matchLhsText "var") scr
+        (mmin, s2) = extractStmt (matchLhsText "min") s1
+        (mmax, s3) = extractStmt (matchLhsText "max") s2
+        (minteger, _) = extractStmt (matchLhsText "integer") s3
+        bound def mstmt = case mstmt of
+            Just [pdx| %_ = !num |] -> Doc.doc2text (plainNumMin (num :: Double))
+            Just [pdx| %_ = $vartag:$var |] -> vartag <> ":" <> var
+            Just [pdx| %_ = $var |] -> var
+            _ -> def
+        varname = case mvar of
+            Just [pdx| %_ = $vartag:$var |] -> vartag <> ":" <> var
+            Just [pdx| %_ = ?var |] -> var
+            _ -> "<!-- Check Script -->"
+        isint = case minteger of
+            Just [pdx| %_ = yes |] -> True
+            _ -> False
+    msgToPP $ MsgSetVariableToRandom varname (bound "0" mmin) (bound "1" mmax) isint
+setVariableToRandom [pdx| %_ = ?var |] = msgToPP $ MsgSetVariableToRandom var "0" "1" False
+setVariableToRandom stmt = preStatement stmt
+
+-----------------------------------
+-- handler for add_random_trait  --
+-----------------------------------
+
+addRandomTrait :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+addRandomTrait stmt@[pdx| %_ = @scr |] = do
+    locs <- traverse getGameL10n (mapMaybe bareAtom scr)
+    if null locs
+        then preStatement stmt
+        else msgToPP $ MsgAddRandomTrait (T.intercalate ", " (map italicText locs))
+addRandomTrait stmt = preStatement stmt
+
+--------------------------------------------
+-- handler for force_enable_resistance    --
+--------------------------------------------
+
+-- | Turns resistance on in a state whatever the game would otherwise make of
+-- it. Whoever the occupier has to be for that is the only part of it a reader
+-- needs; @clear@ only says whether what was set before is thrown away first.
+forceEnableResistance :: forall g m. (HOI4Info g, Monad m) =>
+    (Text -> Text -> ScriptMessage) -> StatementHandler g m
+forceEnableResistance msg [pdx| %_ = @scr |] = do
+    let (moccupier, _) = extractStmt (matchLhsText "occupier") scr
+    whoflag <- case moccupier of
+        Just [pdx| %_ = ?who |] -> flagText (Just HOI4Country) who
+        _ -> return ""
+    msgToPP $ msg whoflag ""
+forceEnableResistance msg [pdx| %_ = ?who |]
+    | T.toLower who `notElem` ["yes", "no"] = do
+        whoflag <- flagText (Just HOI4Country) who
+        msgToPP $ msg whoflag who
+forceEnableResistance _ stmt = preStatement stmt
+
+-------------------------
+-- handler for THIS    --
+-------------------------
+
+-- | @THIS@ names the scope the block is already written in, so it says nothing
+-- the reader is not already under: what is inside it stands where it stood,
+-- without a heading and without the step in that a heading would bring.
+thisScope :: (HOI4Info g, Monad m) => StatementHandler g m
+thisScope [pdx| %_ = @scr |] = indentDown (ppMany scr)
+thisScope stmt = preStatement stmt
+
+-------------------------------------------
+-- handler for the loops over an array   --
+-------------------------------------------
+
+-- | A loop or a test that runs over an array: @any_of@, @all_of@,
+-- @for_each_loop@. Which temporary variables the loop writes its value and its
+-- index into says nothing about what it does with them, and the script under it
+-- names them itself wherever it reads them.
+arrayLoop :: (HOI4Info g, Monad m) =>
+    (Text -> ScriptMessage) -- ^ Message to use as the block header
+        -> StatementHandler g m
+arrayLoop header [pdx| %_ = @scr |] = withCurrentIndent $ \i -> do
+    let (marray, s1) = extractStmt (matchLhsText "array") scr
+        (_, s2) = extractStmt (matchLhsText "value") s1
+        (_, rest) = extractStmt (matchLhsText "index") s2
+        arr = case marray of
+            Just [pdx| %_ = ?a |] -> a
+            _ -> "<!-- Check Script -->"
+    script_pp'd <- ppMany rest
+    return ((i, header arr) : script_pp'd)
+arrayLoop _ stmt = preStatement stmt
+
+-------------------------------
+-- handler for collection_size --
+-------------------------------
+
+-- | How many things a collection gathers. The collection is either named or
+-- written out in full; where it is written out, saying so is as much as the
+-- line can carry, since the whole of it stands in the script beside.
+collectionSize :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+collectionSize stmt@[pdx| %_ = @scr |] = do
+    let (minput, rest) = extractStmt (matchLhsText "input") scr
+        (mvalue, _) = extractStmt (matchLhsText "value") rest
+    whatloc <- case minput of
+        Just [pdx| %_ = ?inp |] -> do
+            let collkey = fromMaybe inp (T.stripPrefix "collection:" inp)
+            getGameL10n ("COLLECTION_" <> T.toUpper collkey)
+        _ -> return "The collection"
+    case mvalue of
+        Just [pdx| %_ > !num |] -> msgToPP $ MsgCollectionSize "" whatloc "more than" num
+        Just [pdx| %_ < !num |] -> msgToPP $ MsgCollectionSize "" whatloc "less than" num
+        Just [pdx| %_ = !num |] -> msgToPP $ MsgCollectionSize "" whatloc "exactly" num
+        Just [pdx| %_ > $var |] -> msgToPP $ MsgCollectionSizeVar "" whatloc "more than" var
+        Just [pdx| %_ < $var |] -> msgToPP $ MsgCollectionSizeVar "" whatloc "less than" var
+        _ -> preStatement stmt
+collectionSize stmt = preStatement stmt
+
+------------------------------------
+-- handler for create_railway_gun --
+------------------------------------
+
+createRailwayGun :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+createRailwayGun stmt@[pdx| %_ = @scr |] = do
+    let (mequip, rest) = extractStmt (matchLhsText "equipment") scr
+        (mloc, _) = extractStmt (matchLhsText "location") rest
+    case mequip of
+        Just [pdx| %_ = ?equip |] -> do
+            equiploc <- getGameL10n equip
+            -- With nowhere named the gun is created in the country's capital,
+            -- which the line need not spell out.
+            whereloc <- case mloc of
+                Just [pdx| %_ = !prov |] ->
+                    return $ "province " <> T.pack (show (prov :: Int))
+                _ -> return ""
+            msgToPP $ MsgCreateRailwayGun equiploc whereloc
+        _ -> preStatement stmt
+createRailwayGun stmt = preStatement stmt
+
+-----------------------------------
+-- handler for add_history_entry --
+-----------------------------------
+
+addHistoryEntry :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+addHistoryEntry stmt@[pdx| %_ = @scr |] =
+    case fst (extractStmt (matchLhsText "key") scr) of
+        Just [pdx| %_ = ?key |] -> msgToPP . MsgAddHistoryEntry =<< getGameL10n key
+        _ -> preStatement stmt
+addHistoryEntry stmt = preStatement stmt
+
+----------------------------------------
+-- handler for set_country_leader_name --
+----------------------------------------
+
+-- | Renames a country's leader. With no party named it is whoever leads the
+-- country now.
+setCountryLeaderName :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+setCountryLeaderName stmt@[pdx| %_ = @scr |] = do
+    let (mname, rest) = extractStmt (matchLhsText "name") scr
+        (mideo, _) = extractStmt (matchLhsText "ideology") rest
+    ideoloc <- case mideo of
+        Just [pdx| %_ = ?ideo |] -> getGameL10n ideo
+        _ -> return ""
+    case mname of
+        Just [pdx| %_ = ?name |] -> do
+            nameloc <- getGameL10n name
+            msgToPP $ MsgSetCountryLeaderName nameloc ideoloc
+        _ -> preStatement stmt
+setCountryLeaderName stmt = preStatement stmt
+
+------------------------------------------------
+-- handler for generate_scientist_character   --
+------------------------------------------------
+
+-- | Hires a scientist the game makes up on the spot. What they are good at is
+-- the whole of what the country gains; the portrait and the gender they are
+-- drawn with are not.
+generateScientistCharacter :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+generateScientistCharacter [pdx| %_ = @scr |] = do
+    let (mtraits, rest) = extractStmt (matchLhsText "traits") scr
+        (mskills, _) = extractStmt (matchLhsText "skills") rest
+    traitlocs <- case mtraits of
+        Just [pdx| %_ = @trts |] -> traverse getGameL10n (mapMaybe bareAtom trts)
+        _ -> return []
+    header <- msgToPP $ MsgGenerateScientistCharacter
+        (T.intercalate ", " (map italicText traitlocs))
+    skillmsgs <- case mskills of
+        Just [pdx| %_ = @skls |] -> indentUp (concat <$> traverse skillMsg skls)
+        _ -> return []
+    return $ header ++ skillmsgs
+    where
+        skillMsg :: GenericStatement -> PPT g m IndentedMessages
+        skillMsg [pdx| $spec = !lvl |] = do
+            specloc <- getGameL10n spec
+            msgToPP $ MsgScientistSkill specloc lvl
+        skillMsg stmt = preStatement stmt
+generateScientistCharacter stmt = preStatement stmt
+
+-----------------------------------------------
+-- handler for set_state_province_controller  --
+-----------------------------------------------
+
+-- | Hands the provinces of a state to someone. The @limit@ is a condition on
+-- whoever holds each province now, so it keeps a block of its own under the
+-- line saying who takes them.
+setStateProvinceController :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+setStateProvinceController stmt@[pdx| %_ = @scr |] = do
+    let (mcontroller, rest) = extractStmt (matchLhsText "controller") scr
+    case mcontroller of
+        Just [pdx| %_ = ?who |] -> do
+            whoflag <- flagText (Just HOI4Country) who
+            header <- msgToPP $ MsgSetStateProvinceController whoflag
+            script_pp'd <- ppMany rest
+            return $ header ++ script_pp'd
+        _ -> preStatement stmt
+setStateProvinceController stmt = preStatement stmt
+
+--------------------------------------------------
+-- handler for num_planes_stationed_in_regions   --
+--------------------------------------------------
+
+numPlanesStationedInRegions :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+numPlanesStationedInRegions stmt@[pdx| %_ = @scr |] = do
+    let (mvalue, rest) = extractStmt (matchLhsText "value") scr
+        (mregions, _) = extractStmt (matchLhsText "regions") rest
+    regionlocs <- case mregions of
+        Just [pdx| %_ = @regs |] -> traverse getRegionLoc (mapMaybe bareInt regs)
+        _ -> return []
+    let whereloc = if null regionlocs then "the regions named"
+                   else T.intercalate ", " regionlocs
+    case mvalue of
+        Just [pdx| %_ > !num |] -> msgToPP $ MsgNumPlanesStationedInRegions "more than" num whereloc
+        Just [pdx| %_ < !num |] -> msgToPP $ MsgNumPlanesStationedInRegions "fewer than" num whereloc
+        Just [pdx| %_ = !num |] -> msgToPP $ MsgNumPlanesStationedInRegions "exactly" num whereloc
+        _ -> preStatement stmt
+numPlanesStationedInRegions stmt = preStatement stmt
+
+------------------------------------------------------
+-- handler for the scopes over a list of targets     --
+------------------------------------------------------
+
+-- | A trigger asked of states or countries listed out by name, rather than of
+-- whatever a scope of its own catches: @any_state_of@, @all_country_of@ and
+-- their like. The list may also be a script constant, which is written out as
+-- the constant's name since what it holds is not in the script at hand.
+listedScope :: forall g m. (HOI4Info g, Monad m) =>
+    (Text -> ScriptMessage) -- ^ Message to use as the block header
+        -> (Text -> PPT g m Text) -- ^ How to name one of the things listed
+        -> StatementHandler g m
+listedScope header nameOf [pdx| %_ = @scr |] = withCurrentIndent $ \i -> do
+    let (mtarget, rest) = extractStmt (matchLhsText "target") scr
+    names <- case mtarget of
+        Just [pdx| %_ = @tgts |] -> traverse nameOf (mapMaybe bareTarget tgts)
+        Just [pdx| %_ = ?one |] -> (:[]) <$> nameOf one
+        _ -> return []
+    let listed = if null names then "the ones named" else T.intercalate ", " names
+    script_pp'd <- ppMany rest
+    return ((i, header listed) : script_pp'd)
+    where
+        bareTarget (StatementBare (IntLhs n)) = Just (T.pack (show n))
+        bareTarget (StatementBare (GenericLhs t [])) = Just t
+        bareTarget stmt = trace ("Unknown in target array: " ++ show stmt) Nothing
+listedScope _ _ stmt = preStatement stmt
+
+-- | The name of a state written into such a list, whether by its id or through
+-- a variable holding it.
+listedState :: (HOI4Info g, Monad m) => Text -> PPT g m Text
+listedState t
+    | not (T.null t), T.all isDigit t = getStateLoc (read (T.unpack t))
+    | otherwise = eGetStateText (Left t)
+
+----------------------------
+-- handler for add_mines  --
+----------------------------
+
+-- | Mines laid in a strategic region, which is named by its id.
+addMines :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+addMines stmt@[pdx| %_ = @scr |] = do
+    let (mregion, rest) = extractStmt (matchLhsText "region") scr
+        (mamount, _) = extractStmt (matchLhsText "amount") rest
+    whereloc <- case mregion of
+        Just [pdx| %_ = !num |] -> getRegionLoc num
+        Just [pdx| %_ = ?var |] -> return (typewriterText var)
+        _ -> return "<!-- Check Script -->"
+    case mamount of
+        Just [pdx| %_ = !num |] -> msgToPP $ MsgAddMines "" whereloc num
+        Just [pdx| %_ = ?var |] -> msgToPP $ MsgAddMinesVar "" whereloc (typewriterText var)
+        _ -> preStatement stmt
+addMines stmt = preStatement stmt
+
+-------------------------------------------------------
+-- handler for set_division_force_allow_recruiting    --
+-------------------------------------------------------
+
+setDivisionForceAllowRecruiting :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+setDivisionForceAllowRecruiting stmt@[pdx| %_ = @scr |] = do
+    let (mtemplate, rest) = extractStmt (matchLhsText "division_template") scr
+        allowed = null [() | [pdx| force_allow_recruiting = no |] <- rest]
+    case mtemplate of
+        Just [pdx| %_ = ?tmpl |] -> msgToPP $ MsgSetDivisionForceAllowRecruiting tmpl allowed
+        _ -> preStatement stmt
+setDivisionForceAllowRecruiting stmt = preStatement stmt
+
+-- | The number written bare inside an array, as script writes a list of states
+-- or of strategic regions.
+bareInt :: GenericStatement -> Maybe Int
+bareInt (StatementBare (IntLhs n)) = Just n
+bareInt stmt = trace ("Unknown in bare number array: " ++ show stmt) Nothing
 
 --------------------------------------
 -- Handler for add_ace --
@@ -4010,6 +4650,229 @@ startBorderWar stmt@[pdx| %_ = @scr |]
                 return $ msgwinatt ++ msgwindeff ++ msglossatt ++ msglossdef ++ msgcancatt ++ msgcancdef
             return $ headMsg ++ bordEventMsgs
 startBorderWar stmt = preStatement stmt
+
+-----------------------------------
+-- handler for count_triggers    --
+-----------------------------------
+
+-- | How many of the conditions under it must hold. Script writes the number
+-- with any of @=@, @>@ and @<@, and the three do not say the same thing, so
+-- the comparison is carried into the message rather than assumed.
+countTriggers :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+countTriggers stmt@[pdx| %_ = @scr |] =
+    withCurrentIndent $ \i -> do
+        let (mamount, rest) = extractStmt (matchLhsText "amount") scr
+            withAmount num comp = do
+                script_pp'd <- ppMany rest
+                return ((i, MsgCountTriggers num comp) : script_pp'd)
+        case mamount of
+            Just [pdx| %_ = !num |] -> withAmount num "At least"
+            Just [pdx| %_ > !num |] -> withAmount num "More than"
+            Just [pdx| %_ < !num |] -> withAmount num "Fewer than"
+            _ -> preStatement stmt
+countTriggers stmt = preStatement stmt
+
+-----------------------------------
+-- handler for for_loop_effect   --
+-----------------------------------
+
+-- | Runs what is under it once for each value of a counter. The bounds and the
+-- counter are fields of the block rather than effects of their own, so they are
+-- read off into the heading and only the body is listed.
+forLoopEffect :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+forLoopEffect [pdx| %_ = @scr |] = withCurrentIndent $ \i -> do
+    let (mstart, s1) = extractStmt (matchLhsText "start") scr
+        (mend,   s2) = extractStmt (matchLhsText "end") s1
+        (madd,   s3) = extractStmt (matchLhsText "add") s2
+        (mvalue, s4) = extractStmt (matchLhsText "value") s3
+        -- The name of the variable that breaks the loop says nothing about what
+        -- the loop does, and neither does how its bounds are compared.
+        (_,      s5) = extractStmt (matchLhsText "break") s4
+        (_,     rest) = extractStmt (matchLhsText "compare") s5
+        -- Defaults are the game's: from 0, up by 1, counting in 'v'.
+        bound def mstmt = case mstmt of
+            Just [pdx| %_ = !num |] -> Doc.doc2text (plainNumMin (num :: Double))
+            Just [pdx| %_ = $vartag:$var |] -> vartag <> ":" <> var
+            Just [pdx| %_ = $var |] -> var
+            _ -> def
+        loopvar = case mvalue of
+            Just [pdx| %_ = $var |] -> var
+            _ -> "v"
+    script_pp'd <- ppMany rest
+    return ((i, MsgForLoop loopvar (bound "0" mstart) (bound "0" mend) (bound "1" madd))
+            : script_pp'd)
+forLoopEffect stmt = preStatement stmt
+
+-----------------------------------------------------
+-- handlers for the effects on an ongoing border war --
+-----------------------------------------------------
+
+-- | The state a field names, whether by its id or through a variable holding
+-- it. Border wars and army teleports both name states this way.
+statedFrom :: (HOI4Info g, Monad m) => Maybe GenericStatement -> PPT g m Text
+statedFrom (Just [pdx| %_ = !num |]) = getStateLoc num
+statedFrom (Just [pdx| %_ = $vartag:$var |]) = eGetStateText (Right (vartag, var))
+statedFrom (Just [pdx| %_ = $var |]) = eGetStateText (Left var)
+statedFrom _ = return "<!-- Check Script -->"
+
+-- | The two states a border war is fought between, as every effect that works
+-- on an ongoing one names them, along with whatever else the block held.
+borderWarSides :: (HOI4Info g, Monad m) =>
+    GenericScript -> PPT g m (Text, Text, GenericScript)
+borderWarSides scr = do
+    let (matt, rest) = extractStmt (matchLhsText "attacker") scr
+        (mdef, rest') = extractStmt (matchLhsText "defender") rest
+    att <- statedFrom matt
+    def <- statedFrom mdef
+    return (att, def, rest')
+
+cancelBorderWar :: (HOI4Info g, Monad m) => StatementHandler g m
+cancelBorderWar [pdx| %_ = @scr |] = do
+    (att, def, _) <- borderWarSides scr
+    msgToPP $ MsgCancelBorderWar att def
+cancelBorderWar stmt = preStatement stmt
+
+-- | Ends a border war with one side declared the winner. Where neither side is
+-- named the winner the war is called off instead, which is what cancelling it
+-- comes to.
+finalizeBorderWar :: (HOI4Info g, Monad m) => StatementHandler g m
+finalizeBorderWar [pdx| %_ = @scr |] = do
+    (att, def, rest) <- borderWarSides scr
+    let attwin = not (null [() | [pdx| attacker_win = yes |] <- rest])
+        defwin = not (null [() | [pdx| defender_win = yes |] <- rest])
+    msgToPP $ if attwin then MsgFinalizeBorderWar att def
+              else if defwin then MsgFinalizeBorderWar def att
+              else MsgCancelBorderWar att def
+finalizeBorderWar stmt = preStatement stmt
+
+-- | Changes the terms an ongoing border war is fought on. What it changes is
+-- listed under the two states, the way the game's own tooltip lists it.
+setBorderWarData :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+setBorderWarData [pdx| %_ = @scr |] = withCurrentIndent $ \i -> do
+    (att, def, rest) <- borderWarSides scr
+    changes <- indentUp (concat <$> traverse change rest)
+    return ((i, MsgSetBorderWarData att def) : changes)
+    where
+        change :: GenericStatement -> PPT g m IndentedMessages
+        change [pdx| combat_width = !num |] = msgToPP $ MsgBorderWarCombatWidth num
+        change [pdx| attacker_modifier = !num |] = msgToPP $ MsgBorderWarSideModifier "Attacker" num
+        change [pdx| defender_modifier = !num |] = msgToPP $ MsgBorderWarSideModifier "Defender" num
+        change [pdx| change_state_after_war = %rhs |]
+            | GenericRhs "yes" [] <- rhs = msgToPP $ MsgBorderWarChangeState True
+            | otherwise = msgToPP $ MsgBorderWarChangeState False
+        -- Whether the events the war was started with fire is nothing the
+        -- reader can see either way.
+        change [pdx| dont_fire_events = %_ |] = return []
+        change stmt = preStatement stmt
+setBorderWarData stmt = preStatement stmt
+
+-------------------------------------
+-- handler for teleport_armies     --
+-------------------------------------
+
+-- | Moves the armies in a state elsewhere. The @limit@ is a condition on
+-- whoever owns them rather than a narrowing of the destination, so it keeps a
+-- block of its own under the line saying where they go.
+teleportArmies :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+teleportArmies [pdx| %_ = @scr |] = withCurrentIndent $ \i -> do
+    let isTo st = any (`matchLhsText` st) ["to_state", "to_state_array", "to_province"]
+        -- Script sometimes names a state and a province both. The first named
+        -- is where they go; the rest is the game's own fallback and says
+        -- nothing more.
+        (tos, rest) = partition isTo scr
+        mto = listToMaybe tos
+    header <- case mto of
+        Just [pdx| to_state_array = $vartag:$var |] -> return $ MsgTeleportArmiesArray (vartag <> "." <> var)
+        Just [pdx| to_state_array = $arr |] -> return $ MsgTeleportArmiesArray arr
+        Just [pdx| to_province = !num |] -> return $ MsgTeleportArmiesProvince num
+        Just to@[pdx| to_state = %_ |] -> MsgTeleportArmies <$> statedFrom (Just to)
+        -- With nowhere named the game sends them to their owner's capital.
+        _ -> return MsgTeleportArmiesCapital
+    script_pp'd <- ppMany rest
+    return ((i, header) : script_pp'd)
+teleportArmies stmt = preStatement stmt
+
+-------------------------------------
+-- handler for transfer_navy       --
+-------------------------------------
+
+transferNavy :: (HOI4Info g, Monad m) => StatementHandler g m
+transferNavy stmt@[pdx| %_ = @scr |] = do
+    let (mtarget, rest) = extractStmt (matchLhsText "target") scr
+        exile = not (null [() | [pdx| is_government_in_exile = yes |] <- rest])
+    case mtarget of
+        Just [pdx| %_ = $tag |] -> do
+            who <- flagText (Just HOI4Country) tag
+            msgToPP $ MsgTransferNavy who exile
+        _ -> preStatement stmt
+transferNavy stmt = preStatement stmt
+
+-------------------------------------------------------
+-- handler for ships_in_area and ships_in_state_ports --
+-------------------------------------------------------
+
+data ShipsIn = ShipsIn
+        {   si_size :: Double
+        ,   si_comp :: Text
+        ,   si_type :: Maybe Text
+        ,   si_where :: Maybe Text
+        }
+
+newSI :: ShipsIn
+newSI = ShipsIn 0 "at least" Nothing Nothing
+
+-- | How many ships of a kind the country has somewhere: a strategic region for
+-- @ships_in_area@, a state's ports for @ships_in_state_ports@. The two are
+-- written alike but for the field naming the place.
+shipsIn :: forall g m. (HOI4Info g, Monad m) =>
+    Text -- ^ Label of the field naming the place
+        -> (Int -> PPT g m Text) -- ^ How to name the place from its id
+        -> (Text -> Double -> Text -> Text -> ScriptMessage)
+        -> StatementHandler g m
+shipsIn wherelabel wherelocof msg stmt@[pdx| %_ = @scr |]
+    = msgToPP =<< ppSI =<< foldM addLine newSI scr
+    where
+        addLine :: ShipsIn -> GenericStatement -> PPT g m ShipsIn
+        addLine si [pdx| size > !num |] = return si { si_comp = "more than", si_size = num }
+        addLine si [pdx| size < !num |] = return si { si_comp = "less than", si_size = num }
+        addLine si [pdx| size = !num |] = return si { si_comp = "at least", si_size = num }
+        addLine si [pdx| type = $txt |] = return si { si_type = Just txt }
+        addLine si st@[pdx| $label = %_ |] | sameKey label wherelabel = case st of
+            [pdx| %_ = !num |] -> do
+                whereloc <- wherelocof num
+                return si { si_where = Just whereloc }
+            _ -> do
+                whereloc <- statedFrom (Just st)
+                return si { si_where = Just whereloc }
+        addLine si st = trace ("unknown form in shipsIn: " ++ show st) $ return si
+        ppSI :: ShipsIn -> PPT g m ScriptMessage
+        ppSI si = do
+            -- With no kind named the trigger counts every ship there is.
+            typeloc <- maybe (return "ships") getGameL10n (si_type si)
+            return $ msg (si_comp si) (si_size si) typeloc
+                         (fromMaybe "<!-- Check Script -->" (si_where si))
+shipsIn _ _ _ stmt = preStatement stmt
+
+-------------------------------
+-- handler for any_state_in  --
+-------------------------------
+
+-- | The states of a strategic region, a continent, or an array, with a
+-- condition asked of each.
+anyStateIn :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+anyStateIn [pdx| %_ = @scr |] = withCurrentIndent $ \i -> do
+    let isWhere st = any (`matchLhsText` st)
+            ["strategic_region", "array", "continent", "ai_area"]
+        (mwhere, rest) = extractStmt isWhere scr
+    header <- case mwhere of
+        Just [pdx| strategic_region = !num |] -> MsgAnyStateIn <$> getRegionLoc num
+        Just [pdx| continent = $con |] -> MsgAnyStateIn <$> getGameL10n con
+        Just [pdx| %_ = $vartag:$var |] -> return $ MsgAnyStateInArray (vartag <> "." <> var)
+        Just [pdx| %_ = $arr |] -> return $ MsgAnyStateInArray arr
+        _ -> return $ MsgAnyStateInArray "<!-- Check Script -->"
+    script_pp'd <- ppMany rest
+    return ((i, header) : script_pp'd)
+anyStateIn stmt = preStatement stmt
 
 ---------------------------------------
 -- handler for add_province_modifier --

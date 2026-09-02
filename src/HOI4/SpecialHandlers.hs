@@ -11,9 +11,12 @@ module HOI4.SpecialHandlers (
     ,   handleHiddenModifier
     ,   handleTargetedModifier
     ,   handleEquipmentBonus
+    ,   addEquipmentBonus
     ,   addDynamicModifier
     ,   removeDynamicModifier
     ,   hasDynamicModifier
+    ,   projectInBlock
+    ,   stripProjectPrefix
     ,   ScriptChunk (..)
     ,   chunkScript
     ,   ppDynModChunk
@@ -463,6 +466,10 @@ famModVar hidden targ key var stmt = do
 
 modifierMSG :: forall g m. (HOI4Info g, Monad m) =>
         Bool -> Text -> StatementHandler g m
+-- Not modifiers but a word on where the dynamic modifier applies: it is also
+-- read in combat for whoever attacks or defends, even from outside the state.
+modifierMSG _ _ [pdx| attacker_modifier = yes |] = msgToPP MsgModifierAttackerSide
+modifierMSG _ _ [pdx| defender_modifier = yes |] = msgToPP MsgModifierDefenderSide
 modifierMSG _ targ stmt@[pdx| $specmod = @scr|]
     | specmod == "hidden_modifier" = ppModifiers True targ scr
     | otherwise = do
@@ -656,6 +663,22 @@ handleEquipmentBonus stmt@[pdx| %_ = @scr |] = fold <$> traverse modifierEquipMS
                 return $ techmsg : modmsg
             modifierEquipMSG stmt = preStatement stmt
 handleEquipmentBonus stmt = preStatement stmt
+
+-- | The same equipment bonuses an idea can carry, given to the country on their
+-- own. The name is a localization key the game titles the bonus with, and the
+-- bonuses themselves are written exactly as an idea writes them.
+addEquipmentBonus :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+addEquipmentBonus stmt@[pdx| %_ = @scr |] = case extractStmt (matchLhsText "bonus") scr of
+    (Just bonus, rest) -> do
+        let (mname, _) = extractStmt (matchLhsText "name") rest
+        header <- case mname of
+            Just [pdx| %_ = $key |] -> MsgAddEquipmentBonus <$> getGameL10n key
+            _ -> return MsgAddEquipmentBonusUnnamed
+        headmsg <- msgToPP header
+        bonusmsg <- indentUp $ handleEquipmentBonus bonus
+        return $ headmsg ++ bonusmsg
+    _ -> preStatement stmt
+addEquipmentBonus stmt = preStatement stmt
 
 
 
@@ -962,12 +985,30 @@ ppDynModChunk dmod isSet mods = do
         modStmt (key, val) = Statement (GenericLhs key []) OpEq (FloatRhs val)
 
 
+-- | Some effects name a special project in a field of a block, along with who
+-- works on it and where. Which project it is is the whole of what a reader
+-- needs; the scientist and the facility are the game's own bookkeeping.
+projectInBlock :: (HOI4Info g, Monad m) =>
+    (Text -> ScriptMessage) -> StatementHandler g m
+projectInBlock msg stmt@[pdx| %_ = @scr |] =
+    case fst (extractStmt (matchLhsText "project") scr) of
+        Just proj -> withLocAtom' msg stripProjectPrefix proj
+        _ -> preStatement stmt
+projectInBlock msg stmt = withLocAtom' msg stripProjectPrefix stmt
+
+-- | Script names a special project with a @sp:@ in front of it, where the name
+-- itself is localized under the key without it.
+stripProjectPrefix :: Text -> Text
+stripProjectPrefix key = fromMaybe key (T.stripPrefix "sp:" key)
+
 hasDynamicModifier :: (HOI4Info g, Monad m) => StatementHandler g m
 hasDynamicModifier stmt@[pdx| %_ = @dyn |] = if length dyn == 2
     then textAtom "scope" "modifier" MsgHasDynamicModFlag flagMaybeText stmt
     else case dyn of
         [stmtd@[pdx| %_ = $txt |]] ->  withLocAtom MsgHasDynamicMod stmtd
         _-> preStatement stmt
+-- Script also names the modifier on the right with nothing around it.
+hasDynamicModifier stmt@[pdx| %_ = $_ |] = withLocAtom MsgHasDynamicMod stmt
 hasDynamicModifier stmt = preStatement stmt
 
 --------------------------------------------
@@ -1667,6 +1708,19 @@ getLeaderTraits trait = do
     where
         sortmod scr = sortmods scr =<< getModKeys
 
+-- | How much faster the character earns experience towards other traits while
+-- they hold this one. What stands on the left of each line is a trait of the
+-- game's own rather than a modifier.
+traitXpFactor :: forall g m. (Monad m, HOI4Info g) => StatementHandler g m
+traitXpFactor [pdx| %_ = @scr |] = concat <$> traverse ppXp scr
+    where
+        ppXp :: GenericStatement -> PPT g m IndentedMessages
+        ppXp [pdx| $trait = !factor |] = do
+            traitloc <- getGameL10n trait
+            msgToPP $ MsgTraitXpFactor traitloc factor
+        ppXp stmt = preStatement stmt
+traitXpFactor stmt = preStatement stmt
+
 getUnitTraits :: (Monad m, HOI4Info g) => Text-> PPT g m IndentedMessages
 getUnitTraits trait = do
     traits <- getUnitLeaderTraits
@@ -1683,7 +1737,7 @@ getUnitTraits trait = do
                 nsmod = getscript (ult_non_shared_modifier ult)
                 ccmod = getscript (ult_corps_commander_modifier ult)
                 fmmod = getscript (ult_field_marshal_modifier ult)
-            trtxp <- maybe (return []) handleModifier (ult_trait_xp_factor ult)
+            trtxp <- maybe (return []) traitXpFactor (ult_trait_xp_factor ult)
             mods <- do
                 let mods' = mod ++ nsmod ++ ccmod ++ fmmod
                 keys <- getModKeys
