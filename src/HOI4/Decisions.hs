@@ -283,6 +283,16 @@ decisionAddSection vars dec stmt
         namedCost txt = case HM.lookup (fromMaybe txt (T.stripPrefix "@" txt)) vars of
             Just num -> HOI4DecisionCostSimple (round num)
             Nothing -> HOI4DecisionCostVariable txt
+        -- A day count the script names rather than writes out, read the same
+        -- way as a cost is.
+        decisionDays rhs = case rhs of
+            (floatRhs -> Just num) -> Just (HOI4DecisionDaysSimple num)
+            GenericRhs vartag [txt] -> Just (namedDays (vartag <> ":" <> txt))
+            GenericRhs txt [] -> Just (namedDays txt)
+            _ -> Nothing
+        namedDays txt = case HM.lookup (fromMaybe txt (T.stripPrefix "@" txt)) vars of
+            Just num -> HOI4DecisionDaysSimple (round num)
+            Nothing -> HOI4DecisionDaysVariable txt
         decisionAddSection' dec stmt@[pdx| $lhs = %rhs |] = case T.toLower lhs of
             "icon" -> case rhs of
                 GenericRhs txt _ ->
@@ -314,9 +324,8 @@ decisionAddSection vars dec stmt
                 _ -> trace "DEBUG: bad decisions available" dec
             "priority" -> dec
             "highlight_states" -> dec
-            "days_re_enable" -> case rhs of -- number of days it takes for decision to reapear after completion
-                (floatRhs -> num) -> dec { dec_days_re_enable = num }
-                --_ -> trace "DEBUG: bad decisions days_re_enable" dec
+            "days_re_enable" -> -- number of days it takes for decision to reapear after completion
+                dec { dec_days_re_enable = decisionDays rhs }
             "fire_only_once"  -> case rhs of --bool, standard false
                 GenericRhs "yes" [] -> dec { dec_fire_only_once = True }
                 -- no is the default, so I don't think this is ever used
@@ -335,9 +344,8 @@ decisionAddSection vars dec stmt
                 GenericRhs txt _ -> -- localizable
                     dec { dec_custom_cost_text = Just txt }
                 _ -> trace "DEBUG: bad decisions custom_cost_text" dec
-            "days_remove" -> case rhs of --number of days it takes to finish decision
-                (floatRhs -> num) -> dec { dec_days_remove = num }
-                --_ -> trace "DEBUG: bad decisions days_remove" dec
+            "days_remove" -> --number of days it takes to finish decision
+                dec { dec_days_remove = decisionDays rhs }
             "remove_effect" -> case rhs of -- effect when decision completes
                 CompoundRhs [] -> dec -- empty, treat as if it wasn't there
                 CompoundRhs scr -> dec { dec_remove_effect = Just scr }
@@ -354,9 +362,8 @@ decisionAddSection vars dec stmt
             "war_with_on_complete" -> dec -- used to inform if a decison declares war when selected
             "war_with_on_timeout" -> dec -- used to inform if a decison declares war when selected
             "fixed_random_seed" -> dec --bool, standard True
-            "days_mission_timeout" -> case rhs of -- how long the mission takes to finish, and turns decision into mission
-                (floatRhs -> num)  -> dec { dec_days_mission_timeout = num }
-                --_ -> trace "DEBUG: bad decisions days_mission_timeout" dec
+            "days_mission_timeout" -> -- how long the mission takes to finish, and turns decision into mission
+                dec { dec_days_mission_timeout = decisionDays rhs }
             "activation" -> case rhs of -- checks for if a mission starts
                 CompoundRhs [] -> dec -- empty, treat as if it wasn't there
                 CompoundRhs scr -> dec { dec_activation = Just scr }
@@ -574,7 +581,7 @@ ppdecision dec = setCurrentFile (dec_path dec) $ withDecisionIdents dec $ do
     mawd_pp'd   <- setIsInEffect True (mapM (imsg2doc <=< ppAiWillDo) (dec_ai_will_do dec))
     cost_pp <- case dec_cost dec of
         Just (HOI4DecisionCostSimple num) -> return $ Just $ T.pack $ show num
-        Just (HOI4DecisionCostVariable txt) -> Just <$> ppCostVariable txt
+        Just (HOI4DecisionCostVariable txt) -> Just <$> ppNamedNumber txt
         Nothing -> return Nothing
     let name = dec_name dec
         nameD = Doc.strictText name
@@ -608,9 +615,20 @@ ppdecision dec = setCurrentFile (dec_path dec) $ withDecisionIdents dec $ do
                 Nothing -> return mempty
         Just (HOI4DecisionIconScript _) -> return "| decision_icon = <!-- Check script -->\n"
         _ -> return mempty
-    let days_remove = dec_days_remove dec
-        days_re_enable = dec_days_re_enable dec
+    let days_re_enable = dec_days_re_enable dec
         days_mission_timeout = dec_days_mission_timeout dec
+        -- The template draws a decision's remove_effect only beside a duration,
+        -- so a decision the script gives none needs one written out or what
+        -- happens when it is removed goes unsaid. Such a decision is taken and
+        -- done with in the same moment, which is a duration of zero. A mission's
+        -- timeout stands in this line's place, so one that has a timeout needs
+        -- nothing here.
+        days_remove = case (dec_days_remove dec, days_mission_timeout) of
+            (Nothing, Nothing) -> Just (HOI4DecisionDaysSimple 0)
+            (mdays, _) -> mdays
+    daysReEnable_pp'd <- ppDays "cooldown" days_re_enable
+    daysMissionTimeout_pp'd <- ppDays "days_mission_timeout" days_mission_timeout
+    daysRemove_pp'd <- ppDays "days_remove" days_remove
     ppActivatedBy_pp'd <- ppActivatedBy (dec_name dec)
     return . mconcat $
         ["<section begin=", nameD, "/>", PP.line
@@ -627,9 +645,9 @@ ppdecision dec = setCurrentFile (dec_path dec) $ withDecisionIdents dec $ do
         custom_cost_loc_pp'd ++
         [maybe mempty (\txt -> if txt /= "0" then mconcat ["| cost = ", Doc.strictText txt, PP.line] else mconcat [])
                cost_pp
-        ,ppDays "cooldown" days_re_enable
-        ,ppDays "days_mission_timeout" days_mission_timeout
-        ,ppDays "days_remove" days_remove] ++
+        ,daysReEnable_pp'd
+        ,daysMissionTimeout_pp'd
+        ,daysRemove_pp'd] ++
         ( if isGood then
             ["| is_good = yes", PP.line]
         else []) ++
@@ -692,21 +710,23 @@ ppdecision dec = setCurrentFile (dec_path dec) $ withDecisionIdents dec $ do
 -- alone, the template writing "days" after it itself. A count below zero says
 -- the decision has no timer rather than naming a length of time, so nothing is
 -- passed for it.
-ppDays :: Text -> Maybe Int -> Doc
+ppDays :: (HOI4Info g, Monad m) => Text -> Maybe HOI4DecisionDays -> PPT g m Doc
 ppDays param = \case
-    Just num | num >= 0 ->
-        mconcat ["| ", Doc.strictText param, " = ", Doc.strictText (T.pack (show num)), PP.line]
-    _ -> mempty
+    Just (HOI4DecisionDaysSimple num) | num >= 0 -> return (line (T.pack (show num)))
+    Just (HOI4DecisionDaysVariable var) -> line <$> ppNamedNumber var
+    _ -> return mempty
+    where
+        line val = mconcat ["| ", Doc.strictText param, " = ", Doc.strictText val, PP.line]
 
--- | How a cost the script names rather than writes out is shown. A constant the
--- file defines for itself is already a number by the time it gets here, so what
--- is left is a variable the game works out as it draws the decision: nothing
--- outside the game can say what it holds, so it is shown by its name, in the
--- typewriter face every variable this program cannot resolve is written in.
--- Script may give a variable a number to fall back on when nothing has set it,
--- written after a @?@, and that number is worth saying.
-ppCostVariable :: (HOI4Info g, Monad m) => Text -> PPT g m Text
-ppCostVariable raw = do
+-- | How a number the script names rather than writes out is shown -- a cost, or
+-- a count of days. A constant the file defines for itself is already a number by
+-- the time it gets here, so what is left is a variable the game works out as it
+-- draws the decision: nothing outside the game can say what it holds, so it is
+-- shown by its name, in the typewriter face every variable this program cannot
+-- resolve is written in. Script may give a variable a number to fall back on
+-- when nothing has set it, written after a @?@, and that number is worth saying.
+ppNamedNumber :: (HOI4Info g, Monad m) => Text -> PPT g m Text
+ppNamedNumber raw = do
     mnum <- constantValue var
     return $ case mnum of
         Just num -> Doc.doc2text (plainNum num)

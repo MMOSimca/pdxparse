@@ -10,7 +10,7 @@ module HOI4.Types (
     ,   HOI4EvtTitle (..), HOI4EvtDesc (..), HOI4Event (..), HOI4Option (..)
     ,   HOI4Source (..), HOI4SourceWeight
     ,   HOI4EventTriggers, HOI4EventWeight
-    ,   HOI4Decision (..), HOI4DecisionCost(..), HOI4DecisionIcon(..), HOI4Decisioncat (..)
+    ,   HOI4Decision (..), HOI4DecisionCost(..), HOI4DecisionDays(..), HOI4DecisionIcon(..), HOI4Decisioncat (..)
     ,   HOI4DecisionTriggers, HOI4DecisionWeight
     ,   HOI4Idea (..)
     ,   HOI4OpinionModifier (..)
@@ -456,6 +456,14 @@ data HOI4DecisionCost
     | HOI4DecisionCostVariable Text
     deriving Show
 
+-- | A count of days a decision runs for, waits out, or times out after. Script
+-- writes it as a number, or names a variable the game works the number out from
+-- as it draws the decision.
+data HOI4DecisionDays
+    = HOI4DecisionDaysSimple Int
+    | HOI4DecisionDaysVariable Text
+    deriving Show
+
 data HOI4DecisionIcon
     = HOI4DecisionIconSimple Text
     | HOI4DecisionIconScript GenericScript
@@ -475,18 +483,18 @@ data HOI4Decision = HOI4Decision
     ,   dec_is_good :: Bool -- ^ changes tooltip on whether timing out or compeleting mission is desirable, default is no and assumes complete_effect is desirable
     ,   dec_complete_effect :: Maybe GenericScript -- ^ the block of effects that gets executed immediately
                                                    --   when the decision is selected (Starting the timer if it has one).
-    ,   dec_days_re_enable :: Maybe Int
+    ,   dec_days_re_enable :: Maybe HOI4DecisionDays
     ,   dec_fire_only_once :: Bool
     ,   dec_cost :: Maybe HOI4DecisionCost
     ,   dec_custom_cost_text :: Maybe Text
-    ,   dec_days_remove :: Maybe Int
+    ,   dec_days_remove :: Maybe HOI4DecisionDays
     ,   dec_remove_effect :: Maybe GenericScript
     ,   dec_remove_trigger :: Maybe GenericScript
     ,   dec_modifier :: Maybe GenericStatement
     ,   dec_cancel_trigger ::  Maybe GenericScript
     ,   dec_cancel_effect ::  Maybe GenericScript
 
-    ,   dec_days_mission_timeout :: Maybe Int
+    ,   dec_days_mission_timeout :: Maybe HOI4DecisionDays
     ,   dec_activation :: Maybe GenericScript
     ,   dec_selectable_mission :: Bool
     ,   dec_timeout_effect :: Maybe GenericScript
