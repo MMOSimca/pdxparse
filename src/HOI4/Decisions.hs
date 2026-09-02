@@ -83,7 +83,12 @@ decisioncatAddSection ddeccat stmt
                 CompoundRhs [] -> decc -- empty, treat as if it wasn't there
                 CompoundRhs scr -> decc { decc_available = Just scr } -- checks visible, if it's false the decision is greyed out but still visible
                 _ -> warn (BadValue "decision category available" stmt) decc
-            [pdx| picture        = $txt  |] -> decc { decc_picture = Just txt }
+            [pdx| picture        = $txt  |] -> decc { decc_picture = Just [txt] }
+            -- The block form names several pictures, each under a trigger
+            -- block saying when the game shows it. The triggers are display
+            -- fine print; the pictures themselves are what get kept.
+            [pdx| picture        = @pics |] ->
+                decc { decc_picture = Just [key | [pdx| $key = %_ |] <- pics] }
             [pdx| custom_icon    = %_    |] -> decc
             [pdx| visibility_type = %_   |] -> decc
             [pdx| priority       = %_    |] -> decc
@@ -145,8 +150,10 @@ ppdecisioncat decc = setCurrentFile (decc_path decc) $ withCategoryIdents decc $
     picture_pp <- do
         case deccpicture of
             Nothing -> return mempty
-            Just picd -> do
-                let piccat = if not $ "GFX_decision_category_" `T.isPrefixOf` picd then "GFX_decision_category_" <> picd else picd
+            Just picds -> fmap mconcat . forM picds $ \picd -> do
+                -- Script names the sprite in full (it always carries GFX_);
+                -- only a bare name needs the category prefix put on.
+                let piccat = if "GFX_" `T.isPrefixOf` picd then picd else "GFX_decision_category_" <> picd
                 mpic <- getGameInterfaceIfPresent piccat
                 maybe (return mempty) (\p -> return $ mconcat ["<!-- picture: ", Doc.strictText p, " -->", PP.line]) mpic
     return . mconcat $

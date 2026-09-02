@@ -438,7 +438,7 @@ data HOI4Decisioncat = HOI4Decisioncat
     ,   decc_name_loc :: Maybe Text -- ^ Localized decision category name
     ,   decc_desc_loc :: Maybe Text
     ,   decc_icon :: Text
-    ,   decc_picture :: Maybe Text
+    ,   decc_picture :: Maybe [Text] -- ^ Picture keys; several when script picks one by trigger
     ,   decc_custom_icon :: Maybe GenericScript
     ,   decc_visible :: Maybe GenericScript
     ,   decc_available :: Maybe GenericScript
