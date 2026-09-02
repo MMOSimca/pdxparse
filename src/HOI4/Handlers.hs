@@ -4553,10 +4553,11 @@ data DeleteUnits = DeleteUnits
         {   du_division_template :: Maybe Text
         ,   du_disband :: Bool
         ,   du_state :: Maybe Text
+        ,   du_id :: Maybe Text
         }
 
 newDU :: DeleteUnits
-newDU = DeleteUnits Nothing False Nothing
+newDU = DeleteUnits Nothing False Nothing Nothing
 
 deleteUnits :: forall g m. (HOI4Info g, Monad m) =>
     (Bool -> Text -> Text -> ScriptMessage) -> StatementHandler g m
@@ -4570,12 +4571,19 @@ deleteUnits msg stmt@[pdx| %_ = @scr |]
             | otherwise = return du
         addLine du [pdx| state = !num |] = do
             stateloc <- getStateLoc num
-            return du { du_division_template = Just stateloc }
-        addLine du [pdx| $other = %_ |] = trace ("unknown section in deleteUnits: " ++ show other) $ return du
-        addLine du stmt = trace ("unknown form in deleteUnits: " ++ show stmt) $ return du
+            return du { du_state = Just stateloc }
+        -- The state may also be a pronoun or a variable naming one.
+        addLine du [pdx| state = $txt |] = do
+            stateloc <- eGetStateText (Left txt)
+            return du { du_state = Just stateloc }
+        -- A single division picked out by id, which script keeps in a
+        -- variable (the game gives ids out at run time).
+        addLine du [pdx| id = $var |] = return du { du_id = Just var }
+        addLine du stmt = warn (UnknownSection "deleteUnits" stmt) $ return du
         ppDU :: DeleteUnits -> PPT g m ScriptMessage
-        ppDU du = do
-            return $ msg (du_disband du) (fromMaybe "" (du_division_template du)) (fromMaybe "" (du_state du))
+        ppDU du = case du_id du of
+            Just divid -> return $ MsgDeleteUnitById (du_disband du) (typewriterText divid)
+            _ -> return $ msg (du_disband du) (fromMaybe "" (du_division_template du)) (fromMaybe "" (du_state du))
 deleteUnits _ stmt = preStatement stmt
 
 ----------------------------------
