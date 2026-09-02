@@ -9,6 +9,7 @@ import Language.Haskell.TH -- everything
 import HOI4.Types (HOI4Info) -- HACK :/
 
 import Data.Text (Text)
+import qualified Data.Text as T
 
 import Data.List (unzip5)
 import Data.Maybe (isJust, fromMaybe)
@@ -93,6 +94,7 @@ foldCompound funname s_tyname prefix extraArgs fieldspecs eval = do
         name_pp = mkName "pp"
         name_scr = mkName "scr"
         name_stmt = mkName "stmt"
+        name_line = mkName "line"
         name_x = mkName "x"
         tyname = mkName s_tyname
         defaultsName = mkName ("new" ++ s_tyname)
