@@ -1988,7 +1988,17 @@ focusIconKeyLoc :: (HOI4Info g, Monad m) => Text -> PPT g m (Maybe (Text, Text, 
 focusIconKeyLoc nf = do
     nfs <- getNationalFocus
     case HM.lookup nf nfs of
-        Nothing -> return Nothing -- unknown national focus
+        -- Not a focus of a tree we read: one built at run time, or one whose
+        -- tree we do not parse. The name it is written under is the key the
+        -- game localizes it by, so the line can still be written without the
+        -- entry; only where there is no localization either is it beyond us.
+        Nothing -> do
+            mloc <- getGameL10nIfPresent nf
+            case mloc of
+                Nothing -> return Nothing -- unknown national focus
+                Just nf_loc -> do
+                    nfIcon <- getGameInterface "goal_unknown" ("GFX_focus_" <> nf)
+                    return $ Just (nfIcon, nf, nf_loc)
         Just nnf -> do
             let nfKey = nf_id nnf
             nfIcon <- do
