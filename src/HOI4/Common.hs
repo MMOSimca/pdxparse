@@ -848,7 +848,7 @@ handlersTextValue :: (HOI4Info g, Monad m) => Trie (StatementHandler g m)
 handlersTextValue = Tr.fromList
         [("add_offsite_building"        , buildingTypeLevel MsgAddOffsiteBuilding MsgAddOffsiteBuildingVar)
         ,("add_popularity"              , textValue "ideology" "popularity" MsgAddPopularity MsgAddPopularityVar ideologyIconLoc)
-        ,("add_power_balance_value"     , textValueKey "id" "value" MsgAddPowerBalanceValue MsgAddPowerBalanceValueVar)
+        ,("add_power_balance_value"     , addPowerBalanceValue)
         ,("add_days_remove"             , textValueKey "decision" "days" MsgAddDaysRemove MsgAddDaysRemoveVar)
         ,("add_days_mission_timeout"    , textValueKey "mission" "days" MsgAddDaysMissionTimeout MsgAddDaysMissionTimeoutVar)
         ,("core_compliance"             , textValueCompare "occupied_country_tag" "value" "more than" "less than" MsgCoreCompliance MsgCoreComplianceVar flagNoIcon)

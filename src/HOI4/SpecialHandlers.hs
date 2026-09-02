@@ -22,6 +22,7 @@ module HOI4.SpecialHandlers (
     ,   ppDynModChunk
     ,   ppIdeaSlotChunk
     ,   addPowerBalanceModifier
+    ,   addPowerBalanceValue
     ,   relationModifier
     ,   addMastery
     ,   addMasteryBonus
@@ -1035,6 +1036,33 @@ addPowerBalanceModifier stmt@[pdx| %_ = @scr |] =
                     _ -> trace ("add_power_balance_modifier: Modifier " ++ T.unpack modi ++ " not found") $ preStatement stmt
             _-> preStatement stmt
 addPowerBalanceModifier stmt = warn (UnknownSection "add_power_balance_modifier" stmt) $ preStatement stmt
+
+-----------------------------------------
+-- Handler for add_power_balance_value --
+-----------------------------------------
+
+-- | Handler for @add_power_balance_value@, which moves a balance of power. The
+-- sign of the value says which way it moves; @tooltip_side@ names the side the
+-- game credits the move to in its tooltip, so it is named in the message too
+-- where script gives it.
+addPowerBalanceValue :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+addPowerBalanceValue stmt@[pdx| %_ = @scr |] = do
+    let (mside, rest) = extractStmt (matchLhsText "tooltip_side") scr
+        tv = parseTV "id" "value" rest
+    msideloc <- case mside of
+        Just [pdx| %_ = $side |] -> Just <$> getGameL10n side
+        _ -> return Nothing
+    case (tv_what tv, tv_value tv, tv_var tv) of
+        (Just what, Just value, _) -> do
+            wloc <- getGameL10n what
+            msgToPP $ case msideloc of
+                Just side -> MsgAddPowerBalanceValueSide wloc what side value
+                Nothing -> MsgAddPowerBalanceValue wloc what value
+        (Just what, _, Just var) -> do
+            wloc <- getGameL10n what
+            msgToPP $ MsgAddPowerBalanceValueVar wloc what var
+        _ -> preStatement stmt
+addPowerBalanceValue stmt = preStatement stmt
 
 
 -----------------------------------------

@@ -736,6 +736,7 @@ data ScriptMessage
     | MsgAddPopularity {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmt :: Double}
     | MsgAddPopularityVar {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmtText :: Text}
     | MsgAddPowerBalanceValue { scriptMessageLoc :: Text, scriptMessageKey :: Text, scriptMessageAmt :: Double }
+    | MsgAddPowerBalanceValueSide { scriptMessageLoc :: Text, scriptMessageKey :: Text, scriptMessageSide :: Text, scriptMessageAmt :: Double }
     | MsgAddPowerBalanceValueVar { scriptMessageLoc :: Text, scriptMessageKey :: Text, scriptMessageAmtText :: Text }
     | MsgBuildRailway {scriptMessageAmt :: Double, scriptMessageStart :: Text, scriptMessageEnd :: Text}
     | MsgBuildRailwayProv {scriptMessageAmt :: Double, scriptMessageStartProv :: Text, scriptMessageEndProv :: Text}
@@ -4939,6 +4940,19 @@ instance RenderMessage Script ScriptMessage where
                 , " moves "
                 , bopicon _amt
                 , toMessage (bold (reducedNum plainPc _amt))
+                ]
+        MsgAddPowerBalanceValueSide { scriptMessageLoc = _loc, scriptMessageKey = _key, scriptMessageSide = _side, scriptMessageAmt = _amt }
+            -> mconcat
+                [ "The "
+                , _loc
+                , "<!--", _key, "-->"
+                , " moves "
+                , bopicon _amt
+                -- The sign only says which side gains; the side is named
+                -- outright here, so the size stands on its own.
+                , toMessage (bold (reducedNum plainPc (abs _amt)))
+                , " toward "
+                , _side
                 ]
         MsgAddPowerBalanceValueVar { scriptMessageLoc = _loc, scriptMessageKey = _key, scriptMessageAmtText = _amtT }
             -> mconcat
