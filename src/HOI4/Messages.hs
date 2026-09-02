@@ -773,7 +773,7 @@ data ScriptMessage
     | MsgAddCountryLeaderRole {scriptMessageWho :: Text, scriptMessageWhat :: Text}
     | MsgAddCountryLeaderRolePromoted {scriptMessageWho :: Text, scriptMessageWhat :: Text}
     | MsgPromoteCharacter {scriptMessageWho :: Text}
-    | MsgCreateOperativeLeader {scriptMessageWho :: Text, scriptMessageWhat :: Text, scriptMessageYn :: Bool, scriptMessageYn2 :: Bool}
+    | MsgCreateOperativeLeader {scriptMessageWho :: Text, scriptMessageWhat :: Text, scriptMessageGender :: Text, scriptMessageYn :: Bool, scriptMessageYn2 :: Bool}
     | MsgDamageBuilding {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmt :: Double, scriptMessageProvince :: Double}
     | MsgDamageBuildingVar {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmtText :: Text, scriptMessageProvince :: Double}
     | MsgDivisionTemplate {scriptMessageWhat :: Text}
@@ -5217,9 +5217,10 @@ instance RenderMessage Script ScriptMessage where
                 , ifThenElseT (T.null _who) "Becomes" " becomes"
                 , " country leader"
                 ]
-        MsgCreateOperativeLeader {scriptMessageWho = _who, scriptMessageWhat = _what, scriptMessageYn = _yn, scriptMessageYn2 = _yn2}
+        MsgCreateOperativeLeader {scriptMessageWho = _who, scriptMessageWhat = _what, scriptMessageGender = _gender, scriptMessageYn = _yn, scriptMessageYn2 = _yn2}
             -> mconcat
-                [ "Create an operative"
+                [ ifThenElseT (T.null _gender) "Create an " ("Create a " <> _gender <> " ")
+                , "operative"
                 , ifThenElseT (T.null _who)  "" (" named " <> toMessage (iquotes _who))
                 , ifThenElseT (T.null _what) "" (" with nationality " <>_what)
                 , ifThenElseT _yn " and recruit them" ""

@@ -1561,10 +1561,11 @@ data CreateOperative = CreateOperative
         ,   co_traits :: Maybe [Text]
         ,   co_nationalities :: Maybe [Text]
         ,   co_available_to_spy_master :: Bool
+        ,   co_gender :: Maybe Text -- ^ @male@ or @female@, where script picks one
         }
 
 newCO :: CreateOperative
-newCO = CreateOperative False "" Nothing Nothing False
+newCO = CreateOperative False "" Nothing Nothing False Nothing
 
 createOperativeLeader :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
 createOperativeLeader stmt@[pdx| %_ = @scr |]
@@ -1584,7 +1585,20 @@ createOperativeLeader stmt@[pdx| %_ = @scr |]
         addLine co [pdx| available_to_spy_master = %rhs |]
             | GenericRhs "yes" [] <- rhs = co { co_available_to_spy_master = True }
             | otherwise = co
-        addLine co stmt = co
+        -- Script fixes the operative's gender under either label; left alone,
+        -- the game picks one at random.
+        addLine co [pdx| female = %rhs |]
+            | GenericRhs "yes" [] <- rhs = co { co_gender = Just "female" }
+            | GenericRhs "no" [] <- rhs = co { co_gender = Just "male" }
+        addLine co [pdx| gender = $g |]
+            | T.toLower g `elem` ["male", "female"] = co { co_gender = Just (T.toLower g) }
+        -- Portrait graphics: which picture the operative gets, or (with
+        -- @portrait_tag_override@) which country's portrait pool it is
+        -- drawn from. Nothing of it survives onto the page.
+        addLine co [pdx| $lhs = %_ |]
+            | T.toLower lhs == "gfx" = co
+            | T.toLower lhs == "portrait_tag_override" = co
+        addLine co stmt = warn (UnknownSection "create_operative_leader" stmt) co
 
         ppCO co = do
             natmsg <- case co_nationalities co of
@@ -1592,7 +1606,7 @@ createOperativeLeader stmt@[pdx| %_ = @scr |]
                         flagged <- mapM (flagText (Just HOI4Country)) nats
                         return $ T.intercalate ", " flagged
                     _ -> return ""
-            basemsg <- msgToPP $ MsgCreateOperativeLeader (co_name co) natmsg (co_bypass_recruitment co) (co_available_to_spy_master co)
+            basemsg <- msgToPP $ MsgCreateOperativeLeader (co_name co) natmsg (fromMaybe "" (co_gender co)) (co_bypass_recruitment co) (co_available_to_spy_master co)
             traitsmsg <- case co_traits co of
                 Just traits -> concatMapM (\t -> do
                     namemsg <- indentUp $ plainMsg' ("'''" <> t <> "'''")
@@ -2086,7 +2100,8 @@ createIntelligenceAgency [pdx| %_ = @scr |] = case foldl' addLine Nothing scr of
     where
         addLine :: Maybe Text -> GenericStatement -> Maybe Text
         addLine _ [pdx| name = ?name |] = Just name
-        addLine acc _ = acc
+        addLine acc [pdx| icon = %_ |] = acc
+        addLine acc stmt = warn (UnknownSection "create_intelligence_agency" stmt) acc
 -- Written bare wherever the agency takes the country's own name.
 createIntelligenceAgency [pdx| %_ = yes |] = msgToPP MsgCreateIntelligenceAgencyPlain
 createIntelligenceAgency stmt = preStatement stmt
