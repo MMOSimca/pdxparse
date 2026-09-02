@@ -4322,7 +4322,7 @@ instance RenderMessage Script ScriptMessage where
                 , bopMoreLess _comp _amt
                 , " "
                 , bopicon _amt
-                , toMessage (bold (plainPc _amt))
+                , toMessage (bold (reducedNum plainPc _amt))
                 ]
         MsgPowerBalanceValueVar {scriptMessageWhat = _what, scriptMessageCompare = _comp, scriptMessageAmtText = _amtT}
             -> mconcat
