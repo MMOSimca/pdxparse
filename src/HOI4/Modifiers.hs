@@ -9,14 +9,13 @@ module HOI4.Modifiers (
     ,   parseHOI4Modifiers
     ) where
 
-import Control.Arrow ((&&&))
-import Control.Monad (foldM, forM, join)
+import Control.Monad (foldM)
 import Control.Monad.Except (MonadError (..))
 import Control.Monad.Trans (MonadIO (..))
 import Control.Monad.State (gets)
 
 import Data.Foldable (fold)
-import Data.Maybe (isJust, fromJust, fromMaybe, catMaybes, mapMaybe)
+import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Data.List ( sortOn, foldl', intercalate )
 import Data.Set (toList, fromList)
@@ -31,13 +30,13 @@ import Abstract -- everything
 import QQ (pdx)
 import SettingsTypes ( PPT, Settings (..){-, Game (..)-}
                      {-, IsGame (..)-}, IsGameData (..), IsGameState (..), GameState (..)
-                     , setCurrentFile, withCurrentFile, withCurrentIndent
-                     , hoistErrors, hoistExceptions
+                     , withCurrentFile, withCurrentIndent
+                     , hoistErrors
                      , getGameInterfaceNamed)
+import ParseWarnings
 import HOI4.Types -- everything
 import HOI4.Localization
 import HOI4.Common (ppMany, HOI4OpinionModifier (HOI4OpinionModifier))
-import StatementUtils (extractStmt, matchExactText)
 import FileIO (Feature (..), writeFeatures)
 import Text.PrettyPrint.Leijen.Text (Doc)
 import qualified Text.PrettyPrint.Leijen.Text as PP
@@ -45,34 +44,23 @@ import qualified Doc
 import HOI4.Messages
 import MessageTools
 
-import Debug.Trace (trace, traceM)
 import HOI4.SpecialHandlers (modifierMSG)
 import System.FilePath (takeBaseName)
 
 parseHOI4OpinionModifiers :: (HOI4Info g, Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap Text HOI4OpinionModifier)
-parseHOI4OpinionModifiers scripts = HM.unions . HM.elems <$> do
-    tryParse <- hoistExceptions $
-        HM.traverseWithKey
-            (\sourceFile scr -> setCurrentFile sourceFile $ mapM parseHOI4OpinionModifier $ concatMap (\case
-                [pdx| opinion_modifiers = @mods |] -> mods
-                _ -> scr)
-                scr)
-            scripts
-    case tryParse of
-        Left err -> do
-            traceM $ "Completely failed parsing opinion modifiers: " ++ T.unpack err
-            return HM.empty
-        Right modifiersFilesOrErrors ->
-            flip HM.traverseWithKey modifiersFilesOrErrors $ \sourceFile emods ->
-                fmap (mkModMap . catMaybes) . forM emods $ \case
-                    Left err -> do
-                        traceM $ "Error parsing modifiers in " ++ sourceFile
-                                 ++ ": " ++ T.unpack err
-                        return Nothing
-                    Right mmod -> return mmod
-                where mkModMap :: [HOI4OpinionModifier] -> HashMap Text HOI4OpinionModifier
-                      mkModMap = HM.fromList . map (omodName &&& id)
+parseHOI4OpinionModifiers scripts = keyedBy omodName <$>
+    parseScriptFiles "opinion modifiers"
+        (\scr -> mapM parseHOI4OpinionModifier (unwrapOpinionModifiers scr))
+        scripts
+
+-- | The statements of an opinion modifiers file, with the customary
+-- @opinion_modifiers = { ... }@ wrapper taken off.
+unwrapOpinionModifiers :: GenericScript -> GenericScript
+unwrapOpinionModifiers scr = concatMap (\case
+    [pdx| opinion_modifiers = @mods |] -> mods
+    _ -> scr)
+    scr
 
 newHOI4OpinionModifier :: Text -> Maybe Text -> FilePath -> HOI4OpinionModifier
 newHOI4OpinionModifier id locid path = HOI4OpinionModifier id locid path Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing
@@ -81,26 +69,12 @@ newHOI4OpinionModifier id locid path = HOI4OpinionModifier id locid path Nothing
 -- modifiers; for those, and for any obvious errors, return Right Nothing.
 parseHOI4OpinionModifier :: (HOI4Info g, MonadError Text m) =>
     GenericStatement -> PPT g m (Either Text (Maybe HOI4OpinionModifier))
-parseHOI4OpinionModifier (StatementBare _) = throwError "bare statement at top level"
-parseHOI4OpinionModifier [pdx| %left = %right |] = case right of
-    CompoundRhs parts -> case left of
-        CustomLhs _ -> throwError "internal error: custom lhs"
-        IntLhs _ -> throwError "int lhs at top level"
-        AtLhs _ -> return (Right Nothing)
-        GenericLhs id [] -> withCurrentFile $ \file -> do
-            locid <- getGameL10nIfPresent id
-            mmod <- hoistErrors $ foldM opinionModifierAddSection
-                                        (Just (newHOI4OpinionModifier id locid file))
-                                        parts
-            case mmod of
-                Left err -> return (Left err)
-                Right Nothing -> return (Right Nothing)
-                Right (Just mod) -> withCurrentFile $ \file ->
-                    return (Right (Just mod ))
-        _ -> throwError "unrecognized form for opinion modifier"
-    _ -> throwError "unrecognized form for opinion modifier"
-parseHOI4OpinionModifier _ = withCurrentFile $ \file ->
-    throwError ("unrecognised form for opinion modifier in " <> T.pack file)
+parseHOI4OpinionModifier = onTopLevelCompound "opinion modifier" $ \id parts ->
+    withCurrentFile $ \file -> do
+        locid <- getGameL10nIfPresent id
+        hoistErrors $ foldM opinionModifierAddSection
+                            (Just (newHOI4OpinionModifier id locid file))
+                            parts
 
 -- | Interpret one section of an opinion modifier. If understood, add it to the
 -- event data. If not understood, throw an exception.
@@ -134,10 +108,8 @@ opinionModifierAddSection mmod stmt
             -- no is the default, so I don't think this is ever used
             GenericRhs "no" [] -> return mod { omodTarget = Just False }
             _ -> throwError "bad target opinion"
-        opinionModifierAddSection' mod [pdx| $other = %_ |]
-            = trace ("unknown opinion modifier section: " ++ T.unpack other) $ return mod
-        opinionModifierAddSection' mod _
-            = trace "unrecognised form for opinion modifier section" $ return mod
+        opinionModifierAddSection' mod stmt
+            = warn (UnknownSection "opinion modifier" stmt) $ return mod
 
 writeHOI4OpinionModifiers :: (HOI4Info g, MonadIO m) => PPT g m ()
 writeHOI4OpinionModifiers = do
@@ -165,28 +137,10 @@ writeHOI4OpinionModifiers' = do
 
 parseHOI4NationalFocusesPath :: (HOI4Info g, Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap FilePath [HOI4OpinionModifier])
-parseHOI4NationalFocusesPath scripts = do
-    tryParse <- hoistExceptions $
-        HM.traverseWithKey
-            (\sourceFile scr ->
-                setCurrentFile sourceFile $ mapM parseHOI4OpinionModifier $ concatMap (\case
-                [pdx| opinion_modifiers = @mods |] -> mods
-                _ -> scr)
-                scr)
-            scripts
-    case tryParse of
-        Left err -> do
-            traceM $ "Completely failed parsing national focus: " ++ T.unpack err
-            return HM.empty
-        Right nfFilesOrErrors ->
-            return $ HM.filter (not . null) $ flip HM.mapWithKey nfFilesOrErrors $ \sourceFile enfs ->
-                mapMaybe (\case
-                    Left err -> do
-                        traceM $ "Error parsing national focus in " ++ sourceFile
-                                 ++ ": " ++ T.unpack err
-                        Nothing
-                    Right nfocus -> nfocus)
-                    enfs
+parseHOI4NationalFocusesPath scripts = HM.filter (not . null) <$>
+    parseScriptFiles "opinion modifiers"
+        (\scr -> mapM parseHOI4OpinionModifier (unwrapOpinionModifiers scr))
+        scripts
 
 -- | The data behind [[Template:Opinion]]. The template itself is now a stub
 -- calling [[Module:Opinion]], which does all the wording and colouring and
@@ -269,26 +223,8 @@ luaString = T.concatMap escape
 
 parseHOI4DynamicModifiers :: (HOI4Info g, Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap Text HOI4DynamicModifier)
-parseHOI4DynamicModifiers scripts = HM.unions . HM.elems <$> do
-    tryParse <- hoistExceptions $
-        HM.traverseWithKey
-            (\sourceFile scr ->
-                setCurrentFile sourceFile $ mapM parseHOI4DynamicModifier scr)
-            scripts
-    case tryParse of
-        Left err -> do
-            traceM $ "Completely failed parsing dynamic modifiers: " ++ T.unpack err
-            return HM.empty
-        Right modifiersFilesOrErrors ->
-            flip HM.traverseWithKey modifiersFilesOrErrors $ \sourceFile emods ->
-                fmap (mkModMap . catMaybes) . forM emods $ \case
-                    Left err -> do
-                        traceM $ "Error parsing dynamic modifiers in " ++ sourceFile
-                                 ++ ": " ++ T.unpack err
-                        return Nothing
-                    Right mmod -> return mmod
-                where mkModMap :: [HOI4DynamicModifier] -> HashMap Text HOI4DynamicModifier
-                      mkModMap = HM.fromList . map (dmodName &&& id)
+parseHOI4DynamicModifiers scripts = keyedBy dmodName <$>
+    parseScriptFiles "dynamic modifiers" (mapM parseHOI4DynamicModifier) scripts
 
 parseHOI4DynamicModifier :: (HOI4Info g, MonadError Text m) =>
     GenericStatement -> PPT g m (Either Text (Maybe HOI4DynamicModifier))
@@ -310,12 +246,11 @@ parseHOI4DynamicModifier [pdx| $modid = @effects |]
         addSection dmd stmt@[pdx| $lhs = @scr |] = case lhs of
             "enable"       -> dmd { dmodEnable = scr }
             "remove_trigger" -> dmd { dmodRemoveTrigger = Just scr }
-            _ -> trace ("Urecognized statement in dynamic modifier: " ++ show stmt) dmd
+            _ -> warn (UnknownSection "dynamic modifier" stmt) dmd
         addSection dmd stmt@[pdx| icon = $txt |] = dmd  { dmodIcon = Just txt }
          -- Must be an effect
         addSection dmd stmt = dmd { dmodEffects = dmodEffects dmd ++ [stmt] }
-parseHOI4DynamicModifier stmt = trace (show stmt) $ withCurrentFile $ \file ->
-    throwError ("unrecognised form for dynamic modifier in " <> T.pack file)
+parseHOI4DynamicModifier stmt = rejectForm "dynamic modifier" stmt
 
 writeHOI4DynamicModifiers :: (HOI4Info g, MonadIO m) => PPT g m ()
 writeHOI4DynamicModifiers = do
@@ -378,26 +313,8 @@ writeHOI4DynamicModifiers = do
 
 parseHOI4Modifiers :: (HOI4Info g, Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap Text HOI4Modifier)
-parseHOI4Modifiers scripts = HM.unions . HM.elems <$> do
-    tryParse <- hoistExceptions $
-        HM.traverseWithKey
-            (\sourceFile scr ->
-                setCurrentFile sourceFile $ mapM parseHOI4Modifier scr)
-            scripts
-    case tryParse of
-        Left err -> do
-            traceM $ "Completely failed parsing modifiers: " ++ T.unpack err
-            return HM.empty
-        Right modifiersFilesOrErrors ->
-            flip HM.traverseWithKey modifiersFilesOrErrors $ \sourceFile emods ->
-                fmap (mkModMap . catMaybes) . forM emods $ \case
-                    Left err -> do
-                        traceM $ "Error parsing modifiers in " ++ sourceFile
-                                 ++ ": " ++ T.unpack err
-                        return Nothing
-                    Right mmod -> return mmod
-                where mkModMap :: [HOI4Modifier] -> HashMap Text HOI4Modifier
-                      mkModMap = HM.fromList . map (modName &&& id)
+parseHOI4Modifiers scripts = keyedBy modName <$>
+    parseScriptFiles "modifiers" (mapM parseHOI4Modifier) scripts
 
 parseHOI4Modifier :: (HOI4Info g, MonadError Text m) =>
     GenericStatement -> PPT g m (Either Text (Maybe HOI4Modifier))
@@ -417,9 +334,8 @@ parseHOI4Modifier [pdx| $modid = @effects |]
         addSection :: HOI4Modifier -> GenericStatement -> HOI4Modifier
         addSection modi stmt@[pdx| $lhs = @scr |] = case lhs of
             "valid_relation_trigger" -> modi { modRemoveTrigger = Just scr }
-            _ -> trace ("Urecognized statement in modifier: " ++ show stmt) modi
+            _ -> warn (UnknownSection "modifier" stmt) modi
         addSection modi stmt@[pdx| icon = $txt |] = modi  { modIcon = Just txt }
          -- Must be an effect
         addSection modi stmt = modi { modEffects = modEffects modi ++ [stmt] }
-parseHOI4Modifier stmt = trace (show stmt) $ withCurrentFile $ \file ->
-    throwError ("unrecognised form for modifier in " <> T.pack file)
+parseHOI4Modifier stmt = rejectForm "modifier" stmt

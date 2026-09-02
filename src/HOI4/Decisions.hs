@@ -7,15 +7,12 @@ module HOI4.Decisions (
         parseHOI4Decisions, writeHOI4Decisions
     ) where
 
-import Debug.Trace (trace, traceM)
-
-import Control.Arrow ((&&&))
 import Control.Monad (foldM, forM, (<=<))
 import Control.Monad.Except (ExceptT (..), MonadError (..))
 import Control.Monad.State (gets)
 import Control.Monad.Trans (MonadIO (..))
 
-import Data.Maybe (catMaybes, fromMaybe, isJust, isNothing, mapMaybe)
+import Data.Maybe (fromMaybe, isJust, isNothing, mapMaybe)
 import Data.List (intersperse, foldl', intercalate, nubBy, sortBy)
 
 import Data.HashMap.Strict (HashMap)
@@ -40,10 +37,11 @@ import QQ (pdx)
 import SettingsTypes ( PPT, Settings (..)
                      , IsGame (..), IsGameData (..), IsGameState (..)
                      , setCurrentFile, withCurrentFile
-                     , hoistErrors, hoistExceptions
+                     , hoistErrors
                      , getGameInterface, getGameInterfaceNamed, getGameInterfaceIfPresent)
 import HOI4.Common -- everything
 import HOI4.Localization
+import ParseWarnings
 
 -- | Empty decision category. Starts off Nothing/empty everywhere, except id and name
 -- (which should get filled in immediately).
@@ -54,51 +52,19 @@ newDecisionCat id locid locdesc = HOI4Decisioncat id locid locdesc "decision_cat
 -- data structures.
 parseHOI4Decisioncats :: (HOI4Info g, Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap Text HOI4Decisioncat)
-parseHOI4Decisioncats scripts = HM.unions . HM.elems <$> do
-    tryParse <- hoistExceptions $
-        HM.traverseWithKey
-            (\sourceFile scr ->
-                setCurrentFile sourceFile $ mapM parseHOI4Decisioncat scr)
-            scripts
-    case tryParse of
-        Left err -> do
-            traceM $ "Completely failed parsing decision category: " ++ T.unpack err
-            return HM.empty
-        Right deccatFilesOrErrors ->
-            flip HM.traverseWithKey deccatFilesOrErrors $ \sourceFile edeccats ->
-                fmap (mkDecCatMap . catMaybes) . forM edeccats $ \case
-                    Left err -> do
-                        traceM $ "Error parsing decision categories in " ++ sourceFile
-                                 ++ ": " ++ T.unpack err
-                        return Nothing
-                    Right ddeccat -> return ddeccat
-                where mkDecCatMap :: [HOI4Decisioncat] -> HashMap Text HOI4Decisioncat
-                      mkDecCatMap = HM.fromList . map (decc_name &&& id)
+parseHOI4Decisioncats scripts = keyedBy decc_name <$>
+    parseScriptFiles "decision categories" (mapM parseHOI4Decisioncat) scripts
 
 -- | Parse one decisioncategory script into a decision data structure.
 parseHOI4Decisioncat :: (HOI4Info g, MonadError Text m) =>
     GenericStatement -> PPT g m (Either Text (Maybe HOI4Decisioncat))
-parseHOI4Decisioncat (StatementBare _) = throwError "bare statement at top level"
-parseHOI4Decisioncat [pdx| %left = %right |] = case right of
-    CompoundRhs parts -> case left of
-        CustomLhs _ -> throwError "internal error: custom lhs"
-        IntLhs _ -> throwError "int lhs at top level"
-        AtLhs _ -> return (Right Nothing)
-        GenericLhs id [] -> withCurrentFile $ \file -> do
-            locid <- getGameL10nIfPresent id
-            locdesc <- getGameL10nIfPresent (id <> "_desc")
-            ddeccat <- hoistErrors $ foldM decisioncatAddSection
-                                        (Just (newDecisionCat id locid locdesc file))
-                                        parts
-            case ddeccat of
-                Left err -> return (Left err)
-                Right Nothing -> return (Right Nothing)
-                Right (Just deccat) -> withCurrentFile $ \_file ->
-                    return (Right (Just deccat ))
-        _ -> throwError "unrecognized form for decision category"
-    _ -> throwError "unrecognized form for decision category"
-parseHOI4Decisioncat _ = withCurrentFile $ \file ->
-    throwError ("unrecognised form for decisi= reon category in " <> T.pack file)
+parseHOI4Decisioncat = onTopLevelCompound "decision category" $ \id parts ->
+    withCurrentFile $ \file -> do
+        locid <- getGameL10nIfPresent id
+        locdesc <- getGameL10nIfPresent (id <> "_desc")
+        hoistErrors $ foldM decisioncatAddSection
+                            (Just (newDecisionCat id locid locdesc file))
+                            parts
 
 -- | Add a sub-clause of the decision categry script to the data structure.
 decisioncatAddSection :: (IsGameState (GameState g), MonadError Text m) =>
@@ -112,11 +78,11 @@ decisioncatAddSection ddeccat stmt
             [pdx| visible        = %rhs  |] -> case rhs of
                 CompoundRhs [] -> decc -- empty, treat as if it wasn't there
                 CompoundRhs scr -> decc { decc_visible = Just scr } -- can check from and root if target_root_trigger is true (or allowed if it's not present)
-                _ -> trace "bade decision category allowed" decc
+                _ -> warn (BadValue "decision category visible" stmt) decc
             [pdx| available      = %rhs  |] -> case rhs of
                 CompoundRhs [] -> decc -- empty, treat as if it wasn't there
                 CompoundRhs scr -> decc { decc_available = Just scr } -- checks visible, if it's false the decision is greyed out but still visible
-                _ -> trace "bade decision category allowed" decc
+                _ -> warn (BadValue "decision category available" stmt) decc
             [pdx| picture        = $txt  |] -> decc { decc_picture = Just txt }
             [pdx| custom_icon    = %_    |] -> decc
             [pdx| visibility_type = %_   |] -> decc
@@ -124,13 +90,12 @@ decisioncatAddSection ddeccat stmt
             [pdx| allowed        = %rhs  |] -> case rhs of
                 CompoundRhs [] -> decc -- empty, treat as if it wasn't there
                 CompoundRhs scr -> decc { decc_allowed = Just scr } -- Checks only once on start/load an is used to restrict which countries have/not have it
-                _ -> trace "bade decision category allowed" decc
+                _ -> warn (BadValue "decision category allowed" stmt) decc
             [pdx| visible_when_empty = %_ |] -> decc
             [pdx| scripted_gui   = %_    |] -> decc
             [pdx| highlight_states = %_  |] -> decc
             [pdx| on_map_area    = %_    |] -> decc
-            [pdx| $other = %_ |] -> trace ("unknown decision category section: " ++ T.unpack other) decc
-            _ -> trace "unrecognised form for decision category section" decc
+            _ -> warn (UnknownSection "decision category" stmt) decc
 
 -- | Present the parsed decision categoriess as wiki text and write them to the
 -- appropriate files.
@@ -204,47 +169,28 @@ newDecision = HOI4Decision undefined undefined Nothing Nothing Nothing Nothing N
 -- data structures.
 parseHOI4Decisions :: (HOI4Info g, Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap Text HOI4Decision)
-parseHOI4Decisions scripts = HM.unions . HM.elems <$> do
-    tryParse <- hoistExceptions $
-        HM.traverseWithKey
-            (\sourceFile scr ->
-                setCurrentFile sourceFile $
-                    concat <$> mapM (parseHOI4DecisionGroup (fileVars scr)) scr)
-            scripts
-    case tryParse of
-        Left err -> do
-            traceM $ "Completely failed parsing decisions: " ++ T.unpack err
-            return HM.empty
-        Right decFilesOrErrors ->
-            flip HM.traverseWithKey decFilesOrErrors $ \sourceFile edecs ->
-                fmap (mkDecMap . catMaybes) . forM edecs $ \case
-                    Left err -> do
-                        traceM $ "Error parsing decisions in " ++ sourceFile
-                                 ++ ": " ++ T.unpack err
-                        return Nothing
-                    Right ddec -> return ddec
-                where mkDecMap :: [HOI4Decision] -> HashMap Text HOI4Decision
-                      mkDecMap = HM.fromList . map (dec_name &&& id)
+parseHOI4Decisions scripts = keyedBy dec_name <$>
+    parseScriptFiles "decisions"
+        (\scr -> concat <$> mapM (parseHOI4DecisionGroup (fileVars scr)) scr)
+        scripts
 
 -- | Parse one file's decision groups scripts into decision data structures.
 -- The constants the file defines for itself come along with them: a file often
 -- gives several of its decisions their cost by naming one of those.
 parseHOI4DecisionGroup :: (HOI4Info g, Monad m) =>
     HashMap Text Double -> GenericStatement -> PPT g (ExceptT Text m) [Either Text (Maybe HOI4Decision)]
-parseHOI4DecisionGroup _ (StatementBare _) = throwError "bare statement at top level"
 parseHOI4DecisionGroup vars [pdx| $left = @scr |]
     = forM scr $ \stmt -> (Right <$> parseHOI4Decision vars stmt left)
                             `catchError` (return . Left)
-parseHOI4DecisionGroup _ [pdx| %check = %_ |] = case check of
+parseHOI4DecisionGroup _ stmt@[pdx| %check = %_ |] = case check of
     AtLhs _ -> return [Right Nothing]
-    _-> throwError "unrecognized form for decision block (LHS)"
-parseHOI4DecisionGroup _ _ = withCurrentFile $ \file ->
-    throwError ("unrecognised form for decision in " <> T.pack file)
+    _-> rejectForm "decision group" stmt
+parseHOI4DecisionGroup _ stmt = rejectForm "decision group" stmt
 
 -- | Parse one decision script into a decision data structure.
 parseHOI4Decision :: (HOI4Info g, Monad m) =>
     HashMap Text Double -> GenericStatement -> Text -> PPT g (ExceptT Text m) (Maybe HOI4Decision)
-parseHOI4Decision vars [pdx| $decName = %rhs |] category = case rhs of
+parseHOI4Decision vars stmt@[pdx| $decName = %rhs |] category = case rhs of
     CompoundRhs parts -> do
         decName_loc <- wikifyLocColours <$> getGameL10n decName
         decDesc <- getGameL10nIfPresent (decName <> "_desc")
@@ -256,11 +202,11 @@ parseHOI4Decision vars [pdx| $decName = %rhs |] category = case rhs of
                               , dec_path = sourcePath </> T.unpack category -- so decision are divided into maps for the cateogry, should I loc or not?
                               , dec_cat = category}))
                   parts
-    _ -> throwError "unrecognized form for decision (RHS)"
-parseHOI4Decision _ [pdx| %check = %_ |] _ = case check of
+    _ -> rejectForm "decision" stmt
+parseHOI4Decision _ stmt@[pdx| %check = %_ |] _ = case check of
     AtLhs _ -> return Nothing
-    _-> throwError "unrecognized form for decision block (LHS)"
-parseHOI4Decision _ _ _ = throwError "unrecognized form for decision (LHS)"
+    _-> rejectForm "decision" stmt
+parseHOI4Decision _ stmt _ = rejectForm "decision" stmt
 
 -- | Add a sub-clause of the decision script to the data structure.
 decisionAddSection :: (HOI4Info g, MonadError Text m) =>
@@ -298,30 +244,30 @@ decisionAddSection vars dec stmt
                 GenericRhs txt _ ->
                     dec { dec_icon = Just (HOI4DecisionIconSimple txt) }
                 CompoundRhs scr -> dec { dec_icon = Just (HOI4DecisionIconScript scr) }
-                _ -> trace "DEBUG: bad decisions icon" dec
+                _ -> warn (BadValue "decision icon" stmt) dec
             "allowed" -> case rhs of -- Checks only once on start/load an is used to restrict which countries have/not have it
                 CompoundRhs [] -> dec -- empty, treat as if it wasn't there
                 CompoundRhs scr -> dec { dec_allowed = Just scr }
-                _ -> trace "DEBUG: bad decisions allowed" dec
+                _ -> warn (BadValue "decision allowed" stmt) dec
             "complete_effect" -> case rhs of -- effect when selecting decision, or when mission starts
                 CompoundRhs [] -> dec -- empty, treat as if it wasn't there
                 CompoundRhs scr -> dec { dec_complete_effect = Just scr }
-                _ -> trace "DEBUG: bad decisions complete_effect" dec
+                _ -> warn (BadValue "decision complete_effect" stmt) dec
             "ai_will_do" -> case rhs of
                 CompoundRhs scr -> dec { dec_ai_will_do = Just (aiWillDo scr) }
-                _ -> trace "DEBUG: bad decisions ai_will_do" dec
+                _ -> warn (BadValue "decision ai_will_do" stmt) dec
             "target_root_trigger" -> case rhs of -- can only check root for targeted decisions if allowed is true
                 CompoundRhs [] -> dec -- empty, treat as if it wasn't there
                 CompoundRhs scr -> dec { dec_target_root_trigger = Just scr }
-                _ -> trace "DEBUG: bad decisions target_root_trigger" dec
+                _ -> warn (BadValue "decision target_root_trigger" stmt) dec
             "visible" -> case rhs of -- can check from and root if target_root_trigger is true (or allowed if it's not present)
                 CompoundRhs [] -> dec -- empty, treat as if it wasn't there
                 CompoundRhs scr -> dec { dec_visible = Just scr }
-                _ -> trace "DEBUG: bad decisions visible" dec
+                _ -> warn (BadValue "decision visible" stmt) dec
             "available" -> case rhs of -- checks visible, if it's false the decision is greyed out but still visible
                 CompoundRhs [] -> dec -- empty, treat as if it wasn't there
                 CompoundRhs scr -> dec { dec_available = Just scr }
-                _ -> trace "DEBUG: bad decisions available" dec
+                _ -> warn (BadValue "decision available" stmt) dec
             "priority" -> dec
             "highlight_states" -> dec
             "days_re_enable" -> -- number of days it takes for decision to reapear after completion
@@ -330,12 +276,12 @@ decisionAddSection vars dec stmt
                 GenericRhs "yes" [] -> dec { dec_fire_only_once = True }
                 -- no is the default, so I don't think this is ever used
                 GenericRhs "no" [] -> dec { dec_fire_only_once = False }
-                _ -> trace "DEBUG: bad decisions fire_only_once" dec
+                _ -> warn (BadValue "decision fire_only_once" stmt) dec
             "cost" -> case rhs of --var or num
                 GenericRhs txt [] -> dec { dec_cost = Just (namedCost txt) }
                 GenericRhs vartag [txt] -> dec { dec_cost = Just (HOI4DecisionCostVariable (vartag <> ":" <> txt)) }
                 (floatRhs -> Just num)  -> dec { dec_cost = Just (HOI4DecisionCostSimple num) }
-                _ -> trace "DEBUG: bad decisions costt" dec
+                _ -> warn (BadValue "decision cost" stmt) dec
             -- What a custom cost checks and takes. The template says only what
             -- the cost is called, and the script behind that name tells a
             -- reader nothing the name has not already, so it is left out.
@@ -343,21 +289,21 @@ decisionAddSection vars dec stmt
             "custom_cost_text" -> case rhs of
                 GenericRhs txt _ -> -- localizable
                     dec { dec_custom_cost_text = Just txt }
-                _ -> trace "DEBUG: bad decisions custom_cost_text" dec
+                _ -> warn (BadValue "decision custom_cost_text" stmt) dec
             "days_remove" -> --number of days it takes to finish decision
                 dec { dec_days_remove = decisionDays rhs }
             "remove_effect" -> case rhs of -- effect when decision completes
                 CompoundRhs [] -> dec -- empty, treat as if it wasn't there
                 CompoundRhs scr -> dec { dec_remove_effect = Just scr }
-                _ -> trace "DEBUG: bad decisions remove_effect" dec
+                _ -> warn (BadValue "decision remove_effect" stmt) dec
             "cancel_trigger" -> case rhs of -- trigger for canceling missions
                 CompoundRhs [] -> dec -- empty, treat as if it wasn't there
                 CompoundRhs scr -> dec { dec_cancel_trigger = Just scr }
-                _ -> trace "DEBUG: bad decisions cancel_trigger" dec
+                _ -> warn (BadValue "decision cancel_trigger" stmt) dec
             "cancel_effect" -> case rhs of -- effect when mission is canceled
                 CompoundRhs [] -> dec -- empty, treat as if it wasn't there
                 CompoundRhs scr -> dec { dec_cancel_effect = Just scr }
-                _ -> trace "DEBUG: bad decisions cancel_effect" dec
+                _ -> warn (BadValue "decision cancel_effect" stmt) dec
             "war_with_on_remove" -> dec -- used to inform if a decison declares war when finished
             "war_with_on_complete" -> dec -- used to inform if a decison declares war when selected
             "war_with_on_timeout" -> dec -- used to inform if a decison declares war when selected
@@ -367,36 +313,36 @@ decisionAddSection vars dec stmt
             "activation" -> case rhs of -- checks for if a mission starts
                 CompoundRhs [] -> dec -- empty, treat as if it wasn't there
                 CompoundRhs scr -> dec { dec_activation = Just scr }
-                _ -> trace "DEBUG: bad decisions activation" dec
+                _ -> warn (BadValue "decision activation" stmt) dec
             "selectable_mission" -> case rhs of --bool, standard false
                 GenericRhs "yes" [] -> dec { dec_selectable_mission = True }
                 -- no is the default, so I don't think this is ever used
                 GenericRhs "no" [] -> dec { dec_selectable_mission = False }
-                _ -> trace "DEBUG: bad decisions selectable_mission" dec
+                _ -> warn (BadValue "decision selectable_mission" stmt) dec
             "timeout_effect" -> case rhs of -- effect for mission completing
                 CompoundRhs [] -> dec -- empty, treat as if it wasn't there
                 CompoundRhs scr -> dec { dec_timeout_effect = Just scr }
-                _ -> trace "DEBUG: bad decisions trimeout_effect" dec
+                _ -> warn (BadValue "decision timeout_effect" stmt) dec
             "is_good" ->  case rhs of --bool, standard false, says wether finishing the mission is good or bad
                 GenericRhs "yes" [] -> dec { dec_is_good = True }
                 GenericRhs "no" [] -> dec { dec_is_good = False }
-                _ -> trace "DEBUG: bad decisions is_good" dec
+                _ -> warn (BadValue "decision is_good" stmt) dec
             "targets" -> case rhs of -- weirdo array , checks countries for which decision can be targeted to, turn decisions into targeted decision
                 CompoundRhs [] -> dec -- empty, treat as if it wasn't there
                 CompoundRhs scr -> dec { dec_targets = Just scr }
-                _ -> trace "DEBUG: bad decisions targets" dec
+                _ -> warn (BadValue "decision targets" stmt) dec
             "target_array" -> case rhs of -- uses variables to create targets for decision, turn decisions into targeted decision
                 GenericRhs txt _ -> dec { dec_target_array = Just txt }
-                _ -> trace "DEBUG: bad decisions target array" dec
+                _ -> warn (BadValue "decision target_array" stmt) dec
             "targets_dynamic" -> case rhs of --bool, standard false , makes targets also check for orignal_tag
                 GenericRhs "yes" [] -> dec { dec_targets_dynamic = True }
                 -- no is the default, so I don't think this is ever used
                 GenericRhs "no" [] -> dec { dec_targets_dynamic = False }
-                _ -> trace "DEBUG: bad decisions targets_dynamic" dec
+                _ -> warn (BadValue "decision targets_dynamic" stmt) dec
             "target_trigger" -> case rhs of -- alternate to visible for targeted decision
                 CompoundRhs [] -> dec -- empty, treat as if it wasn't there
                 CompoundRhs scr -> dec { dec_target_trigger = Just scr }
-                _ -> trace "DEBUG: bad decisions target_trigger" dec
+                _ -> warn (BadValue "decision target_trigger" stmt) dec
             "war_with_target_on_complete" -> dec --bool, standard false
             "war_with_target_on_remove" -> dec --bool, standard false
             "war_with_target_on_timeout" -> dec --bool, standard false
@@ -404,39 +350,39 @@ decisionAddSection vars dec stmt
                 GenericRhs "no" [] -> dec
                 -- no is the default, so I don't think this is ever used
                 GenericRhs trgt [] -> dec { dec_state_target = Just trgt }
-                _ -> trace "DEBUG: bad decisions state_target" dec
+                _ -> warn (BadValue "decision state_target" stmt) dec
             "on_map_mode" -> dec
             "modifier" -> case rhs of -- effects that apply when decision is active (timer/mission?)
                 CompoundRhs [] -> dec -- empty, treat as if it wasn't there
                 CompoundRhs _scr -> dec { dec_modifier = Just stmt }
-                _ -> trace "DEBUG: bad decisions modifier" dec
+                _ -> warn (BadValue "decision modifier" stmt) dec
             "targeted_modifier" -> case rhs of -- effects for country/state targeted and duration?
                 CompoundRhs [] -> dec -- empty, treat as if it wasn't there
                 CompoundRhs _scr -> let oldstmt = fromMaybe [] (dec_targeted_modifier dec) in
                     dec { dec_targeted_modifier = Just (oldstmt ++ [stmt]) }
-                _ -> trace "DEBUG: bad decisions targeted_modifier" dec
+                _ -> warn (BadValue "decision targeted_modifier" stmt) dec
             "cancel_if_not_visible" -> case rhs of -- cancels mission if visible is false
                 GenericRhs "yes" [] -> dec { dec_cancel_if_not_visible = True }
                 -- no is the default, so I don't think this is ever used
                 GenericRhs "no" [] -> dec { dec_cancel_if_not_visible = False }
-                _ -> trace "DEBUG: bad decisions cancel_if_not_visible" dec
+                _ -> warn (BadValue "decision cancel_if_not_visible" stmt) dec
             "name" -> case rhs of -- is used over the localized id
                 GenericRhs txt _ -> dec {dec_name = txt}
                 -- literal display name (e.g. the DEBUG balance-of-power decisions);
                 -- keep dec_name as the id since it's used as the output filename
                 StringRhs txt -> dec {dec_name_loc = txt}
-                _ -> trace "DEBUG: bad decisions name" dec
+                _ -> warn (BadValue "decision name" stmt) dec
             "ai_hint_pp_cost" -> dec
             "cosmetic_tag" -> dec -- no clue
             "cosmetic_ideology" -> dec -- no clue
             "remove_trigger" -> case rhs of -- used to cancel timed decision
                 CompoundRhs [] -> dec -- empty, treat as if it wasn't there
                 CompoundRhs scr -> dec { dec_remove_trigger = Just scr }
-                _ -> trace "DEBUG: bad decisions remove_trigger" dec
+                _ -> warn (BadValue "decision remove_trigger" stmt) dec
             "target_non_existing" -> dec -- no clue
             "power_balance" -> dec -- no clue, only seen in debug so far
-            other -> trace ("unknown decision section: " ++ show other ++ "  " ++ show stmt) dec
-        decisionAddSection' dec _stmt = trace "unrecognised form for decision section" dec
+            _ -> warn (UnknownSection "decision" stmt) dec
+        decisionAddSection' dec stmt = warn (UnknownSection "decision" stmt) dec
 
 -- | Present the parsed decisions as wiki text and write them to the
 -- appropriate files. Also write one consolidated file per decision category
@@ -700,10 +646,10 @@ ppdecision dec = setCurrentFile (dec_path dec) $ withDecisionIdents dec $ do
         ]
     where
         extractTargets (StatementBare (GenericLhs e [])) = Just e
-        extractTargets stmt = trace ("Unknown in targets array statement: " ++ show stmt) Nothing
+        extractTargets stmt = warn (UnknownSection "targets array" stmt) Nothing
         extractTargetsStates (StatementBare (IntLhs e)) = Just e
         extractTargetsStates [pdx| state = !e |] = Just e
-        extractTargetsStates stmt = trace ("Unknown in targets states array statement: " ++ show stmt) Nothing
+        extractTargetsStates stmt = warn (UnknownSection "targets states array" stmt) Nothing
 
 
 -- | A count of days written the way the decision templates want it: the number

@@ -18,15 +18,12 @@ module HOI4.Misc (
         ,parseHOI4LocKeys
     ) where
 
-import Debug.Trace (trace, traceM)
-
-import Control.Arrow ((&&&))
-import Control.Monad (foldM, forM)
+import Control.Monad (foldM)
 import Control.Monad.Except (MonadError (..))
 
 import Data.Char (isUpper, isAlphaNum)
 import Data.List ( sortOn, foldl', elemIndex )
-import Data.Maybe (catMaybes, listToMaybe, mapMaybe)
+import Data.Maybe (listToMaybe, mapMaybe)
 
 import System.FilePath (takeFileName)
 
@@ -41,8 +38,9 @@ import QQ (pdx)
 import SettingsTypes ( PPT
                      , IsGame (..), IsGameData (..), IsGameState (..)
 
-                     , setCurrentFile, withCurrentFile
-                     , hoistErrors, hoistExceptions)
+                     , withCurrentFile
+                     , hoistErrors)
+import ParseWarnings
 import HOI4.Common -- everything
 import StatementUtils -- everything
 import HOI4.ModifierTable (modifiersTable)
@@ -57,31 +55,14 @@ newHOI4CountryHistory cosmetic chtag = HOI4CountryHistory chtag chtag cosmetic
 parseHOI4CountryHistory :: (IsGameState (GameState g), IsGameData (GameData g), Monad m) =>
     HashMap String GenericScript
         -> PPT g m (HashMap Text HOI4CountryHistory, HashMap Text Double)
-parseHOI4CountryHistory scripts = (, initialVariables) . HM.unions . HM.elems <$> do
-    tryParse <- hoistExceptions $
-        HM.traverseWithKey
-            (\sourceFile scr -> setCurrentFile sourceFile $
-                case (cosmeticTag scr, concatMap mapHisto scr) of
-                    (cosmetic@(Just _), []) -> return
-                        [Right (Just (newHOI4CountryHistory cosmetic (fileTag sourceFile)))]
-                    (cosmetic, stmts) -> mapM (processPolitics cosmetic) stmts)
-            scripts
-    case tryParse of
-        Left err -> do
-            traceM $ "Completely failed parsing country history: " ++ T.unpack err
-            return HM.empty
-        Right countryHistoryFilesOrErrors ->
-            flip HM.traverseWithKey countryHistoryFilesOrErrors $ \sourceFile echist ->
-                fmap (mkCHMap . catMaybes) . forM echist $ \case
-                    Left err -> do
-                        traceM $ "Error parsing country history in " ++ sourceFile
-                                 ++ ": " ++ T.unpack err
-                        return Nothing
-                    Right cchist -> return cchist
+parseHOI4CountryHistory scripts = (, initialVariables) . keyedBy chTag <$>
+    parseScriptFiles "country history"
+        (\scr -> case (cosmeticTag scr, concatMap mapHisto scr) of
+            (cosmetic@(Just _), []) -> withCurrentFile $ \sourceFile -> return
+                [Right (Just (newHOI4CountryHistory cosmetic (fileTag sourceFile)))]
+            (cosmetic, stmts) -> mapM (processPolitics cosmetic) stmts)
+        scripts
     where
-        mkCHMap :: [HOI4CountryHistory] -> HashMap Text HOI4CountryHistory
-        mkCHMap = HM.fromList . map (chTag &&& id)
-
         mapHisto scr = case scr of
             stmt@[pdx| set_politics = @pol |] -> [stmt]
             _ -> []
@@ -142,26 +123,12 @@ parseHOI4CountryHistory scripts = (, initialVariables) . HM.unions . HM.elems <$
 
 processPolitics :: (IsGameState (GameState g), IsGameData (GameData g), MonadError Text m) =>
     Maybe Text -> GenericStatement -> PPT g m (Either Text (Maybe HOI4CountryHistory))
-processPolitics _ (StatementBare _) = throwError "bare statement at top level"
-processPolitics cosmetic [pdx| %left = %right |] = case right of
-    CompoundRhs parts -> case left of
-        CustomLhs _ -> throwError "internal error: custom lhs"
-        IntLhs _ -> throwError "int lhs at top level"
-        AtLhs _ -> return (Right Nothing)
-        GenericLhs id [] -> withCurrentFile $ \file -> do
-            let chtag = T.pack $ take 3 $ takeFileName file
-            cchist <- hoistErrors $ foldM processPoliticsAddSection
-                                        (Just (newHOI4CountryHistory cosmetic chtag))
-                                        parts
-            case cchist of
-                Left err -> return (Left err)
-                Right Nothing -> return (Right Nothing)
-                Right (Just chist) -> withCurrentFile $ \file ->
-                    return (Right (Just chist ))
-        _ -> throwError "unrecognized form for set_politics"
-    _ -> throwError "unrecognized form for set_politics@content"
-processPolitics _ _ = withCurrentFile $ \file ->
-    throwError ("unrecognised form for set_politics in " <> T.pack file)
+processPolitics cosmetic = onTopLevelCompound "set_politics" $ \_ parts ->
+    withCurrentFile $ \file -> do
+        let chtag = T.pack $ take 3 $ takeFileName file
+        hoistErrors $ foldM processPoliticsAddSection
+                            (Just (newHOI4CountryHistory cosmetic chtag))
+                            parts
 
 processPoliticsAddSection :: (IsGameState (GameState g), MonadError Text m) =>
     Maybe HOI4CountryHistory -> GenericStatement -> PPT g m (Maybe HOI4CountryHistory)
@@ -178,10 +145,8 @@ processPoliticsAddSection cohi stmt
             = return cohi
         processPoliticsAddSection' cohi stmt@[pdx| elections_allowed = %_ |]
             = return cohi
-        processPoliticsAddSection' cohi [pdx| $other = %_ |]
-            = trace ("unknown set_politics in history: " ++ T.unpack other) $ return cohi
-        processPoliticsAddSection' cohi _
-            = trace "unrecognised form for set_politics in history" $ return cohi
+        processPoliticsAddSection' cohi stmt
+            = warn (UnknownSection "set_politics" stmt) $ return cohi
 
 -- | The value each variable holds when the game starts. Script keeps the numbers
 -- behind a dynamic modifier in variables, so that it can raise and lower what the
@@ -232,23 +197,8 @@ parseHOI4InitialVariables scripts = return $ HM.mapMaybe id $
 
 parseHOI4Terrain :: (IsGameState (GameState g), IsGameData (GameData g), Monad m) =>
     HashMap String GenericScript -> PPT g m [Text]
-parseHOI4Terrain scripts = do
-    tryParse <- hoistExceptions $
-        HM.traverseWithKey
-            (\sourceFile scr -> setCurrentFile sourceFile $ mapM processTerrain $ concatMap getcat scr)
-            scripts
-    case tryParse of
-        Left err -> do
-            traceM $ "Completely failed parsing terrain: " ++ T.unpack err
-            return []
-        Right terrainFilesOrErrors ->
-            return $ catMaybes $ concat $ concat $ HM.elems (HM.mapWithKey (\sourceFile eterrain -> -- probably better ways to this
-                map (\case
-                    Left err -> do
-                        traceM $ "Error parsing terrain in " ++ sourceFile
-                                 ++ ": " ++ T.unpack err
-                        return Nothing
-                    Right tterrain -> return tterrain) eterrain) terrainFilesOrErrors)
+parseHOI4Terrain scripts = flattened <$>
+    parseScriptFiles "terrain" (mapM processTerrain . concatMap getcat) scripts
     where
         getcat = \case
             [pdx| categories = @cat |] -> cat
@@ -256,17 +206,7 @@ parseHOI4Terrain scripts = do
 
 processTerrain :: (IsGameState (GameState g), IsGameData (GameData g), MonadError Text m) =>
     GenericStatement -> PPT g m (Either Text (Maybe Text))
-processTerrain (StatementBare _) = throwError "bare statement at top level"
-processTerrain [pdx| %left = %right |] = case right of
-    CompoundRhs parts -> case left of
-        CustomLhs _ -> throwError "internal error: custom lhs"
-        IntLhs _ -> throwError "int lhs at top level"
-        AtLhs _ -> return (Right Nothing)
-        GenericLhs id [] -> withCurrentFile $ \file -> return (Right (Just id))
-        _ -> throwError "unrecognized form for terrain"
-    _ -> throwError "unrecognized form for terrain@content"
-processTerrain _ = withCurrentFile $ \file ->
-    throwError ("unrecognised form for terrain in " <> T.pack file)
+processTerrain = onTopLevelCompound "terrain" $ \id _ -> return (Right (Just id))
 
 ----------------
 -- ideologies --
@@ -274,23 +214,8 @@ processTerrain _ = withCurrentFile $ \file ->
 
 parseHOI4Ideology :: (IsGameState (GameState g), IsGameData (GameData g), Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap Text Text)
-parseHOI4Ideology scripts = HM.unions . HM.elems <$> do
-    tryParse <- hoistExceptions $
-        HM.traverseWithKey
-            (\sourceFile scr -> setCurrentFile sourceFile $ mapM processIdeology $ concatMap getideo scr)
-            scripts
-    case tryParse of
-        Left err -> do
-            traceM $ "Completely failed parsing ideology: " ++ T.unpack err
-            return HM.empty
-        Right ideologyFilesOrErrors ->
-            flip HM.traverseWithKey ideologyFilesOrErrors $ \sourceFile eideology ->
-                fmap (mkIdeoMap . catMaybes) . forM eideology $ \case
-                    Left err -> do
-                        traceM $ "Error parsing ideology in " ++ sourceFile
-                                 ++ ": " ++ T.unpack err
-                        return Nothing
-                    Right iideology -> return iideology
+parseHOI4Ideology scripts = mkIdeoMap . flattened <$>
+    parseScriptFiles "ideology" (mapM processIdeology . concatMap getideo) scripts
     where
         mkIdeoMap :: [(Text,[Text])] -> HashMap Text Text
         mkIdeoMap subideolist = HM.fromList $ concatMap switchideos subideolist
@@ -305,24 +230,14 @@ parseHOI4Ideology scripts = HM.unions . HM.elems <$> do
 
 processIdeology :: (IsGameState (GameState g), IsGameData (GameData g), MonadError Text m) =>
     GenericStatement -> PPT g m (Either Text (Maybe (Text,[Text])))
-processIdeology (StatementBare _) = throwError "bare statement at top level"
-processIdeology [pdx| %left = %right |] = case right of
-    CompoundRhs parts -> case left of
-        CustomLhs _ -> throwError "internal error: custom lhs"
-        IntLhs _ -> throwError "int lhs at top level"
-        AtLhs _ -> return (Right Nothing)
-        GenericLhs id [] -> withCurrentFile $ \file -> do
-            let subideos = concat $ mapMaybe (\case
-                    [pdx| types = @scr |] -> Just $ mapMaybe getsubs scr
-                    _-> Nothing) parts
-            return (Right (Just (id , subideos)))
-        _ -> throwError "unrecognized form for ideology"
-    _ -> throwError "unrecognized form for ideology@content"
+processIdeology = onTopLevelCompound "ideology" $ \id parts -> do
+    let subideos = concat $ mapMaybe (\case
+            [pdx| types = @scr |] -> Just $ mapMaybe getsubs scr
+            _-> Nothing) parts
+    return (Right (Just (id , subideos)))
     where
         getsubs [pdx| $subideo = @_|] = Just subideo
-        getsubs stmt = Nothing
-processIdeology _ = withCurrentFile $ \file ->
-    throwError ("unrecognised form for ideology in " <> T.pack file)
+        getsubs _ = Nothing
 
 
 -----------------
@@ -331,85 +246,33 @@ processIdeology _ = withCurrentFile $ \file ->
 
 parseHOI4Effects :: (IsGameState (GameState g), IsGameData (GameData g), Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap Text GenericStatement)
-parseHOI4Effects scripts = HM.unions . HM.elems <$> do
-    tryParse <- hoistExceptions $
-        HM.traverseWithKey
-            (\sourceFile scr -> setCurrentFile sourceFile $ mapM parseHOI4Effect $ concatMap onlyscripts scr)
-            scripts
-    case tryParse of
-        Left err -> do
-            traceM $ "Completely failed parsing scripted effects: " ++ T.unpack err
-            return HM.empty
-        Right effectFilesOrErrors ->
-            flip HM.traverseWithKey effectFilesOrErrors $ \sourceFile eeffect ->
-                fmap (mkEffectMap . catMaybes) . forM eeffect $ \case
-                    Left err -> do
-                        traceM $ "Error parsing scripted effects in " ++ sourceFile
-                                 ++ ": " ++ T.unpack err
-                        return Nothing
-                    Right feffect -> return feffect
+parseHOI4Effects scripts = HM.fromList . flattened <$>
+    parseScriptFiles "scripted effects" (mapM parseHOI4Effect . concatMap onlyscripts) scripts
     where
-        mkEffectMap :: [(Text,GenericStatement)] -> HashMap Text GenericStatement
-        mkEffectMap = HM.fromList
         onlyscripts = \case
             stmt@[pdx| %_ = @_|] -> [stmt]
             _ -> []
 
 parseHOI4Effect :: (IsGameState (GameState g), IsGameData (GameData g), MonadError Text m) =>
     GenericStatement -> PPT g m (Either Text (Maybe (Text, GenericStatement)))
-parseHOI4Effect (StatementBare _) = throwError "bare statement at top level"
-parseHOI4Effect stmt@[pdx| %left = %right |] = case right of
-    CompoundRhs parts -> case left of
-        CustomLhs _ -> throwError "internal error: custom lhs"
-        IntLhs _ -> throwError "int lhs at top level"
-        AtLhs _ -> return (Right Nothing)
-        GenericLhs id [] -> withCurrentFile $ \file ->
-            return (Right (Just (id , stmt)))
-        _ -> throwError "unrecognized form for scripted effect"
-    _ -> throwError "unrecognized form for scripted effect@content"
-parseHOI4Effect _ = withCurrentFile $ \file ->
-    throwError ("unrecognised form for scripted effect in " <> T.pack file)
+parseHOI4Effect stmt = onTopLevelCompound "scripted effect"
+    (\id _ -> return (Right (Just (id , stmt))))
+    stmt
 
 parseHOI4Triggers :: (IsGameState (GameState g), IsGameData (GameData g), Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap Text GenericStatement)
-parseHOI4Triggers scripts = HM.unions . HM.elems <$> do
-    tryParse <- hoistExceptions $
-        HM.traverseWithKey
-            (\sourceFile scr -> setCurrentFile sourceFile $ mapM parseHOI4Trigger $ concatMap onlyscripts scr)
-            scripts
-    case tryParse of
-        Left err -> do
-            traceM $ "Completely failed parsing scripted triggers: " ++ T.unpack err
-            return HM.empty
-        Right triggerFilesOrErrors ->
-            flip HM.traverseWithKey triggerFilesOrErrors $ \sourceFile etrigger ->
-                fmap (mkTriggerMap . catMaybes) . forM etrigger $ \case
-                    Left err -> do
-                        traceM $ "Error parsing scripted triggers in " ++ sourceFile
-                                 ++ ": " ++ T.unpack err
-                        return Nothing
-                    Right ttrigger -> return ttrigger
+parseHOI4Triggers scripts = HM.fromList . flattened <$>
+    parseScriptFiles "scripted triggers" (mapM parseHOI4Trigger . concatMap onlyscripts) scripts
     where
-        mkTriggerMap :: [(Text,GenericStatement)] -> HashMap Text GenericStatement
-        mkTriggerMap = HM.fromList
         onlyscripts = \case
             stmt@[pdx| %_ = @_|] -> [stmt]
             _ -> []
 
 parseHOI4Trigger :: (IsGameState (GameState g), IsGameData (GameData g), MonadError Text m) =>
     GenericStatement -> PPT g m (Either Text (Maybe (Text, GenericStatement)))
-parseHOI4Trigger (StatementBare _) = throwError "bare statement at top level"
-parseHOI4Trigger stmt@[pdx| %left = %right |] = case right of
-    CompoundRhs parts -> case left of
-        CustomLhs _ -> throwError "internal error: custom lhs"
-        IntLhs _ -> throwError "int lhs at top level"
-        AtLhs _ -> return (Right Nothing)
-        GenericLhs id [] -> withCurrentFile $ \file ->
-            return (Right (Just (id , stmt)))
-        _ -> throwError "unrecognized form for scripted trigger"
-    _ -> throwError "unrecognized form for scripted trigger@content"
-parseHOI4Trigger _ = withCurrentFile $ \file ->
-    throwError ("unrecognised form for scripted trigger in " <> T.pack file)
+parseHOI4Trigger stmt = onTopLevelCompound "scripted trigger"
+    (\id _ -> return (Right (Just (id , stmt))))
+    stmt
 
 ------------------------------
 -- Balance of power rangers --
@@ -417,26 +280,9 @@ parseHOI4Trigger _ = withCurrentFile $ \file ->
 
 parseHOI4BopRanges :: (IsGameState (GameState g), IsGameData (GameData g), Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap Text HOI4BopRange)
-parseHOI4BopRanges scripts = HM.unions . HM.elems <$> do
-    tryParse <- hoistExceptions $
-        HM.traverseWithKey
-            (\sourceFile scr -> setCurrentFile sourceFile $ mapM parseHOI4BopRange $ concatMap getRanges scr)
-            scripts
-    case tryParse of
-        Left err -> do
-            traceM $ "Completely failed parsing bop ranges: " ++ T.unpack err
-            return HM.empty
-        Right bopFilesOrErrors ->
-            flip HM.traverseWithKey bopFilesOrErrors $ \sourceFile ebop ->
-                fmap (mkBopMap . catMaybes) . forM ebop $ \case
-                    Left err -> do
-                        traceM $ "Error parsing bop rangess in " ++ sourceFile
-                                 ++ ": " ++ T.unpack err
-                        return Nothing
-                    Right bbop -> return bbop
+parseHOI4BopRanges scripts = keyedBy bop_id <$>
+    parseScriptFiles "bop ranges" (mapM parseHOI4BopRange . concatMap getRanges) scripts
     where
-        mkBopMap :: [HOI4BopRange] -> HashMap Text HOI4BopRange
-        mkBopMap = HM.fromList . map (bop_id &&& id)
         getRanges :: GenericStatement -> [GenericStatement]
         getRanges = \case
             [pdx| %_ = @scrs |] -> concatMap (\case
@@ -448,7 +294,6 @@ parseHOI4BopRanges scripts = HM.unions . HM.elems <$> do
 
 parseHOI4BopRange :: (IsGameState (GameState g), IsGameData (GameData g), MonadError Text m) =>
     GenericStatement ->PPT g m (Either Text (Maybe HOI4BopRange))
-parseHOI4BopRange (StatementBare _) = throwError "bare statement at top level"
 parseHOI4BopRange stmt@[pdx| range = @scr |]
     = withCurrentFile $ \file ->
         let bop = foldl' addSection (HOI4BopRange {
@@ -461,43 +306,27 @@ parseHOI4BopRange stmt@[pdx| range = @scr |]
     where
         addSection :: HOI4BopRange -> GenericStatement -> HOI4BopRange
         addSection bop [pdx| id = $txt |] = bop { bop_id = txt }
-        addSection bop [pdx| on_activate = %rhs |] = case rhs of
+        addSection bop stmt@[pdx| on_activate = %rhs |] = case rhs of
                 CompoundRhs [] -> bop
                 CompoundRhs scr -> bop { bop_on_activate = Just scr }
-                _-> trace "bad bop on_activate" bop
-        addSection bop [pdx| on_deactivate = %rhs |] = case rhs of
+                _-> warn (BadValue "bop on_activate" stmt) bop
+        addSection bop stmt@[pdx| on_deactivate = %rhs |] = case rhs of
                 CompoundRhs [] -> bop
                 CompoundRhs scr -> bop { bop_on_deactivate = Just scr }
-                _-> trace "bad bop on_activate" bop
+                _-> warn (BadValue "bop on_deactivate" stmt) bop
         addSection bop [pdx| min = %_ |] = bop
         addSection bop [pdx| max = %_ |] = bop
         addSection bop [pdx| modifier = %_ |] = bop
-        addSection bop stmt = trace ("Urecognized statement in bop range: " ++ show stmt) bop
-parseHOI4BopRange stmt = trace (show stmt) $ withCurrentFile $ \file ->
-    throwError ("unrecognised form for range in bop in " <> T.pack file)
+        addSection bop stmt = warn (UnknownSection "bop range" stmt) bop
+parseHOI4BopRange stmt = rejectForm "bop range" stmt
 
 -- Modifier Definitions
 
-parseHOI4ModifierDefinitions scripts = HM.unions . HM.elems <$> do
-    tryParse <- hoistExceptions $
-        HM.traverseWithKey
-            (\sourceFile scr -> setCurrentFile sourceFile $ mapM parseHOI4ModifierDefinition $ concatMap onlyscripts scr)
-            scripts
-    case tryParse of
-        Left err -> do
-            traceM $ "Completely failed parsing modifier definitions: " ++ T.unpack err
-            return HM.empty
-        Right moddefFilesOrErrors ->
-            flip HM.traverseWithKey moddefFilesOrErrors $ \sourceFile emoddef ->
-                fmap (mkTriggerMap . catMaybes) . forM emoddef $ \case
-                    Left err -> do
-                        traceM $ "Error parsing modifier definitions in " ++ sourceFile
-                                 ++ ": " ++ T.unpack err
-                        return Nothing
-                    Right mmoddef -> return mmoddef
+parseHOI4ModifierDefinitions scripts = mkModDefMap . flattened <$>
+    parseScriptFiles "modifier definitions" (mapM parseHOI4ModifierDefinition . concatMap onlyscripts) scripts
     where
-        mkTriggerMap :: [ModifierDisplay] -> HashMap Text ModifierDisplay
-        mkTriggerMap ds = HM.fromList [(key, d) | d@(key,_,_) <- ds]
+        mkModDefMap :: [ModifierDisplay] -> HashMap Text ModifierDisplay
+        mkModDefMap ds = HM.fromList [(key, d) | d@(key,_,_) <- ds]
         onlyscripts = \case
             stmt@[pdx| %_ = @_|] -> [stmt]
             _ -> []
@@ -514,24 +343,16 @@ newMDF = ModDef "<!--Check Script-->" "<!--Check Script-->" 0 Nothing
 
 parseHOI4ModifierDefinition :: (IsGameState (GameState g), IsGameData (GameData g), MonadError Text m) =>
     GenericStatement -> PPT g m (Either Text (Maybe ModifierDisplay))
-parseHOI4ModifierDefinition (StatementBare _) = throwError "bare statement at top level"
-parseHOI4ModifierDefinition stmt@[pdx| %left = %right |] = case right of
-    CompoundRhs parts -> case left of
-        CustomLhs _ -> throwError "internal error: custom lhs"
-        IntLhs _ -> throwError "int lhs at top level"
-        AtLhs _ -> return (Right Nothing)
-        GenericLhs id [] -> withCurrentFile $ \file -> do
-            let mdefdata = getscrmess id =<< foldM addSection newMDF parts
-            return $ Right mdefdata
-        _ -> throwError "unrecognized form for scripted trigger"
-    _ -> throwError "unrecognized form for scripted trigger@content"
+parseHOI4ModifierDefinition = onTopLevelCompound "modifier definition" $ \id parts -> do
+    let mdefdata = getscrmess id =<< foldM addSection newMDF parts
+    return $ Right mdefdata
     where
         addSection mdf [pdx| color_type = $ctype |] = return $ mdf { mdef_color_type = ctype }
         addSection mdf [pdx| value_type = $vtype |] = return $ mdf { mdef_value_type = vtype }
         addSection mdf [pdx| category = %_ |] = return mdf
         addSection mdf [pdx| precision = !precision |] = return $ mdf { mdef_precision = precision }
         addSection mdf [pdx| postfix = $psfix |] = return mdf { mdef_postfix = Just psfix }
-        addSection mdf stmt = return $ trace ("Urecognized statement in modifier definition: " ++ show stmt) mdf
+        addSection mdf stmt = return $ warn (UnknownSection "modifier definition" stmt) mdf
 
         getscrmess :: Text -> ModDef -> Maybe ModifierDisplay
         getscrmess mdid mdf = withPrecision <$> case T.toLower $ mdef_color_type mdf of
@@ -558,9 +379,6 @@ parseHOI4ModifierDefinition stmt@[pdx| %left = %right |] = case right of
                 -- The definition says how many decimal places to write the value
                 -- to, the same as the documentation does for a built-in modifier.
                 withPrecision msg = (mdid, msg, Just (round (mdef_precision mdf)))
-
-parseHOI4ModifierDefinition _ = withCurrentFile $ \file ->
-    throwError ("unrecognised form for scripted trigger in " <> T.pack file)
 
 
 -- | The modifier localization keys that read as headings (all-caps), in the

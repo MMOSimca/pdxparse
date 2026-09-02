@@ -50,6 +50,7 @@ executable pdxparse
                        Interface
                        Localization,
                        MessageTools,
+                       ParseWarnings,
                        Paths_pdxparse,
                        Platform,
                        QQ,

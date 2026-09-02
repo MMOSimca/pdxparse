@@ -8,14 +8,11 @@ module HOI4.Ideas (
 --    ,   writeHOI4Ideas
     ) where
 
-import Debug.Trace (trace, traceM)
-
-import Control.Arrow ((&&&))
 import Control.Monad (foldM, forM)
 import Control.Monad.Except (ExceptT (..), MonadError (..))
 
 import Data.Char (toLower)
-import Data.Maybe (catMaybes, fromMaybe)
+import Data.Maybe (fromMaybe)
 
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
@@ -28,8 +25,8 @@ import Abstract -- everything
 import QQ (pdx)
 import SettingsTypes ( PPT
                      , IsGame (..), IsGameData (..), IsGameState (..)
-                     , setCurrentFile, withCurrentFile
-                     , hoistExceptions)
+                     , withCurrentFile)
+import ParseWarnings
 import HOI4.Common -- everything
 import HOI4.Localization
 import HOI4.Messages (wikifyLocColours)
@@ -38,33 +35,16 @@ import HOI4.Messages (wikifyLocColours)
 -- data structures.
 parseHOI4Ideas :: (HOI4Info g, Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap Text HOI4Idea)
-parseHOI4Ideas scripts = HM.unions . HM.elems <$> do
-    tryParse <- hoistExceptions $
-        HM.traverseWithKey
-            (\sourceFile scr ->
-                setCurrentFile sourceFile $ concat <$> mapM parseHOI4IdeaGroup (case scr of
-                    [[pdx| ideas = @mods |]] -> mods
-                    _ -> []))
-            scripts
-    case tryParse of
-        Left err -> do
-            traceM $ "Completely failed parsing ideas: " ++ T.unpack err
-            return HM.empty
-        Right ideasFilesOrErrors ->
-            flip HM.traverseWithKey ideasFilesOrErrors $ \sourceFile eidea ->
-                fmap (mkIdeaMap . catMaybes) . forM eidea $ \case
-                    Left err -> do
-                        traceM $ "Error parsing ideas in " ++ sourceFile
-                                 ++ ": " ++ T.unpack err
-                        return Nothing
-                    Right iidea -> return iidea
-                where mkIdeaMap :: [HOI4Idea] -> HashMap Text HOI4Idea
-                      mkIdeaMap = HM.fromList . map (id_id &&& id)
+parseHOI4Ideas scripts = keyedBy id_id <$>
+    parseScriptFiles "ideas"
+        (\scr -> concat <$> mapM parseHOI4IdeaGroup (case scr of
+            [[pdx| ideas = @mods |]] -> mods
+            _ -> []))
+        scripts
 
 -- | Parse one file's idea groups scripts into idea data structures.
 parseHOI4IdeaGroup :: (HOI4Info g, Monad m) =>
     GenericStatement -> PPT g (ExceptT Text m) [Either Text (Maybe HOI4Idea)]
-parseHOI4IdeaGroup stmt@(StatementBare _) = throwError "bare statement at top level"
 parseHOI4IdeaGroup [pdx| $left = @scr |]
     = forM scr $ \stmt -> (Right <$> parseHOI4Idea stmt left isLaw)
                             `catchError` (return . Left)
@@ -74,11 +54,10 @@ parseHOI4IdeaGroup [pdx| $left = @scr |]
         isLaw = any lawMarker scr
         lawMarker [pdx| law = yes |] = True
         lawMarker _ = False
-parseHOI4IdeaGroup [pdx| %check = %_ |] = case check of
+parseHOI4IdeaGroup stmt@[pdx| %check = %_ |] = case check of
     AtLhs _ -> return [Right Nothing]
-    _-> throwError "unrecognized form for idea block (LHS)"
-parseHOI4IdeaGroup _ = withCurrentFile $ \file ->
-    throwError ("unrecognised form for ideas in " <> T.pack file)
+    _-> rejectForm "idea group" stmt
+parseHOI4IdeaGroup stmt = rejectForm "idea group" stmt
 
 -- | Empty idea. Starts off Nothing everywhere, except id and name
 -- (should get filled in immediately).
@@ -88,7 +67,7 @@ newIdea = HOI4Idea undefined undefined "<!-- Check Script -->" undefined "GFX_id
 -- | Parse one idea script into a idea data structure.
 parseHOI4Idea :: (HOI4Info g, Monad m) =>
     GenericStatement -> Text -> Bool -> PPT g (ExceptT Text m) (Maybe HOI4Idea)
-parseHOI4Idea [pdx| $ideaName = %rhs |] category isLaw = case rhs of
+parseHOI4Idea stmt@[pdx| $ideaName = %rhs |] category isLaw = case rhs of
     CompoundRhs parts -> do
         idName_loc <- wikifyLocColours <$> getGameL10n ideaName
         -- The picture an idea is shown by where it names none of its own: the
@@ -108,12 +87,12 @@ parseHOI4Idea [pdx| $ideaName = %rhs |] category isLaw = case rhs of
                               , id_law = isLaw
                               , id_category = category}))
                   parts
-    GenericRhs txt [] -> if ideaName == "designer" || ideaName == "use_list_view" || ideaName == "law" then return Nothing else throwError "unrecognized form for idea (RHS) "
-    _ -> throwError "unrecognized form for idea (RHS)"
-parseHOI4Idea [pdx| %check = %_ |] _ _ = case check of
+    GenericRhs txt [] -> if ideaName == "designer" || ideaName == "use_list_view" || ideaName == "law" then return Nothing else rejectForm "idea" stmt
+    _ -> rejectForm "idea" stmt
+parseHOI4Idea stmt@[pdx| %check = %_ |] _ _ = case check of
     AtLhs _ -> return Nothing
-    _-> throwError "unrecognized form for idea block (LHS)"
-parseHOI4Idea _ _ _ = throwError "unrecognized form for idea (LHS)"
+    _-> rejectForm "idea" stmt
+parseHOI4Idea stmt _ _ = rejectForm "idea" stmt
 
 -- | Interpret one section of an opinion modifier. If understood, add it to the
 -- event data. If not understood, throw an exception.
@@ -134,64 +113,64 @@ ideaAddSection iidea stmt
                              | "idea_" `T.isPrefixOf` txt = "GFX_" <> txt
                              | otherwise = "GFX_idea_" <> txt in
                     iidea { id_picture = txtd }
-                _-> trace "bad idea picture" iidea
+                _-> warn (BadValue "idea picture" stmt) iidea
             "name"      -> case rhs of
                 GenericRhs txt [] -> iidea { id_name = txt }
                 StringRhs txt -> iidea { id_name = txt }
-                _-> trace "bad idea name" iidea
+                _-> warn (BadValue "idea name" stmt) iidea
             "modifier"  -> case rhs of
                 CompoundRhs [] -> iidea
                 CompoundRhs scr -> iidea { id_modifier = Just stmt }
-                _-> trace "bad idea modifer" iidea
+                _-> warn (BadValue "idea modifier" stmt) iidea
             "targeted_modifier" -> case rhs of
                 CompoundRhs [] -> iidea
                 CompoundRhs scr -> let oldstmt = fromMaybe [] (id_targeted_modifier iidea) in
                     iidea { id_targeted_modifier = Just (oldstmt ++ [stmt]) }
-                _-> trace "bad idea targeted_modifier" iidea
+                _-> warn (BadValue "idea targeted_modifier" stmt) iidea
             "research_bonus" -> case rhs of
                 CompoundRhs [] -> iidea
                 CompoundRhs scr -> iidea { id_research_bonus = Just stmt }
-                _-> trace "bad idea reearch_bonus" iidea
+                _-> warn (BadValue "idea research_bonus" stmt) iidea
             "equipment_bonus" -> case rhs of
                 CompoundRhs [] -> iidea
                 CompoundRhs scr -> iidea { id_equipment_bonus = Just stmt }
-                _-> trace "bad idea equipment_bonus" iidea
+                _-> warn (BadValue "idea equipment_bonus" stmt) iidea
             "allowed" -> case rhs of
                 CompoundRhs [] -> iidea
                 CompoundRhs scr -> iidea { id_allowed = Just scr }
-                _-> trace "bad idea allowed" iidea
+                _-> warn (BadValue "idea allowed" stmt) iidea
             "visible" -> case rhs of
                 CompoundRhs [] -> iidea
                 CompoundRhs scr -> iidea { id_visible = Just scr }
-                _-> trace "bad idea visible" iidea
+                _-> warn (BadValue "idea visible" stmt) iidea
             "available" -> case rhs of
                 CompoundRhs [] -> iidea
                 CompoundRhs scr -> iidea { id_available = Just scr }
-                _-> trace "bad idea available" iidea
+                _-> warn (BadValue "idea available" stmt) iidea
             "on_add" -> case rhs of
                 CompoundRhs [] -> iidea
                 CompoundRhs scr -> iidea { id_on_add = Just scr }
-                _-> trace "bad idea on_add" iidea
+                _-> warn (BadValue "idea on_add" stmt) iidea
             "on_remove" -> case rhs of
                 CompoundRhs [] -> iidea
                 CompoundRhs scr -> iidea { id_on_remove = Just scr }
-                _-> trace "bad idea on_remove" iidea
+                _-> warn (BadValue "idea on_remove" stmt) iidea
             "cancel" -> case rhs of --removes idea if true
                 CompoundRhs [] -> iidea
                 CompoundRhs scr -> iidea { id_cancel = Just scr }
-                _-> trace "bad idea cancel" iidea
+                _-> warn (BadValue "idea cancel" stmt) iidea
             "do_effect" -> case rhs of --disabled modifiers if False
                 CompoundRhs [] -> iidea
                 CompoundRhs scr -> iidea { id_do_effect = Just scr }
-                _-> trace "bad idea do_effect" iidea
+                _-> warn (BadValue "idea do_effect" stmt) iidea
             "rule" -> case rhs of
                 CompoundRhs [] -> iidea
                 CompoundRhs scr -> iidea { id_rule = Just scr }
-                _-> trace "bad idea rule" iidea
+                _-> warn (BadValue "idea rule" stmt) iidea
             "allowed_civil_war" -> case rhs of
                 CompoundRhs [] -> iidea
                 CompoundRhs scr -> iidea { id_allowed_civil_war = Just scr }
-                _-> trace "bad idea allowed_civil_war" iidea
+                _-> warn (BadValue "idea allowed_civil_war" stmt) iidea
             "ai_will_do"        -> iidea
             "cancel_if_invalid" -> iidea
             "removal_cost"      -> iidea
@@ -201,9 +180,9 @@ ideaAddSection iidea stmt
             "traits"            -> case rhs of
                 CompoundRhs [] -> iidea
                 CompoundRhs scr -> iidea { id_traits = Just scr }
-                _-> trace "bad idea traits" iidea
+                _-> warn (BadValue "idea traits" stmt) iidea
             "ledger"            -> iidea
             "default"           -> iidea
-            other               -> trace ("unknown idea section: " ++ T.unpack other) iidea
-        ideaAddSection' iidea _
-            = trace "unrecognised form for idea section" iidea
+            _                   -> warn (UnknownSection "idea" stmt) iidea
+        ideaAddSection' iidea stmt
+            = warn (UnknownSection "idea" stmt) iidea

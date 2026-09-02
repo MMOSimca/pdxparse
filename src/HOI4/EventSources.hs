@@ -36,8 +36,6 @@ module HOI4.EventSources (
     ,   findActivatedDecisionsInGenericScripts
     ) where
 
-import Debug.Trace (trace)
-
 import Data.List (foldl')
 import Data.Maybe (fromMaybe, mapMaybe)
 
@@ -54,6 +52,7 @@ import HOI4.Common (ppEventLoc, iquotes't)
 import HOI4.Localization
 import HOI4.Messages (wikifyLocColours)
 import HOI4.Types
+import ParseWarnings (ParseWarning (..), warn)
 import QQ (pdx)
 import SettingsTypes ( PPT
                      , getGameInterface, getGameInterfaceNamed, getGameInterfaceIfPresent)
@@ -407,7 +406,7 @@ actionNameTable = HM.fromList $ map (\(n, t) -> (n, "<!-- " <> n <> " -->" <> t)
 -- fired with where one applies (random_events blocks).
 evtFindInStmt :: GenericStatement -> [(HOI4SourceWeight, Text)]
 evtFindInStmt stmt@[pdx| $lhs = @scr |] | lhs `elem` eventEffects =
-    maybe (trace ("Unrecognized event trigger: " ++ show stmt) [])
+    maybe (warn (BadValue "event effect" stmt) [])
         (\triggeredId -> [(Nothing, triggeredId)])
         (getId scr)
     where
@@ -416,7 +415,7 @@ evtFindInStmt stmt@[pdx| $lhs = @scr |] | lhs `elem` eventEffects =
         getId (stmt@[pdx| id = ?!id |] : _) = case id of
             Just (Left n) -> Just $ T.pack (show (n :: Int))
             Just (Right t) -> Just t
-            _ -> trace ("Invalid event id statement: " ++ show stmt) Nothing
+            _ -> warn (BadValue "event id" stmt) Nothing
         getId (_ : ss) = getId ss
 evtFindInStmt [pdx| $lhs = $id |]
     | lhs `elem` eventEffects || lhs `elem` ["on_win", "on_lose", "on_cancel"] =
@@ -426,7 +425,7 @@ evtFindInStmt [pdx| events = @scr |] = mapMaybe extractEvent scr
         extractEvent :: GenericStatement -> Maybe (HOI4SourceWeight, Text)
         extractEvent (StatementBare (GenericLhs e [])) = Just (Nothing, e)
         extractEvent (StatementBare (IntLhs e)) = Just (Nothing, T.pack (show e))
-        extractEvent stmt = trace ("Unknown in events statement: " ++ show stmt) Nothing
+        extractEvent stmt = warn (UnknownSection "events block" stmt) Nothing
 evtFindInStmt [pdx| random_events = @scr |] =
     let evts = mapMaybe extractRandomEvent scr
         total = sum $ map fst evts
@@ -436,8 +435,8 @@ evtFindInStmt [pdx| random_events = @scr |] =
         extractRandomEvent stmt@[pdx| !weight = ?!id |] = case id of
             Just (Left n) -> Just (fromIntegral weight, T.pack (show (n :: Int)))
             Just (Right t) -> Just (fromIntegral weight, t)
-            _ -> trace ("Invalid event id in random_events: " ++ show stmt) Nothing
-        extractRandomEvent stmt = trace ("Unknown in random_events statement: " ++ show stmt) Nothing
+            _ -> warn (BadValue "random_events event id" stmt) Nothing
+        extractRandomEvent stmt = warn (UnknownSection "random_events block" stmt) Nothing
 evtFindInStmt [pdx| %lhs = @scr |] = concatMap evtFindInStmt scr
 evtFindInStmt _ = []
 
@@ -513,7 +512,7 @@ findSourcesInOnActions finder hm scr = foldl' findInAction hm scr
         findInAction :: HOI4SourceMap -> GenericStatement -> HOI4SourceMap
         findInAction hm [pdx| on_actions = @stmts |] = foldl' findInAction hm stmts
         findInAction hm [pdx| $lhs = @scr |] = addTriggers hm (addSource (HOI4SrcOnAction lhs) (findInStmts finder scr))
-        findInAction hm stmt = trace ("Unknown on_actions statement: " ++ show stmt) hm
+        findInAction hm stmt = warn (UnknownSection "on_actions" stmt) hm
 
 findSourcesInNationalFocus :: StmtFinder -> HOI4SourceMap -> [HOI4NationalFocus] -> HOI4SourceMap
 findSourcesInNationalFocus finder hm nf = addTriggers hm (concatMap findInFocus nf)
@@ -544,7 +543,7 @@ findSourcesInScriptedEffects finder hm scr = foldl' findInScriptEffect hm scr
     where
         findInScriptEffect :: HOI4SourceMap -> GenericStatement -> HOI4SourceMap
         findInScriptEffect hm [pdx| $lhs = @scr |] = addTriggers hm (addSource (HOI4SrcScriptedEffect lhs) (findInStmts finder scr))
-        findInScriptEffect hm stmt = trace ("Unknown scripted effect statement: " ++ show stmt) hm
+        findInScriptEffect hm stmt = warn (UnknownSection "scripted effect" stmt) hm
 
 findSourcesInBops :: StmtFinder -> HOI4SourceMap -> [HOI4BopRange] -> HOI4SourceMap
 findSourcesInBops finder hm hBops = addTriggers hm (concatMap findInBop hBops)

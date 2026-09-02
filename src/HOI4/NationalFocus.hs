@@ -7,12 +7,9 @@ module HOI4.NationalFocus (
         ,writeHOI4NationalFocuses
     ) where
 
-import Debug.Trace (trace, traceM)
-
 import System.FilePath (takeBaseName)
 
-import Control.Arrow ((&&&))
-import Control.Monad (foldM, forM)
+import Control.Monad (foldM)
 import Control.Monad.Except (MonadError (..))
 import Control.Monad.State (gets)
 import Control.Monad.Trans (MonadIO (..))
@@ -38,12 +35,13 @@ import QQ (pdx)
 import SettingsTypes ( PPT, Settings (..)
                      , IsGame (..), IsGameData (..), IsGameState (..)
                      , setCurrentFile, withCurrentFile
-                     , hoistErrors, hoistExceptions
+                     , hoistErrors
                      , indentUp
                      , getGameInterface, getGameInterfaceIfPresent)
 import HOI4.Common -- everything
 import HOI4.Localization
 import HOI4.Messages (wikifyLocColours, messageText)
+import ParseWarnings
 
 -- | Empty national focus. Starts off Nothing/empty everywhere, except id and name
 -- (which should get filled in immediately).
@@ -68,31 +66,13 @@ gfxKey txt = if "GFX_" `T.isPrefixOf` txt then txt else "GFX_" <> txt
 -- data structures.
 parseHOI4NationalFocuses :: (HOI4Info g, Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap Text HOI4NationalFocus)
-parseHOI4NationalFocuses scripts = HM.unions . HM.elems <$> do
-    tryParse <- hoistExceptions $
-        HM.traverseWithKey
-            (\sourceFile scr ->
-                setCurrentFile sourceFile $
-                    mapM (\(ordinal, (country, stmt)) ->
-                            parseHOI4NationalFocus (fileVars scr) country ordinal stmt)
-                         (zip [0..] (concatMap mapTree scr)))
-            scripts
-    case tryParse of
-        Left err -> do
-            traceM $ "Completely failed parsing national focus: " ++ T.unpack err
-            return HM.empty
-        Right nfFilesOrErrors ->
-            flip HM.traverseWithKey nfFilesOrErrors $ \sourceFile enfs ->
-                fmap (mkNfMap . catMaybes) . forM enfs $ \case
-                    Left err -> do
-                        traceM $ "Error parsing national focus in " ++ sourceFile
-                                 ++ ": " ++ T.unpack err
-                        return Nothing
-                    Right nfocus -> return nfocus
+parseHOI4NationalFocuses scripts = keyedBy nf_id <$>
+    parseScriptFiles "national focus"
+        (\scr -> mapM (\(ordinal, (country, stmt)) ->
+                        parseHOI4NationalFocus (fileVars scr) country ordinal stmt)
+                      (zip [0..] (concatMap mapTree scr)))
+        scripts
     where
-        mkNfMap :: [HOI4NationalFocus] -> HashMap Text HOI4NationalFocus
-        mkNfMap = HM.fromList . map (nf_id &&& id)
-
         -- A tree holds all the focuses standing in it, and says which country
         -- it is for; a focus shared between trees stands on its own and belongs
         -- to no one country. Either way the order they come out in is the order
@@ -124,11 +104,10 @@ treeCountry tree = case nub (tagsIn scoring) of
 
 parseHOI4NationalFocus :: (HOI4Info g, MonadError Text m) =>
     HashMap Text Double -> Maybe Text -> Int -> GenericStatement -> PPT g m (Either Text (Maybe HOI4NationalFocus))
-parseHOI4NationalFocus _ _ _ (StatementBare _) = throwError "bare statement at top level"
-parseHOI4NationalFocus vars country ordinal [pdx| %left = %right |] = case right of
+parseHOI4NationalFocus vars country ordinal stmt@[pdx| %left = %right |] = case right of
     CompoundRhs parts -> case left of
-        CustomLhs _ -> throwError "internal error: custom lhs"
-        IntLhs _ -> throwError "int lhs at top level"
+        CustomLhs _ -> rejectForm "national focus" stmt
+        IntLhs _ -> rejectForm "national focus" stmt
         AtLhs _ -> return (Right Nothing)
         GenericLhs id [] ->
             if not (id == "focus" || id == "shared_focus" || id == "joint_focus") then
@@ -151,20 +130,15 @@ parseHOI4NationalFocus vars country ordinal [pdx| %left = %right |] = case right
                     -- it goes by instead.
                     nfNameVariants <- map (first wikifyLocColours)
                                         <$> scriptedLocVariants root nameKey
-                    nnf <- hoistErrors $ foldM (nationalFocusAddSection vars)
-                                                (Just newHOI4NationalFocus {nf_path = file
-                                                                            ,nf_name_loc = nfNameLoc
-                                                                            ,nf_name_desc = nfNameDesc
-                                                                            ,nf_name_variants = nfNameVariants
-                                                                            ,nf_ordinal = ordinal
-                                                                            ,nf_country = country})
-                                                parts
-                    case nnf of
-                        Left err -> return (Left err)
-                        Right Nothing -> return (Right Nothing)
-                        Right (Just nf) -> withCurrentFile $ \file ->
-                            return (Right (Just nf))
-        _ -> throwError "unrecognized form for national focus (LHS)"
+                    hoistErrors $ foldM (nationalFocusAddSection vars)
+                                        (Just newHOI4NationalFocus {nf_path = file
+                                                                    ,nf_name_loc = nfNameLoc
+                                                                    ,nf_name_desc = nfNameDesc
+                                                                    ,nf_name_variants = nfNameVariants
+                                                                    ,nf_ordinal = ordinal
+                                                                    ,nf_country = country})
+                                        parts
+        _ -> rejectForm "national focus" stmt
     _ -> return (Right Nothing)
     where
         getNFId ([pdx| id = $nfname|]:_) = nfname
@@ -173,8 +147,7 @@ parseHOI4NationalFocus vars country ordinal [pdx| %left = %right |] = case right
         getNFTxt ([pdx| text = $nfname|]:_) = Just nfname
         getNFTxt (_:xs) = getNFTxt xs
         getNFTxt [] = Nothing
-parseHOI4NationalFocus _ _ _ _ = withCurrentFile $ \file ->
-    throwError ("unrecognised form for national focus in " <> T.pack file)
+parseHOI4NationalFocus _ _ _ stmt = rejectForm "national focus" stmt
 
 -- | Interpret one section of an national focus. If understood, add it to the
 -- event data. If not understood, throw an exception.
@@ -187,15 +160,15 @@ nationalFocusAddSection vars nf stmt
         nationalFocusAddSection' nf stmt@[pdx| $lhs = %rhs |] = case T.map toLower lhs of
             "id" -> case rhs of
                 GenericRhs txt [] -> nf { nf_id = txt}
-                _-> trace ("bad nf id in: " ++ show stmt) nf
+                _-> warn (BadValue "national focus id" stmt) nf
             "text" -> case rhs of
                 GenericRhs txt [] -> nf { nf_text = Just txt}
-                _-> trace ("bad nf id in: " ++ show stmt) nf
+                _-> warn (BadValue "national focus text" stmt) nf
             "completion_reward" -> case rhs of
                 CompoundRhs [] ->
                     nf
                 CompoundRhs scr -> nf { nf_completion_reward = Just scr }
-                _-> trace "bad nf completion_reward" nf
+                _-> warn (BadValue "national focus completion_reward" stmt) nf
             "icon" -> case rhs of
                 GenericRhs txt [] ->
                     nf { nf_icon = gfxKey txt}
@@ -210,7 +183,7 @@ nationalFocusAddSection vars nf stmt
                     let (fallback, conditional) = partitionEithers (mapMaybe iconVariant scr) in
                     nf { nf_icon = fromMaybe (nf_icon nf) (listToMaybe fallback)
                        , nf_icon_variants = conditional}
-                _-> trace ("bad nf icon in: " ++ show stmt) nf
+                _-> warn (BadValue "national focus icon" stmt) nf
             "alternate_icon" -> case rhs of
                 GenericRhs txt [] ->
                     let txtd = if "GFX_" `T.isPrefixOf` txt then txt else "GFX_" <> txt in
@@ -220,18 +193,18 @@ nationalFocusAddSection vars nf stmt
                     nf { nf_alt_icon = Just txtd}
                 CompoundRhs _ ->
                     nf { nf_alt_icon = Just "Multiple Pictures possible, check script."}
-                _-> trace ("bad nf icon in: " ++ show stmt) nf
+                _-> warn (BadValue "national focus alternate_icon" stmt) nf
             "cost" -> case rhs of
                 (floatRhs -> Just num) -> nf {nf_cost = num}
                 GenericRhs var []
                     | Just num <- HM.lookup (fromMaybe var (T.stripPrefix "@" var)) vars
                     -> nf {nf_cost = num}
-                _ -> trace ("bad nf cost in: " ++ show stmt) nf
+                _ -> warn (BadValue "national focus cost" stmt) nf
             "allow_branch" -> case rhs of
                 CompoundRhs [] ->
                     nf
                 CompoundRhs scr -> nf { nf_allow_branch = Just scr }
-                _-> trace "bad nf allow_branch" nf
+                _-> warn (BadValue "national focus allow_branch" stmt) nf
             "x" -> nf
             "y" -> nf
             "prerequisite" -> case rhs of
@@ -239,38 +212,38 @@ nationalFocusAddSection vars nf stmt
                     nf
                 CompoundRhs scr ->
                     nf { nf_prerequisite = nf_prerequisite nf ++ [Just scr] }
-                _-> trace "bad nf prerequisite" nf
+                _-> warn (BadValue "national focus prerequisite" stmt) nf
             "mutually_exclusive" -> case rhs of
                 CompoundRhs [] ->
                     nf
                 CompoundRhs scr ->
                     nf { nf_mutually_exclusive = Just scr }
-                _-> trace "bad nf mutually_exclusive" nf
+                _-> warn (BadValue "national focus mutually_exclusive" stmt) nf
             "available" -> case rhs of
                 CompoundRhs [] ->
                     nf
                 CompoundRhs scr -> nf { nf_available = Just scr }
-                _-> trace "bad nf available" nf
+                _-> warn (BadValue "national focus available" stmt) nf
             "bypass" -> case rhs of
                 CompoundRhs [] ->
                     nf
                 CompoundRhs scr -> nf { nf_bypass = Just scr }
-                _-> trace "bad nf bypass" nf
+                _-> warn (BadValue "national focus bypass" stmt) nf
             "completion_reward_joint_originator" -> case rhs of
                 CompoundRhs [] ->
                     nf
                 CompoundRhs scr -> nf { nf_joint_complete_origin = Just scr }
-                _-> trace "bad nf joint reward orginator" nf
+                _-> warn (BadValue "national focus completion_reward_joint_originator" stmt) nf
             "completion_reward_joint_member" -> case rhs of
                 CompoundRhs [] ->
                     nf
                 CompoundRhs scr -> nf { nf_joint_complete_member = Just scr }
-                _-> trace "bad nf joint reward member" nf
+                _-> warn (BadValue "national focus completion_reward_joint_member" stmt) nf
             "joint_trigger" -> case rhs of
                 CompoundRhs [] ->
                     nf
                 CompoundRhs scr -> nf { nf_joint_trigger = Just scr }
-                _-> trace "bad nf joint trigger" nf
+                _-> warn (BadValue "national focus joint_trigger" stmt) nf
             "cancel" -> nf
             "cancelable" -> nf --bool
             "historical_ai" -> nf
@@ -283,13 +256,13 @@ nationalFocusAddSection vars nf stmt
                 CompoundRhs [] ->
                     nf
                 CompoundRhs scr -> nf {nf_select_effect = Just scr}
-                _-> trace ("bad nf select_effect in: " ++ show stmt) nf
+                _-> warn (BadValue "national focus select_effect" stmt) nf
             "ai_will_do" -> nf --Do we want to deal with aistuff with focus' ?
             "complete_tooltip" ->  case rhs of
                 CompoundRhs [] ->
                     nf
                 CompoundRhs scr -> nf { nf_complete_tooltip = Just scr }
-                _-> trace "bad nf complete tooltip" nf
+                _-> warn (BadValue "national focus complete_tooltip" stmt) nf
             "offset" -> nf
             "relative_position_id" -> nf
             "text_icon" -> nf -- unknown what it does for now. AAT
@@ -298,9 +271,9 @@ nationalFocusAddSection vars nf stmt
             "bypass_if_unavailable" -> nf --bool
             "bypass_effect" -> nf -- effect executed when the focus is bypassed
             "overlay" -> nf -- graphical overlay on the focus icon
-            other -> trace ("unknown national focus section: " ++ show other ++ " for " ++ show stmt) nf
-        nationalFocusAddSection' nf _
-            = trace "unrecognised form for national focus section" nf
+            _ -> warn (UnknownSection "national focus" stmt) nf
+        nationalFocusAddSection' nf stmt
+            = warn (UnknownSection "national focus" stmt) nf
 
 
 
@@ -326,28 +299,12 @@ writeHOI4NationalFocuses = do
 
 parseHOI4NationalFocusesPath :: (HOI4Info g, Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap FilePath [HOI4NationalFocus])
-parseHOI4NationalFocusesPath scripts = do
-    tryParse <- hoistExceptions $
-        HM.traverseWithKey
-            (\sourceFile scr ->
-                setCurrentFile sourceFile $
-                    mapM (\(ordinal, (country, stmt)) ->
-                            parseHOI4NationalFocus (fileVars scr) country ordinal stmt)
-                         (zip [0..] (concatMap mapTree scr)))
-            scripts
-    case tryParse of
-        Left err -> do
-            traceM $ "Completely failed parsing national focus: " ++ T.unpack err
-            return HM.empty
-        Right nfFilesOrErrors ->
-            return $ HM.filter (not . null) $ flip HM.mapWithKey nfFilesOrErrors $ \sourceFile enfs ->
-                mapMaybe (\case
-                    Left err -> do
-                        traceM $ "Error parsing national focus in " ++ sourceFile
-                                 ++ ": " ++ T.unpack err
-                        Nothing
-                    Right nfocus -> nfocus)
-                    enfs
+parseHOI4NationalFocusesPath scripts = HM.filter (not . null) <$>
+    parseScriptFiles "national focus"
+        (\scr -> mapM (\(ordinal, (country, stmt)) ->
+                        parseHOI4NationalFocus (fileVars scr) country ordinal stmt)
+                      (zip [0..] (concatMap mapTree scr)))
+        scripts
     where
         -- A tree holds all the focuses standing in it, and says which country
         -- it is for; a focus shared between trees stands on its own and belongs

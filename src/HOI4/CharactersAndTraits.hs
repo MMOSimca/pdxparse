@@ -8,14 +8,11 @@ module HOI4.CharactersAndTraits (
         ,parseHOI4UnitLeaderTraits
     ) where
 
-import Debug.Trace (trace, traceM)
-
-import Control.Arrow ((&&&))
-import Control.Monad (foldM, forM)
+import Control.Monad (foldM)
 import Control.Monad.Except (MonadError (..))
 
 import Data.List ( foldl' )
-import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
+import Data.Maybe (fromMaybe, mapMaybe)
 
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
@@ -27,8 +24,9 @@ import Abstract -- everything
 import QQ (pdx)
 import SettingsTypes ( PPT
                      , IsGame (..), IsGameData (..), IsGameState (..)
-                     , setCurrentFile, withCurrentFile
-                     , hoistErrors, hoistExceptions)
+                     , withCurrentFile
+                     , hoistErrors)
+import ParseWarnings
 import HOI4.Common -- everything
 import StatementUtils -- everything
 import HOI4.Localization
@@ -51,30 +49,15 @@ addUnitRole role hChar
 parseHOI4Characters :: (HOI4Info g, IsGameData (GameData g), Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap Text HOI4Character, HashMap Text HOI4Advisor)
 parseHOI4Characters scripts = do
-    charmap <- HM.unions . HM.elems <$> do
-        tryParse <- hoistExceptions $
-            HM.traverseWithKey
-                (\sourceFile scr -> setCurrentFile sourceFile $ mapM character $ concatMap (\case
-                    [pdx| characters = @chars |] -> chars
-                    _ -> scr) scr)
-                scripts
-        case tryParse of
-            Left err -> do
-                traceM $ "Completely failed parsing characters: " ++ T.unpack err
-                return HM.empty
-            Right characterFilesOrErrors ->
-                flip HM.traverseWithKey characterFilesOrErrors $ \sourceFile ecchar ->
-                    fmap (mkChaMap . catMaybes) . forM ecchar $ \case
-                        Left err -> do
-                            traceM $ "Error parsing characters in " ++ sourceFile
-                                     ++ ": " ++ T.unpack err
-                            return Nothing
-                        Right cchar -> return cchar
+    charmap <- keyedBy cha_id <$>
+        parseScriptFiles "characters"
+            (\scr -> mapM character $ concatMap (\case
+                [pdx| characters = @chars |] -> chars
+                _ -> scr) scr)
+            scripts
     chartokmap <- parseCharToken charmap
     return (charmap, chartokmap)
     where
-        mkChaMap :: [HOI4Character] -> HashMap Text HOI4Character
-        mkChaMap = HM.fromList . map (cha_id &&& id)
         parseCharToken :: (HOI4Info g, IsGameData (GameData g), Monad m) =>
             HashMap Text HOI4Character ->  PPT g m (HashMap Text HOI4Advisor)
         parseCharToken chas = do
@@ -90,26 +73,12 @@ parseHOI4Characters scripts = do
 
 character :: (HOI4Info g, IsGameData (GameData g), MonadError Text m) =>
     GenericStatement -> PPT g m (Either Text (Maybe HOI4Character))
-character (StatementBare _) = throwError "bare statement at top level"
-character [pdx| %left = %right |] = case right of
-    CompoundRhs parts -> case left of
-        CustomLhs _ -> throwError "internal error: custom lhs"
-        IntLhs _ -> throwError "int lhs at top level"
-        AtLhs _ -> return (Right Nothing)
-        GenericLhs id [] -> withCurrentFile $ \file -> do
-            locname <- wikifyLocColours <$> getGameL10n id
-            cchar <- hoistErrors $ foldM characterAddSection
-                                        (Just (newHOI4Character id locname file))
-                                        parts
-            case cchar of
-                Left err -> return (Left err)
-                Right Nothing -> return (Right Nothing)
-                Right (Just char) -> withCurrentFile $ \_ ->
-                    return (Right (Just char))
-        _ -> throwError "unrecognized form for characters"
-    _ -> throwError "unrecognized form for characters@content"
-character _ = withCurrentFile $ \file ->
-    throwError ("unrecognised form for characters in " <> T.pack file)
+character = onTopLevelCompound "character" $ \id parts ->
+    withCurrentFile $ \file -> do
+        locname <- wikifyLocColours <$> getGameL10n id
+        hoistErrors $ foldM characterAddSection
+                            (Just (newHOI4Character id locname file))
+                            parts
 
 characterAddSection :: (HOI4Info g, MonadError Text m) =>
     Maybe HOI4Character -> GenericStatement -> PPT g m (Maybe HOI4Character)
@@ -117,14 +86,14 @@ characterAddSection Nothing _ = return Nothing
 characterAddSection hChar stmt
     = sequence (characterAddSection' <$> hChar <*> pure stmt)
     where
-        characterAddSection' hChar [pdx| name = %name |] = case name of
+        characterAddSection' hChar stmt@[pdx| name = %name |] = case name of
             StringRhs name -> do
                 nameLoc <- wikifyLocColours <$> getGameL10n name
                 return hChar {cha_loc_name = nameLoc, cha_name = name}
             GenericRhs name [] -> do
                 nameLoc <- wikifyLocColours <$> getGameL10n name
                 return hChar {cha_loc_name  = nameLoc, cha_name = name}
-            _ -> trace "Bad name in characters" $ return hChar
+            _ -> warn (BadValue "character name" stmt) $ return hChar
         characterAddSection' hChar [pdx| advisor = @adv |] = do
             let oldadv = fromMaybe [] (cha_advisor hChar )
             advif <- getAdvinfo hChar adv
@@ -162,10 +131,8 @@ characterAddSection hChar stmt
             return hChar
         characterAddSection' hChar [pdx| can_be_captured = %_ |] =
             return hChar
-        characterAddSection' hChar [pdx| $other = %_ |]
-            = trace ("unknown section in character: " ++ T.unpack other) $ return hChar
-        characterAddSection' hChar _
-            = trace "unrecognised form for in character" $ return hChar
+        characterAddSection' hChar stmt
+            = warn (UnknownSection "character" stmt) $ return hChar
 
         -- Instances disagree about the character's name, since that is often the
         -- whole reason for having more than one of them, so the name the
@@ -179,7 +146,7 @@ characterAddSection hChar stmt
         getTraits stmt@[pdx| traits = @traits |] = map
             (\case
                 StatementBare (GenericLhs trait []) -> trait
-                _ -> trace ("different trait list in" ++ show stmt) "")
+                _ -> warn (BadValue "character traits" stmt) "")
             traits
         getTraits _ = []
         getLeaderIdeo stmt = do
@@ -204,7 +171,7 @@ getSmallPortrait scr = getPortrait scr
 
 traitFromArray :: GenericStatement -> Maybe Text
 traitFromArray (StatementBare (GenericLhs e [])) = Just e
-traitFromArray stmt = trace ("Unknown in character trait array: " ++ show stmt) Nothing
+traitFromArray stmt = warn (UnknownSection "character trait array" stmt) Nothing
 
 
 newAI :: HOI4Advisor
@@ -248,9 +215,9 @@ getAdvinfo cha = foldM addLine newAI
                 CompoundRhs scr -> return ai { adv_visible = Just scr }
                 _-> return ai
         addLine ai [pdx| ledger = %_|] = return ai
-        addLine ai [pdx| cost = %rhs|] = case rhs of
+        addLine ai stmt@[pdx| cost = %rhs|] = case rhs of
                 (floatRhs -> Just num) -> return ai { adv_cost = Just num }
-                _-> return $ trace "bad advisor cost" ai
+                _-> return $ warn (BadValue "advisor cost" stmt) ai
         addLine ai [pdx| ai_will_do = %_|] = return ai
         addLine ai [pdx| removal_cost = %_|] = return ai
         addLine ai [pdx| do_effect = %_|] = return ai
@@ -260,34 +227,16 @@ getAdvinfo cha = foldM addLine newAI
         addLine ai [pdx| can_be_fired = %rhs|]
             | GenericRhs "no" [] <- rhs = return ai { adv_can_be_fired = True }
             | GenericRhs "yes" [] <- rhs = return ai { adv_can_be_fired = False }
-        addLine ai [pdx| $other = %_ |] = trace ("unknown section in advisor info: " ++ show other) $ return ai
-        addLine ai stmt = trace ("unknown form in advisor info: " ++ show stmt) $ return ai
+        addLine ai stmt = warn (UnknownSection "advisor info" stmt) $ return ai
 
 parseHOI4CountryLeaderTraits :: (HOI4Info g, Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap Text HOI4CountryLeaderTrait)
-parseHOI4CountryLeaderTraits scripts = HM.unions . HM.elems <$> do
-    tryParse <- hoistExceptions $
-        HM.traverseWithKey
-            (\sourceFile scr ->
-                setCurrentFile sourceFile $ mapM parseHOI4CountryLeaderTrait $ concatMap (\case
-                [pdx| leader_traits = @traits |] -> traits
-                _ -> [])
-                scr)
-            scripts
-    case tryParse of
-        Left err -> do
-            traceM $ "Completely failed parsing countryleadertraits: " ++ T.unpack err
-            return HM.empty
-        Right countryleadertraitsFilesOrErrors ->
-            flip HM.traverseWithKey countryleadertraitsFilesOrErrors $ \sourceFile eclts ->
-                fmap (mkCltMap . catMaybes) . forM eclts $ \case
-                    Left err -> do
-                        traceM $ "Error parsing countryleadertraits in " ++ sourceFile
-                                 ++ ": " ++ T.unpack err
-                        return Nothing
-                    Right cclt -> return cclt
-                where mkCltMap :: [HOI4CountryLeaderTrait] -> HashMap Text HOI4CountryLeaderTrait
-                      mkCltMap = HM.fromList . map (clt_id &&& id)
+parseHOI4CountryLeaderTraits scripts = keyedBy clt_id <$>
+    parseScriptFiles "country leader traits"
+        (mapM parseHOI4CountryLeaderTrait . concatMap (\case
+            [pdx| leader_traits = @traits |] -> traits
+            _ -> []))
+        scripts
 
 parseHOI4CountryLeaderTrait :: (HOI4Info g, MonadError Text m) =>
     GenericStatement -> PPT g m (Either Text (Maybe HOI4CountryLeaderTrait))
@@ -316,7 +265,7 @@ parseHOI4CountryLeaderTrait [pdx| $id = @effects |]
             "ai_strategy" -> clt
             "ai_will_do" -> clt
             "random" -> clt
-            _ -> trace ("Urecognized statement in country_leader: " ++ show stmt) clt
+            _ -> warn (UnknownSection "country leader trait" stmt) clt
          -- Must be an effect
         addSection clt [pdx| random = %_ |] = clt
         addSection clt [pdx| command_power = %_ |] = clt
@@ -327,34 +276,16 @@ parseHOI4CountryLeaderTrait [pdx| $id = @effects |]
         addSection clt stmt =
             let oldmod = fromMaybe [] (clt_modifier clt) in
             clt { clt_modifier = Just (oldmod ++ [stmt]) }
-parseHOI4CountryLeaderTrait stmt = trace (show stmt) $ withCurrentFile $ \file ->
-    throwError ("unrecognised form for country_leader in " <> T.pack file)
+parseHOI4CountryLeaderTrait stmt = rejectForm "country leader trait" stmt
 
 parseHOI4UnitLeaderTraits :: (HOI4Info g, Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap Text HOI4UnitLeaderTrait)
-parseHOI4UnitLeaderTraits scripts = HM.unions . HM.elems <$> do
-    tryParse <- hoistExceptions $
-        HM.traverseWithKey
-            (\sourceFile scr ->
-                setCurrentFile sourceFile $ mapM parseHOI4UnitLeaderTrait $ concatMap (\case
-                [pdx| leader_traits = @traits |] -> traits
-                _ -> [])
-                scr)
-            scripts
-    case tryParse of
-        Left err -> do
-            traceM $ "Completely failed parsing unitleadertraits: " ++ T.unpack err
-            return HM.empty
-        Right unitleadertraitsFilesOrErrors ->
-            flip HM.traverseWithKey unitleadertraitsFilesOrErrors $ \sourceFile eults ->
-                fmap (mkUltMap . catMaybes) . forM eults $ \case
-                    Left err -> do
-                        traceM $ "Error parsing unitleadertraits in " ++ sourceFile
-                                 ++ ": " ++ T.unpack err
-                        return Nothing
-                    Right cult -> return cult
-                where mkUltMap :: [HOI4UnitLeaderTrait] -> HashMap Text HOI4UnitLeaderTrait
-                      mkUltMap = HM.fromList . map (ult_id &&& id)
+parseHOI4UnitLeaderTraits scripts = keyedBy ult_id <$>
+    parseScriptFiles "unit leader traits"
+        (mapM parseHOI4UnitLeaderTrait . concatMap (\case
+            [pdx| leader_traits = @traits |] -> traits
+            _ -> []))
+        scripts
 
 parseHOI4UnitLeaderTrait :: (HOI4Info g, MonadError Text m) =>
     GenericStatement -> PPT g m (Either Text (Maybe HOI4UnitLeaderTrait))
@@ -405,7 +336,7 @@ parseHOI4UnitLeaderTrait [pdx| $id = @effects |]
             "unit_type" -> ult -- what unit types it applies to?
             "any_parent" -> ult -- unknown what it does for now. AAT
             "parent" -> ult -- unknown what it does for now. AAT
-            _ -> trace ("Urecognized statement in unit_leader lhs -> scr: " ++ show stmt) ult
+            _ -> warn (UnknownSection "unit leader trait" stmt) ult
          -- Must be an effect
         addSection ult stmt@[pdx| $lhs = !num |] = case lhs of
             "attack_skill" -> ult { ult_attack_skill = Just num}
@@ -425,8 +356,8 @@ parseHOI4UnitLeaderTrait [pdx| $id = @effects |]
             "cost" -> ult
             "num_parents_needed" -> ult
             "gain_xp_on_spotting" -> ult
-            _ -> trace ("Urecognized statement in unit_leader lhs -> Double: " ++ show stmt) ult
-        addSection ult stmt@[pdx| $_ = !num |] = let _ = num ::Int in trace ("Urecognized statement in unit_leader lhs -> Int: " ++ show stmt) ult
+            _ -> warn (UnknownSection "unit leader trait" stmt) ult
+        addSection ult stmt@[pdx| $_ = !num |] = let _ = num ::Int in warn (UnknownSection "unit leader trait" stmt) ult
         addSection ult stmt@[pdx| $lhs = $_ |] = case lhs of
             "type" -> ult
             "trait_type" -> ult
@@ -441,7 +372,6 @@ parseHOI4UnitLeaderTrait [pdx| $id = @effects |]
             "enable_ability" -> ult
             "custom_effect_tooltip" -> ult
             "override_effect_tooltip" -> ult
-            _ -> trace ("Urecognized statement in unit_leader lhs -> txt: " ++ show stmt) ult
-        addSection ult stmt = trace ("Urecognized statement form in unit_leader: " ++ show stmt) ult
-parseHOI4UnitLeaderTrait stmt = trace (show stmt) $ withCurrentFile $ \file ->
-    throwError ("unrecognised form for unit_leader in " <> T.pack file)
+            _ -> warn (UnknownSection "unit leader trait" stmt) ult
+        addSection ult stmt = warn (UnknownSection "unit leader trait" stmt) ult
+parseHOI4UnitLeaderTrait stmt = rejectForm "unit leader trait" stmt

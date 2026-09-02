@@ -8,16 +8,13 @@ module HOI4.TechAndEquipment (
         parseHOI4UnitTags, parseHOI4Units
     ) where
 
-import Debug.Trace (trace, traceM)
-
-import Control.Arrow ((&&&))
-import Control.Monad (foldM, forM)
+import Control.Monad (foldM)
 import Control.Monad.Except (ExceptT (..), MonadError (..))
 import Control.Monad.State (MonadState (..), gets)
 import Control.Monad.Trans (MonadIO (..))
 
 import Data.List ( foldl', sortOn )
-import Data.Maybe (catMaybes, fromMaybe, mapMaybe, isJust)
+import Data.Maybe (fromMaybe, mapMaybe, isJust)
 
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
@@ -37,7 +34,8 @@ import SettingsTypes ( PPT, Settings (..)
                      , IsGame (..), IsGameData (..), IsGameState (..)
                      , withCurrentIndent, getGameInterface
                      , setCurrentFile, withCurrentFile
-                     , hoistErrors, hoistExceptions, getGameInterfaceIfPresent, concatMapM, indentUp)
+                     , hoistErrors, getGameInterfaceIfPresent, concatMapM, indentUp)
+import ParseWarnings
 import HOI4.Common -- everything
 import HOI4.Localization
 import Data.Char (toLower)
@@ -46,23 +44,8 @@ import HOI4.ModifierTable (modifiersTable)
 
 parseHOI4UnitTags :: (IsGameState (GameState g), IsGameData (GameData g), Monad m) =>
     HashMap String GenericScript -> PPT g m [Text]
-parseHOI4UnitTags scripts = do
-    tryParse <- hoistExceptions $
-        HM.traverseWithKey
-            (\sourceFile scr -> setCurrentFile sourceFile $ mapM processUnitTags $ concatMap getcat scr)
-            scripts
-    case tryParse of
-        Left err -> do
-            traceM $ "Completely failed parsing terrain: " ++ T.unpack err
-            return []
-        Right terrainFilesOrErrors ->
-            return $ catMaybes $ concat $ concat $ HM.elems (HM.mapWithKey (\sourceFile eterrain -> -- probably better ways to this
-                map (\case
-                    Left err -> do
-                        traceM $ "Error parsing terrain in " ++ sourceFile
-                                 ++ ": " ++ T.unpack err
-                        return Nothing
-                    Right tterrain -> return tterrain) eterrain) terrainFilesOrErrors)
+parseHOI4UnitTags scripts = flattened <$>
+    parseScriptFiles "unit tags" (mapM processUnitTags . concatMap getcat) scripts
     where
         getcat = \case
             [pdx| sub_unit_categories = @cat |] -> cat
@@ -70,37 +53,13 @@ parseHOI4UnitTags scripts = do
 
 processUnitTags :: (IsGameState (GameState g), IsGameData (GameData g), MonadError Text m) =>
     GenericStatement -> PPT g m (Either Text (Maybe Text))
-processUnitTags (StatementBare (GenericLhs e [])) = withCurrentFile $ \file -> return (Right (Just e))
-processUnitTags [pdx| %left = %right |] = case right of
-    CompoundRhs parts -> case left of
-        CustomLhs _ -> throwError "internal error: custom lhs"
-        IntLhs _ -> throwError "int lhs at top level"
-        AtLhs _ -> return (Right Nothing)
-        GenericLhs id [] -> return (Right Nothing)
-        _ -> throwError "unrecognized form for terrain"
-    _ -> throwError "unrecognized form for terrain@content"
-processUnitTags _ = withCurrentFile $ \file ->
-    throwError ("unrecognised form for terrain in " <> T.pack file)
+processUnitTags (StatementBare (GenericLhs e [])) = return (Right (Just e))
+processUnitTags stmt = onTopLevelCompound "unit tags" (\_ _ -> return (Right Nothing)) stmt
 
 parseHOI4Units :: (IsGameState (GameState g), IsGameData (GameData g), Monad m) =>
     HashMap String GenericScript -> PPT g m [Text]
-parseHOI4Units scripts = do
-    tryParse <- hoistExceptions $
-        HM.traverseWithKey
-            (\sourceFile scr -> setCurrentFile sourceFile $ mapM processUnits $ concatMap getcat scr)
-            scripts
-    case tryParse of
-        Left err -> do
-            traceM $ "Completely failed parsing terrain: " ++ T.unpack err
-            return []
-        Right terrainFilesOrErrors ->
-            return $ catMaybes $ concat $ concat $ HM.elems (HM.mapWithKey (\sourceFile eterrain -> -- probably better ways to this
-                map (\case
-                    Left err -> do
-                        traceM $ "Error parsing terrain in " ++ sourceFile
-                                 ++ ": " ++ T.unpack err
-                        return Nothing
-                    Right tterrain -> return tterrain) eterrain) terrainFilesOrErrors)
+parseHOI4Units scripts = flattened <$>
+    parseScriptFiles "units" (mapM processUnits . concatMap getcat) scripts
     where
         getcat = \case
             [pdx| sub_units = @unit |] -> unit
@@ -108,41 +67,17 @@ parseHOI4Units scripts = do
 
 processUnits :: (IsGameState (GameState g), IsGameData (GameData g), MonadError Text m) =>
     GenericStatement -> PPT g m (Either Text (Maybe Text))
-processUnits (StatementBare _) = throwError "bare statement at top level"
-processUnits stmt@[pdx| %left = %right |] = case right of
-    CompoundRhs parts -> case left of
-        CustomLhs _ -> throwError "internal error: custom lhs"
-        IntLhs _ -> throwError "int lhs at top level"
-        AtLhs _ -> return (Right Nothing)
-        GenericLhs id [] -> withCurrentFile $ \file -> return (Right (Just id))
-        _ -> throwError "unrecognized form for terrain"
-    _ -> throwError "unrecognized form for terrain@content"
-processUnits _ = withCurrentFile $ \file ->
-    throwError ("unrecognised form for terrain in " <> T.pack file)
+processUnits = onTopLevelCompound "unit" $ \id _ -> return (Right (Just id))
 
 parseHOI4TechnologiesPath :: (HOI4Info g, Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap FilePath [HOI4Technology])
-parseHOI4TechnologiesPath scripts = do
-    tryParse <- hoistExceptions $
-        HM.traverseWithKey
-            (\sourceFile scr -> setCurrentFile sourceFile $ mapM parseHOI4Technology $ concatMap (\case
-                [pdx| technologies = @techs |] -> techs
-                _ -> scr)
-                scr)
-            scripts
-    case tryParse of
-        Left err -> do
-            traceM $ "Completely failed parsing technology paths: " ++ T.unpack err
-            return HM.empty
-        Right techFilesOrErrors ->
-            return $ HM.filter (not . null) $ flip HM.mapWithKey techFilesOrErrors $ \sourceFile etechs ->
-                mapMaybe (\case
-                    Left err -> do
-                        traceM $ "Error parsing technology paths in " ++ sourceFile
-                                 ++ ": " ++ T.unpack err
-                        Nothing
-                    Right techs -> techs)
-                    etechs
+parseHOI4TechnologiesPath scripts = HM.filter (not . null) <$>
+    parseScriptFiles "technologies"
+        (\scr -> mapM parseHOI4Technology $ concatMap (\case
+            [pdx| technologies = @techs |] -> techs
+            _ -> scr)
+            scr)
+        scripts
 
 newHOI4Technology :: Text -> Text -> FilePath -> HOI4Technology
 newHOI4Technology id locid = HOI4Technology id locid Nothing "" Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing 0 0 False Nothing Nothing Nothing
@@ -151,26 +86,19 @@ newHOI4Technology id locid = HOI4Technology id locid Nothing "" Nothing Nothing 
 -- modifiers; for those, and for any obvious errors, return Right Nothing.
 parseHOI4Technology :: (HOI4Info g, MonadError Text m) =>
     GenericStatement -> PPT g m (Either Text (Maybe HOI4Technology))
-parseHOI4Technology (StatementBare _) = throwError "bare statement at top level"
-parseHOI4Technology [pdx| %left = %right |] = case right of
+parseHOI4Technology stmt@[pdx| %left = %right |] = case right of
     CompoundRhs parts -> case left of
-        CustomLhs _ -> throwError "internal error: custom lhs"
-        IntLhs _ -> throwError "int lhs at top level"
+        CustomLhs _ -> rejectForm "technology" stmt
+        IntLhs _ -> rejectForm "technology" stmt
         AtLhs _ -> return (Right Nothing)
         GenericLhs id [] -> withCurrentFile $ \file -> do
             locid <- getGameL10n id
-            mtech <- hoistErrors $ foldM technologyAddSection
-                                        (Just (newHOI4Technology id locid file))
-                                        parts
-            case mtech of
-                Left err -> return (Left err)
-                Right Nothing -> return (Right Nothing)
-                Right (Just tech) -> withCurrentFile $ \file ->
-                    return (Right (Just tech ))
-        _ -> throwError "unrecognized form for technology"
+            hoistErrors $ foldM technologyAddSection
+                                (Just (newHOI4Technology id locid file))
+                                parts
+        _ -> rejectForm "technology" stmt
     _ -> return (Right Nothing)
-parseHOI4Technology _ = withCurrentFile $ \file ->
-    throwError ("unrecognised form for technology in " <> T.pack file)
+parseHOI4Technology stmt = rejectForm "technology" stmt
 
 -- | Interpret one section of an opinion modifier. If understood, add it to the
 -- event data. If not understood, throw an exception.
@@ -184,14 +112,14 @@ technologyAddSection ttech stmt
             "dependencies" -> tech
             "research_cost" -> case rhs of
                 (floatRhs -> Just num) -> tech { tech_cost = num }
-                _ -> trace ("bad tech cost in: " ++ show stmt) tech
+                _ -> warn (BadValue "technology research_cost" stmt) tech
             "start_year" -> case rhs of
                 (floatRhs -> Just num) -> tech { tech_start_year = num }
-                _ -> trace ("bad tech cost in: " ++ show stmt) tech
+                _ -> warn (BadValue "technology start_year" stmt) tech
             "desc" -> case rhs of
                 GenericRhs txt [] -> tech { tech_desc = Just txt }
                 StringRhs txt -> tech { tech_desc = Just txt }
-                _-> trace ("bad tech desc in: " ++ show stmt) tech
+                _-> warn (BadValue "technology desc" stmt) tech
             "folder" -> tech
             "ai_will_do" -> tech
             "categories" -> tech
@@ -200,17 +128,17 @@ technologyAddSection ttech stmt
                 CompoundRhs [] ->  tech
                 CompoundRhs scr -> let equips = mapMaybe getbareTech scr in
                     tech { tech_equipment = Just equips }
-                _-> trace "bad enable_equipments in tech"  tech
+                _-> warn (BadValue "technology equipment list" stmt) tech
             "enable_equipment_modules" -> case rhs of
                 CompoundRhs [] ->  tech
                 CompoundRhs scr -> let modules = mapMaybe getbareTech scr in
                     tech { tech_modules = Just modules }
-                _-> trace "bad enable_equipments in tech"  tech
+                _-> warn (BadValue "technology equipment list" stmt) tech
             "enable_subunits" -> case rhs of
                 CompoundRhs [] ->  tech
                 CompoundRhs scr -> let units = mapMaybe getbareTech scr in
                     tech { tech_units = Just units }
-                _-> trace "bad enable_equipments in tech"  tech
+                _-> warn (BadValue "technology equipment list" stmt) tech
             "allow" -> tech
             "allow_branch" -> tech
             "ai_research_weights" -> tech
@@ -220,7 +148,7 @@ technologyAddSection ttech stmt
                 GenericRhs "yes" [] -> tech { tech_doctrine = True }
                 -- no is the default, so I don't think this is ever used
                 GenericRhs "no" [] -> tech { tech_doctrine = False }
-                _ -> trace "bad dctrine in tech" tech
+                _ -> warn (BadValue "technology doctrine" stmt) tech
             "xor" -> tech
             "xp_research_type" -> tech
             "xp_boost_tech" -> tech
@@ -228,7 +156,7 @@ technologyAddSection ttech stmt
             "enable_building" -> case rhs of
                 CompoundRhs [] -> tech
                 CompoundRhs scr -> tech { tech_buildings = mconcat [tech_buildings tech, Just [scr]] }
-                _-> trace "bad enable_equipments in tech"  tech
+                _-> warn (BadValue "technology equipment list" stmt) tech
             other -> do
                 case HM.lookup other modifiersTable of
                     Just mod -> tech { tech_globalmod = mconcat [tech_globalmod tech, Just [stmt]] }
@@ -236,15 +164,14 @@ technologyAddSection ttech stmt
                             -- trace ("unknown tech section: " ++ T.unpack other) tech 
 
 
-        technologyAddSection' tech _
-            = trace "unrecognised form for tech section" tech
+        technologyAddSection' tech stmt
+            = warn (UnknownSection "technology" stmt) tech
 
         getbareTech (StatementBare (GenericLhs e [])) = Just e
         getbareTech stmt@[pdx| $lhs = %rhs |] = case T.map toLower lhs of
             "limit" -> Nothing
-            other ->
-                trace ("Unknown in getting tech array statement: " ++ show stmt) Nothing
-        getbareTech stmt = trace ("Unknown in getting tech array statement: " ++ show stmt) Nothing
+            _ -> warn (UnknownSection "technology array" stmt) Nothing
+        getbareTech stmt = warn (UnknownSection "technology array" stmt) Nothing
 
 
 

@@ -9,15 +9,14 @@ module HOI4.Events (
 
 import Debug.Trace (traceM)
 
-import Control.Arrow ((&&&))
-import Control.Monad (forM, foldM, when, (<=<))
+import Control.Monad (foldM, when, (<=<))
 import Control.Monad.Except (MonadError (..))
 import Control.Monad.State (gets)
 import Control.Monad.Trans (MonadIO (..))
 
 import Data.Char (isDigit)
-import Data.List (intersperse, foldl', nubBy, sortBy)
-import Data.Maybe (isJust, isNothing, fromMaybe, fromJust, catMaybes)
+import Data.List (intersperse, nubBy, sortBy)
+import Data.Maybe (isJust, isNothing, fromMaybe, fromJust)
 
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
@@ -42,7 +41,8 @@ import QQ (pdx)
 import SettingsTypes ( PPT, Settings (..)
                      , IsGame (..), IsGameData (..)
                      , setCurrentFile, withCurrentFile
-                     , hoistErrors, hoistExceptions )
+                     , hoistErrors )
+import ParseWarnings
 
 -- | Empty event value. Starts off Nothing/empty everywhere.
 newHOI4Event :: HOI4Scope -> FilePath -> HOI4Event
@@ -55,27 +55,9 @@ newHOI4Option = HOI4Option Nothing Nothing Nothing Nothing
 -- structures.
 parseHOI4Events :: (HOI4Info g, Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap Text HOI4Event)
-parseHOI4Events scripts = HM.unions . HM.elems <$> do
-    tryParse <- hoistExceptions $
-        HM.traverseWithKey
-            (\sourceFile scr ->
-                setCurrentFile sourceFile $ mapM parseHOI4Event scr)
-            scripts
-    case tryParse of
-        Left err -> do
-            traceM $ "Completely failed parsing events: " ++ T.unpack err
-            return HM.empty
-        Right eventsFilesOrErrors ->
-            flip HM.traverseWithKey eventsFilesOrErrors $ \sourceFile eevts -> do
-                fmap (mkEvtMap . catMaybes) . forM eevts $ \case
-                    Left err -> do
-                        traceM $ "Error parsing events in " ++ sourceFile
-                                 ++ ": " ++ T.unpack err
-                        return Nothing
-                    Right mevt -> return mevt
-                where mkEvtMap :: [HOI4Event] -> HashMap Text HOI4Event
-                      mkEvtMap = HM.fromList . map (fromJust . hoi4evt_id &&& id)
-                        -- Events returned from parseEvent are guaranteed to have an id.
+parseHOI4Events scripts = keyedBy (fromJust . hoi4evt_id) <$>
+    parseScriptFiles "events" (mapM parseHOI4Event) scripts
+    -- Events returned from parseHOI4Event are guaranteed to have an id.
 
 -- | Present the parsed events as wiki text and write them to the appropriate
 -- files. Also write one consolidated file per event folder, with a wiki
@@ -159,12 +141,10 @@ groupEvents cfs = M.toAscList $ M.map (sortBy (\a b -> naturalOrder (eventId a) 
 -- those, and for any obvious errors, return Right Nothing.
 parseHOI4Event :: (HOI4Info g, MonadError Text m) =>
     GenericStatement -> PPT g m (Either Text (Maybe HOI4Event))
-parseHOI4Event (StatementBare lhs) = withCurrentFile $ \f ->
-        throwError $ T.pack (f ++ ": bare statement at top level: " ++ show lhs)
 parseHOI4Event stmt@[pdx| %left = %right |] = case right of
     CompoundRhs parts -> case left of
-        CustomLhs _ -> throwError "internal error: custom lhs"
-        IntLhs _ -> throwError "int lhs at top level"
+        CustomLhs _ -> rejectForm "event" stmt
+        IntLhs _ -> rejectForm "event" stmt
         AtLhs _ -> return (Right Nothing)
         GenericLhs etype _ ->
             let mescope = case T.toLower etype of
@@ -189,7 +169,7 @@ parseHOI4Event stmt@[pdx| %left = %right |] = case right of
                                          <> ": missing event id")
 
     _ -> return (Right Nothing)
-parseHOI4Event _ = throwError "operator other than ="
+parseHOI4Event stmt = rejectForm "event" stmt
 
 -- | Intermediate structure for interpreting event title blocks.
 data EvtTitleI = EvtTitleI {
@@ -200,7 +180,7 @@ data EvtTitleI = EvtTitleI {
 -- localization key or a conditional title block. (TODO: document the
 -- format here)
 evtTitle :: MonadError Text m => Maybe Text -> GenericScript -> m HOI4EvtTitle
-evtTitle meid scr = case foldl' evtTitle' (EvtTitleI Nothing Nothing) scr of
+evtTitle meid scr = foldM evtTitle' (EvtTitleI Nothing Nothing) scr >>= \case
         EvtTitleI (Just t) Nothing -- title = { text = foo }
             -> return $ HOI4EvtTitleSimple t
         EvtTitleI Nothing (Just trig) -- title = { trigger = { .. } } (invalid)
@@ -214,16 +194,14 @@ evtTitle meid scr = case foldl' evtTitle' (EvtTitleI Nothing Nothing) scr of
                 Just eid -> " in event " <> eid
                 Nothing -> ""
     where
-        evtTitle' ed [pdx| trigger = @trig |] = ed { eti_trigger = Just trig }
-        evtTitle' ed [pdx| text = ?txt |] = ed { eti_text = Just txt }
-        evtTitle' ed [pdx| title = ?txt |] = ed { eti_text = Just txt }
-        evtTitle' ed [pdx| show_sound = %_ |] = ed
-        evtTitle' ed [pdx| $label = %_ |]
-            = error ("unrecognized title section " ++ T.unpack label
-                     ++ " in " ++ maybe "(unknown)" T.unpack meid)
-        evtTitle' ed stmt
-            = error ("unrecognized title section in " ++ maybe "(unknown)" T.unpack meid
-                    ++ ": " ++ show stmt)
+        evtTitle' ed [pdx| trigger = @trig |] = return ed { eti_trigger = Just trig }
+        evtTitle' ed [pdx| text = ?txt |] = return ed { eti_text = Just txt }
+        evtTitle' ed [pdx| title = ?txt |] = return ed { eti_text = Just txt }
+        evtTitle' ed [pdx| show_sound = %_ |] = return ed
+        evtTitle' _ stmt
+            = throwError $ "unrecognized title section in event "
+                <> fromMaybe "(unknown)" meid
+                <> ": " <> T.pack (show stmt)
 
 
 -- | Intermediate structure for interpreting event description blocks.
@@ -235,7 +213,7 @@ data EvtDescI = EvtDescI {
 -- localization key or a conditional description block. (TODO: document the
 -- format here)
 evtDesc :: MonadError Text m => Maybe Text -> GenericScript -> m HOI4EvtDesc
-evtDesc meid scr = case foldl' evtDesc' (EvtDescI Nothing Nothing) scr of
+evtDesc meid scr = foldM evtDesc' (EvtDescI Nothing Nothing) scr >>= \case
         EvtDescI (Just t) Nothing -- desc = { text = foo }
             -> return $ HOI4EvtDescSimple t
         EvtDescI Nothing (Just trig) -- desc = { trigger = { .. } } (invalid)
@@ -249,16 +227,14 @@ evtDesc meid scr = case foldl' evtDesc' (EvtDescI Nothing Nothing) scr of
                 Just eid -> " in event " <> eid
                 Nothing -> ""
     where
-        evtDesc' ed [pdx| trigger = @trig |] = ed { edi_trigger = Just trig }
-        evtDesc' ed [pdx| text = ?txt |] = ed { edi_text = Just txt }
-        evtDesc' ed [pdx| desc = ?txt |] = ed { edi_text = Just txt }
-        evtDesc' ed [pdx| show_sound = %_ |] = ed
-        evtDesc' ed [pdx| $label = %_ |]
-            = error ("unrecognized desc section " ++ T.unpack label
-                     ++ " in " ++ maybe "(unknown)" T.unpack meid)
-        evtDesc' ed stmt
-            = error ("unrecognized desc section in " ++ maybe "(unknown)" T.unpack meid
-                    ++ ": " ++ show stmt)
+        evtDesc' ed [pdx| trigger = @trig |] = return ed { edi_trigger = Just trig }
+        evtDesc' ed [pdx| text = ?txt |] = return ed { edi_text = Just txt }
+        evtDesc' ed [pdx| desc = ?txt |] = return ed { edi_text = Just txt }
+        evtDesc' ed [pdx| show_sound = %_ |] = return ed
+        evtDesc' _ stmt
+            = throwError $ "unrecognized desc section in event "
+                <> fromMaybe "(unknown)" meid
+                <> ": " <> T.pack (show stmt)
 
 -- | Interpret one section of an event. If understood, add it to the event
 -- data. If not understood, throw an exception.
@@ -347,10 +323,7 @@ eventAddSection mevt stmt = sequence (eventAddSection' <$> mevt <*> pure stmt) w
         _ -> throwError "bad fire_for_sender"
     eventAddSection' evt stmt@[pdx| timeout_days = %_ |] = return evt
     eventAddSection' evt stmt@[pdx| minor_flavor = %_ |] = return evt -- unknown effect
-    eventAddSection' evt stmt@[pdx| $label = %_ |] =
-        withCurrentFile $ \file ->
-            throwError $ "unrecognized event section in " <> T.pack file <> ": " <> label
-    eventAddSection' evt stmt =
+    eventAddSection' _ stmt =
         withCurrentFile $ \file ->
             throwError $ "unrecognized event section in " <> T.pack file <> ": " <> T.pack (show stmt)
 
