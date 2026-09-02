@@ -33,6 +33,12 @@ modifiersTable = HM.fromList
         ,("local_resources_chromium_factor" , ("local_resources_chromium_factor", MsgModifierPcPosReduced, Just 2))
         ,("local_resources_coal_factor"     , ("local_resources_coal_factor", MsgModifierPcPosReduced, Just 2))
         ,("surrender_limit"                 , ("MODIFIER_SURRENDER_LIMIT", MsgModifierPcPosReduced, Just 2))
+        ,("command_cap_increase"            , ("MODIFIER_COMMAND_CAP", MsgModifierColourPos, Just 0))
+        -- What a spirit of the given branch costs to take. Each is
+        -- localized under the modifier's own name.
+        ,("army_spirit_category_type_cost_factor" , ("army_spirit_category_type_cost_factor", MsgModifierPcNegReduced, Just 2))
+        ,("air_spirit_category_type_cost_factor" , ("air_spirit_category_type_cost_factor", MsgModifierPcNegReduced, Just 2))
+        ,("navy_spirit_category_type_cost_factor" , ("navy_spirit_category_type_cost_factor", MsgModifierPcNegReduced, Just 2))
         ,("max_surrender_limit_offset"      , ("MODIFIER_MAX_SURRENDER_LIMIT_OFFSET", MsgModifierPcPosReduced, Just 2))
 
             -- Politics modifiers
