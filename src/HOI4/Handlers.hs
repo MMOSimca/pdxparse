@@ -1703,7 +1703,7 @@ simpleEffectNum tArg msg stmt =
     case getEffectArg tArg stmt of
         Just (FloatRhs num) -> msgToPP (msg num)
         Just (IntRhs num) -> msgToPP (msg (fromIntegral num))
-        _ -> warn (UnknownSection "simpleEffectNum" stmt) $ preStatement statement
+        _ -> warn (UnknownSection "simpleEffectNum" stmt) $ preStatement stmt
 
 simpleEffectAtom :: forall g m. (HOI4Info g, Monad m) => Text -> (Text -> Text -> ScriptMessage) -> StatementHandler g m
 simpleEffectAtom tArg msg stmt =

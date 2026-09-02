@@ -780,6 +780,7 @@ data ScriptMessage
     | MsgDeleteUnit {scriptMessageYn :: Bool, scriptMessageWhat :: Text, scriptMessageWhere :: Text}
     | MsgDeleteUnitTemplateAndUnits {scriptMessageYn :: Bool, scriptMessageWhat :: Text, scriptMessage_where :: Text}
     | MsgDeleteUnits {scriptMessageYn :: Bool, scriptMessageWhat :: Text, scriptMessage_where :: Text}
+    | MsgDeleteUnitById {scriptMessageYn :: Bool, scriptMessageWhat :: Text}
     | MsgArmyManpowerInState {scriptMessageComp :: Text, scriptMessageAmt :: Double, scriptMessageWhat :: Text, scriptMessageWhere :: Text, scriptMessage_where2 :: Text}
     | MsgDivisionsInState {scriptMessageComp :: Text, scriptMessageAmt :: Double, scriptMessageWhat :: Text, scriptMessageWhere :: Text, scriptMessage_where2 :: Text}
     | MsgDivisionsInBorderState {scriptMessageComp :: Text, scriptMessageAmt :: Double, scriptMessageWhat :: Text, scriptMessageWhere :: Text, scriptMessageWhere2 :: Text}
@@ -5266,6 +5267,12 @@ instance RenderMessage Script ScriptMessage where
                 [ ifThenElseT _yn "Disband" "Delete"
                 , " all units created from template "
                 , toMessage (iquotes _what)
+                ]
+        MsgDeleteUnitById {scriptMessageYn = _yn, scriptMessageWhat = _what}
+            -> mconcat
+                [ ifThenElseT _yn "Disband" "Delete"
+                , " the division whose id is held in "
+                , _what
                 ]
         MsgDivisionTemplate {scriptMessageWhat = _what}
             -> mconcat
