@@ -1216,9 +1216,13 @@ promomessage what atom stmt = do
                 then msgToPP $ MsgPromoteCharacter nameloc
                 else msgToPP $ MsgAddCountryLeaderRolePromoted nameloc party
             return $ basemsg ++ traitmsg
-        _-> if not (T.null what)
-            then preStatement stmt
-            else msgToPP $ MsgAddCountryLeaderRolePromoted "" party
+        -- The character may be named through an event target or a variable,
+        -- where there is no entry to look their name up in; the name the script
+        -- itself uses is then all there is to call them by.
+        _-> let nameloc = if T.null what then "" else typewriterText what
+            in msgToPP $ if T.null party
+                then MsgPromoteCharacter nameloc
+                else MsgAddCountryLeaderRolePromoted nameloc party
 
 ppHt :: (Monad m, HOI4Info g) => Text -> PPT g m IndentedMessages
 ppHt trait = do
