@@ -248,7 +248,11 @@ handleIdea' :: (HOI4Info g, Monad m) =>
 handleIdea' always addIdea ide = do
     ides <- getIdeas
     charto <- getCharToken
-    let midea = HM.lookup ide ides
+    -- Script writes an idea's name in whatever case it likes and the game finds
+    -- it either way, so a miss is looked for again without regard for case.
+    let ciLookup name table = HM.lookup name table <|>
+            listToMaybe [v | (k, v) <- HM.toList table, T.toLower k == T.toLower name]
+        midea = ciLookup ide ides
     case midea of
         Just iidea -> do
             let ideaKey = id_id iidea
