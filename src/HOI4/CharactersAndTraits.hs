@@ -224,6 +224,9 @@ getAdvinfo cha = foldM addLine newAI
         addLine ai [pdx| desc = %_|] = return ai
         addLine ai [pdx| picture = %_|] = return ai
         addLine ai [pdx| name = %_|] = return ai
+        -- Whether the advisor's effects always show on the actions tooltip;
+        -- display only, nothing for the page.
+        addLine ai [pdx| always_show_on_actions_tooltip = %_ |] = return ai
         addLine ai [pdx| can_be_fired = %rhs|]
             | GenericRhs "no" [] <- rhs = return ai { adv_can_be_fired = True }
             | GenericRhs "yes" [] <- rhs = return ai { adv_can_be_fired = False }
@@ -336,8 +339,13 @@ parseHOI4UnitLeaderTrait [pdx| $id = @effects |]
             "unit_type" -> ult -- what unit types it applies to?
             "any_parent" -> ult -- unknown what it does for now. AAT
             "parent" -> ult -- unknown what it does for now. AAT
+            "country_trigger" -> ult -- country-scope conditions for gaining xp. AAT
+            "allowed_ship_equipments" -> ult -- hull types the trait's ship may have. AAT
             _ -> warn (UnknownSection "unit leader trait" stmt) ult
          -- Must be an effect
+        -- Where the trait sits in the GUI relative to its parent; the offset
+        -- may be negative, so it is caught before the numeric dispatch below.
+        addSection ult [pdx| leader_default_proximity_offset = %_ |] = ult
         addSection ult stmt@[pdx| $lhs = !num |] = case lhs of
             "attack_skill" -> ult { ult_attack_skill = Just num}
             "defense_skill" -> ult { ult_defense_skill = Just num}
