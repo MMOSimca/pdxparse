@@ -68,6 +68,10 @@ module HOI4.Handlers (
     ,   partyIconOf
     ,   beliefIcon
     ,   withPartyIcon
+    ,   buildingTypeLevel
+    ,   victoryPoints
+    ,   setProvinceName
+    ,   withProvince
     ,   textValue
     ,   textValueKey
     ,   textValueCompare
@@ -1425,6 +1429,33 @@ textValueKey whatlabel vallabel valmsg varmsg stmt@[pdx| %_ = @scr |]
             _ -> return $ preMessage stmt
 textValueKey _ _ _ _ stmt = preStatement stmt
 
+-- | Handler for the @type@/@level@ building effects that may carry a little
+-- more: @remove_building@ names the province a landmark stands in, and a few
+-- @add_offsite_building@ scripts write an @instant_build@ flag. The flag
+-- changes nothing the reader sees -- an offsite building appears at once
+-- either way -- and the province goes into the message where one is given.
+buildingTypeLevel :: forall g m. (HOI4Info g, Monad m) =>
+    (Text -> Text -> Double -> Text -> ScriptMessage) -- ^ Message constructor for a number
+        -> (Text -> Text -> Text -> Text -> ScriptMessage) -- ^ Message constructor for a variable
+        -> StatementHandler g m
+buildingTypeLevel valmsg varmsg stmt@[pdx| %_ = @scr |] = do
+    let sift (mprov, rest) = \case
+            [pdx| province = !num |] -> (Just num, rest)
+            [pdx| instant_build = %_ |] -> (mprov, rest)
+            line -> (mprov, rest ++ [line])
+        (mprov, scr') = foldl' sift (Nothing, []) scr
+    provloc <- maybe (return "") getProvinceLoc mprov
+    let tv = parseTV "type" "level" scr'
+    case (tv_what tv, tv_value tv, tv_var tv) of
+        (Just what, Just value, _) -> do
+            (icon, loc) <- tryLocAndIcon what
+            msgToPP $ valmsg icon loc value provloc
+        (Just what, _, Just var) -> do
+            (icon, loc) <- tryLocAndIcon what
+            msgToPP $ varmsg icon loc var provloc
+        _ -> preStatement stmt
+buildingTypeLevel _ _ stmt = preStatement stmt
+
 textValueCompare :: forall g m. (HOI4Info g, Monad m) =>
     Text                                             -- ^ Label for "what"
         -> Text                                      -- ^ Label for "how much"
@@ -1510,6 +1541,50 @@ valueValue whatlabel vallabel valmsg varmsg stmt@[pdx| %_ = @scr |]
                 return $ varmsg what var
             _ -> return $ preMessage stmt
 valueValue _ _ _ _ stmt = preStatement stmt
+
+-- | Handler for @set_victory_points@ and @add_victory_points@, which write a
+-- province and an amount. The province is named by its victory point, which
+-- for these two nearly always exists (they are what put it there).
+victoryPoints :: forall g m. (HOI4Info g, Monad m) =>
+    (Text -> Double -> ScriptMessage) -- ^ Message constructor for a number
+        -> (Text -> Text -> ScriptMessage) -- ^ Message constructor for a variable
+        -> StatementHandler g m
+victoryPoints valmsg varmsg stmt@[pdx| %_ = @scr |] = do
+    let vv = parseVV "province" "value" scr
+    case vv_what vv of
+        Just prov -> do
+            provloc <- getProvinceLoc (round prov)
+            case (vv_value vv, vv_var vv) of
+                (Just value, _) -> msgToPP $ valmsg provloc value
+                (_, Just var) -> msgToPP $ varmsg provloc var
+                _ -> preStatement stmt
+        _ -> preStatement stmt
+victoryPoints _ _ stmt = preStatement stmt
+
+-- | Handler for @set_province_name@, which renames a province -- nearly always
+-- one with a victory point, whose current name the message shows.
+setProvinceName :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
+setProvinceName stmt@[pdx| %_ = @scr |] = do
+    let tv = parseTV "name" "id" scr
+    case tv_what tv of
+        Just name -> do
+            (_, nameloc) <- tryLocMaybe name
+            case (tv_value tv, tv_var tv) of
+                (Just provid, _) -> do
+                    provloc <- getProvinceLoc (round provid)
+                    msgToPP $ MsgSetProvinceName "" nameloc provloc
+                (_, Just var) -> msgToPP $ MsgSetProvinceNameVar "" nameloc var
+                _ -> preStatement stmt
+        _ -> preStatement stmt
+setProvinceName stmt = preStatement stmt
+
+-- | Handler for statements whose right-hand side is a province id, shown with
+-- its victory point name where it has one.
+withProvince :: forall g m. (HOI4Info g, Monad m) =>
+    (Text -> ScriptMessage) -> StatementHandler g m
+withProvince msg [pdx| %_ = !provid |]
+    = msgToPP . msg =<< getProvinceLoc provid
+withProvince _ stmt = preStatement stmt
 
 -- | Statements of the form
 -- @
@@ -2551,11 +2626,12 @@ ppProvSel ps = do
             mflagloc <- eflag (Just HOI4Country) country
             messageText $ MsgLimitToBorderCountry (fromMaybe "<!--CHECK SCRIPT-->" mflagloc)
         _ -> return ""
-    let provmsg = case ps_ids ps of
-            Just ids -> if length ids > 1
-                then T.pack $ concat [", on the provinces (" , intercalate "), (" (map (show . round) ids), ")"]
-                else T.pack $ concat [", on the province (" , concatMap (show . round) ids, ")"]
-            _ -> ""
+    provmsg <- case ps_ids ps of
+            -- Each province is named by its victory point where it has one;
+            -- the helper's text already says "province", so the list needs no
+            -- word of its own for it.
+            Just ids -> (", on " <>) . T.intercalate ", " <$> traverse (getProvinceLoc . round) ids
+            _ -> return ""
     levelmsg <- case ps_level ps of
         Just level -> messageText $ MsgProvinceLevel (ps_level_comp ps) level
         _ -> return ""
@@ -3489,8 +3565,8 @@ parseRailway what = foldM addLine (Railway 1 Nothing Nothing Nothing Nothing Not
             = warn (UnknownSection (T.pack what) stmt) $ return br
 
         -- A state written as its id, a variable, or a tagged variable.
-        stateRhs :: GenericRhs -> PPT g m (Maybe Text)
-        stateRhs = \case
+        stateRhs :: GenericStatement -> GenericRhs -> PPT g m (Maybe Text)
+        stateRhs stmt = \case
             IntRhs num -> Just <$> getStateLoc num
             GenericRhs vartag [var] -> eGetState (Right (vartag, var))
             GenericRhs txt [] -> eGetState (Left txt)
@@ -3500,51 +3576,61 @@ parseRailway what = foldM addLine (Railway 1 Nothing Nothing Nothing Nothing Not
         provinceFromArray (StatementBare (IntLhs e)) = Just $ fromIntegral e
         provinceFromArray stmt = warn (UnknownSection "generator array" stmt) Nothing
 
+-- | Name each province a railway path runs through, with its victory point
+-- name where it has one.
+railwayPathText :: (HOI4Info g, Monad m) => [Double] -> PPT g m Text
+railwayPathText path = do
+    provlocs <- traverse (getProvinceLoc . round) path
+    return $ "through " <> T.intercalate ", " provlocs
+
 buildRailway  :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
 buildRailway stmt@[pdx| %_ = @scr |]
-    = msgToPP . pp_br =<< parseRailway "build_railway" scr
+    = msgToPP =<< pp_br =<< parseRailway "build_railway" scr
     where
         pp_br br = case rail_path br of
-            Just path ->
-                let paths = T.pack $ concat ["on the provinces (" , intercalate "), (" (map (show . round) path),")"]
-                in MsgBuildRailwayPath (rail_level br) paths
+            Just path -> MsgBuildRailwayPath (rail_level br) <$> railwayPathText path
             _ -> case (rail_start_state br, rail_target_state br,
                        rail_start_province br, rail_target_province br) of
-                    (Just start, Just end, _,_) -> MsgBuildRailway (rail_level br) start end
-                    (_,_, Just start, Just end) -> MsgBuildRailwayProv (rail_level br) start end
-                    _ -> preMessage stmt
+                    (Just start, Just end, _,_) -> return $ MsgBuildRailway (rail_level br) start end
+                    (_,_, Just start, Just end) ->
+                        MsgBuildRailwayProv (rail_level br)
+                            <$> getProvinceLoc (round start)
+                            <*> getProvinceLoc (round end)
+                    _ -> return $ preMessage stmt
 buildRailway stmt = preStatement stmt
 
 canBuildRailway  :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
 canBuildRailway stmt@[pdx| %_ = @scr |]
-    = msgToPP . pp_cbr =<< parseRailway "can_build_railway" scr
+    = msgToPP =<< pp_cbr =<< parseRailway "can_build_railway" scr
     where
         pp_cbr cbr = case rail_path cbr of
-            Just path ->
-                let paths = T.pack $ concat ["on the provinces (" , intercalate "), (" (map (show . round) path),")"]
-                in MsgCanBuildRailwayPath paths
+            Just path -> MsgCanBuildRailwayPath <$> railwayPathText path
             _ -> case (rail_start_state cbr, rail_target_state cbr,
                        rail_start_province cbr, rail_target_province cbr) of
-                    (Just start, Just end, _,_) -> MsgCanBuildRailway start end
-                    (_,_, Just start, Just end) -> MsgCanBuildRailwayProv start end
-                    _ -> preMessage stmt
+                    (Just start, Just end, _,_) -> return $ MsgCanBuildRailway start end
+                    (_,_, Just start, Just end) ->
+                        MsgCanBuildRailwayProv
+                            <$> getProvinceLoc (round start)
+                            <*> getProvinceLoc (round end)
+                    _ -> return $ preMessage stmt
 canBuildRailway stmt = preStatement stmt
 
 -- | Whether the railway @can_build_railway@ would build is already there. The
 -- two are written with the same fields.
 hasRailwayConnection :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
 hasRailwayConnection stmt@[pdx| %_ = @scr |]
-    = msgToPP . pp_hrc =<< parseRailway "has_railway_connection" scr
+    = msgToPP =<< pp_hrc =<< parseRailway "has_railway_connection" scr
     where
         pp_hrc hrc = case rail_path hrc of
-            Just path ->
-                let paths = T.pack $ concat ["on the provinces (" , intercalate "), (" (map (show . round) path),")"]
-                in MsgHasRailwayConnectionPath paths
+            Just path -> MsgHasRailwayConnectionPath <$> railwayPathText path
             _ -> case (rail_start_state hrc, rail_target_state hrc,
                        rail_start_province hrc, rail_target_province hrc) of
-                    (Just start, Just end, _,_) -> MsgHasRailwayConnection start end
-                    (_,_, Just start, Just end) -> MsgHasRailwayConnectionProv start end
-                    _ -> preMessage stmt
+                    (Just start, Just end, _,_) -> return $ MsgHasRailwayConnection start end
+                    (_,_, Just start, Just end) ->
+                        MsgHasRailwayConnectionProv
+                            <$> getProvinceLoc (round start)
+                            <*> getProvinceLoc (round end)
+                    _ -> return $ preMessage stmt
 hasRailwayConnection stmt = preStatement stmt
 
 ------------------------------

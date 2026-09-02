@@ -532,7 +532,7 @@ data ScriptMessage
     | MsgAIAddOneline {scriptMessageFactor :: Text, scriptMessageMultiplier :: Double}
     | MsgAIFactorHeader {scriptMessageMultiplier :: Double}
     | MsgAIAddHeader {scriptMessageMultiplier :: Double}
-    | MsgResetProvinceName {scriptMessageAmt :: Double}
+    | MsgResetProvinceName {scriptMessage_where :: Text}
     | MsgHasCompletedFocus {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageLoc :: Text}
     | MsgReduceFocusCompletionCost {scriptMessageAmt :: Double}
     | MsgFocusLink {scriptMessageWhat :: Text, scriptMessageWhat2 :: Text}
@@ -738,17 +738,17 @@ data ScriptMessage
     | MsgAddPowerBalanceValue { scriptMessageLoc :: Text, scriptMessageKey :: Text, scriptMessageAmt :: Double }
     | MsgAddPowerBalanceValueVar { scriptMessageLoc :: Text, scriptMessageKey :: Text, scriptMessageAmtText :: Text }
     | MsgBuildRailway {scriptMessageAmt :: Double, scriptMessageStart :: Text, scriptMessageEnd :: Text}
-    | MsgBuildRailwayProv {scriptMessageAmt :: Double, scriptMessageStartProv :: Double, scriptMessageEndProv :: Double}
+    | MsgBuildRailwayProv {scriptMessageAmt :: Double, scriptMessageStartProv :: Text, scriptMessageEndProv :: Text}
     | MsgBuildRailwayPath {scriptMessageAmt :: Double, scriptMessageWhat :: Text}
     | MsgCanBuildRailway {scriptMessageStart :: Text, scriptMessageEnd :: Text}
-    | MsgCanBuildRailwayProv {scriptMessageStartProv :: Double, scriptMessageEndProv :: Double}
+    | MsgCanBuildRailwayProv {scriptMessageStartProv :: Text, scriptMessageEndProv :: Text}
     | MsgCanBuildRailwayPath {scriptMessagePath :: Text}
-    | MsgSetProvinceName {scriptMessage_icon :: Text, scriptMessageWhom :: Text, scriptMessageAmt :: Double}
+    | MsgSetProvinceName {scriptMessage_icon :: Text, scriptMessageWhom :: Text, scriptMessage_where :: Text}
     | MsgSetProvinceNameVar {scriptMessage_icon :: Text, scriptMessage_whom :: Text, scriptMessage_amt_text :: Text}
-    | MsgSetVictoryPoints {scriptMessageAmt2 :: Double, scriptMessageAmt :: Double}
-    | MsgSetVictoryPointsVar {scriptMessageAmt2 :: Double, scriptMessageAmtText :: Text}
-    | MsgAddVictoryPoints {scriptMessageAmt2 :: Double, scriptMessageAmt :: Double}
-    | MsgAddVictoryPointsVar {scriptMessageAmt2 :: Double, scriptMessageAmtText :: Text}
+    | MsgSetVictoryPoints {scriptMessage_where :: Text, scriptMessageAmt :: Double}
+    | MsgSetVictoryPointsVar {scriptMessage_where :: Text, scriptMessageAmtText :: Text}
+    | MsgAddVictoryPoints {scriptMessage_where :: Text, scriptMessageAmt :: Double}
+    | MsgAddVictoryPointsVar {scriptMessage_where :: Text, scriptMessageAmtText :: Text}
     | MsgStockpileRatio {scriptMessage_icon :: Text, scriptMessageWhat :: Text, scriptMessageCompare :: Text, scriptMessageAmt :: Double}
     | MsgStockpileRatioVar {scriptMessage_icon :: Text, scriptMessageWhat :: Text, scriptMessageCompare :: Text, scriptMessageAmtText :: Text}
     | MsgStrengthRatio {scriptMessage_icon :: Text, scriptMessageWhom :: Text, scriptMessageCompare :: Text, scriptMessageAmt :: Double}
@@ -782,8 +782,8 @@ data ScriptMessage
     | MsgArmyManpowerInState {scriptMessageComp :: Text, scriptMessageAmt :: Double, scriptMessageWhat :: Text, scriptMessageWhere :: Text, scriptMessage_where2 :: Text}
     | MsgDivisionsInState {scriptMessageComp :: Text, scriptMessageAmt :: Double, scriptMessageWhat :: Text, scriptMessageWhere :: Text, scriptMessage_where2 :: Text}
     | MsgDivisionsInBorderState {scriptMessageComp :: Text, scriptMessageAmt :: Double, scriptMessageWhat :: Text, scriptMessageWhere :: Text, scriptMessageWhere2 :: Text}
-    | MsgAddOffsiteBuilding {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmt :: Double}
-    | MsgAddOffsiteBuildingVar {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmtText :: Text}
+    | MsgAddOffsiteBuilding {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmt :: Double, scriptMessage_where :: Text}
+    | MsgAddOffsiteBuildingVar {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmtText :: Text, scriptMessage_where :: Text}
     | MsgReleaseAutonomy {scriptMessageWho :: Text, scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmt :: Double, scriptMessage_war :: Text}
     | MsgSetAutonomy {scriptMessageWho :: Text, scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmt :: Double, scriptMessageWar :: Text}
     | MsgSetPolitics {scriptMessageIcon :: Text, scriptMessageWho :: Text, scriptMessageMonths :: Double}
@@ -830,8 +830,8 @@ data ScriptMessage
     | MsgBuildingLevelVar {scriptMessageIcon :: Text, scriptMessageAmtText :: Text, scriptMessageCompare :: Text}
     | MsgSetBuildingLevel {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmt :: Double, scriptMessageProv :: Text}
     | MsgSetBuildingLevelVar {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmtText :: Text, scriptMessageProv :: Text}
-    | MsgRemoveBuilding {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmt :: Double}
-    | MsgRemoveBuildingVar {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmtText :: Text}
+    | MsgRemoveBuilding {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmt :: Double, scriptMessage_where :: Text}
+    | MsgRemoveBuildingVar {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageAmtText :: Text, scriptMessage_where :: Text}
     | MsgAddProvinceModifier {scriptMessageYn :: Bool, scriptMessageWhat :: Text, scriptMessageProv :: Text}
     | MsgAllProvinces
     | MsgLimitToBorder
@@ -878,7 +878,7 @@ data ScriptMessage
     | MsgHasCountryRule {scriptMessageWhat :: Text}
     | MsgHasFactionTemplate {scriptMessageWhat :: Text}
     | MsgHasShineEffectOnFocus {scriptMessageIcon :: Text, scriptMessageKey :: Text, scriptMessageLoc :: Text}
-    | MsgControlsProvince {scriptMessageAmt :: Double}
+    | MsgControlsProvince {scriptMessage_where :: Text}
     | MsgHasResistance {scriptMessageYn :: Bool}
     | MsgHasEventTarget {scriptMessageWhat :: Text}
     | MsgIsDebug {scriptMessageYn :: Bool}
@@ -1101,7 +1101,7 @@ data ScriptMessage
     | MsgHasNavyLedger {scriptMessageYn :: Bool}
     | MsgHasAirLedger {scriptMessageYn :: Bool}
     | MsgHasRailwayConnection {scriptMessageWhere :: Text, scriptMessageWhere2 :: Text}
-    | MsgHasRailwayConnectionProv {scriptMessageStartProv :: Double, scriptMessageEndProv :: Double}
+    | MsgHasRailwayConnectionProv {scriptMessageStartProv :: Text, scriptMessageEndProv :: Text}
     | MsgHasRailwayConnectionPath {scriptMessageWhere :: Text}
     | MsgStateResource {scriptMessageIcon :: Text, scriptMessageAmt :: Double, scriptMessageCompare :: Text}
     | MsgStateResourceVar {scriptMessageIcon :: Text, scriptMessageAmtText :: Text, scriptMessageCompare :: Text}
@@ -3422,11 +3422,10 @@ instance RenderMessage Script ScriptMessage where
                 , toMessage (bold (plainNumSign _multiplier))
                 , " if the following are true:"
                 ]
-        MsgResetProvinceName {scriptMessageAmt = _amt}
+        MsgResetProvinceName {scriptMessage_where = _where}
             -> mconcat
-                [ "Reset the name of the province ("
-                , toMessage (roundNumNoSpace _amt)
-                , ")"
+                [ "Reset the name of "
+                , _where
                 ]
         MsgReduceFocusCompletionCost {scriptMessageAmt = _amt}
             -> mconcat
@@ -4965,11 +4964,10 @@ instance RenderMessage Script ScriptMessage where
                 [ "Build a level "
                 , toMessage (bold (plainNumMin _amt))
                 , " {{icon|railway|1}} "
-                , " from province ("
-                , toMessage (roundNumNoSpace _start)
-                , ") to province ("
-                , toMessage (roundNumNoSpace _end)
-                , ")"
+                , " from "
+                , _start
+                , " to "
+                , _end
                 ]
         MsgBuildRailwayPath {scriptMessageAmt = _amt, scriptMessageWhat = _what}
             -> mconcat
@@ -4987,60 +4985,60 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgCanBuildRailwayProv {scriptMessageStartProv = _start, scriptMessageEndProv = _end}
             -> mconcat
-                [ "Can build {{icon|railway|1}} from province ("
-                , toMessage (roundNumNoSpace _start)
-                , ") to province ("
-                , toMessage (roundNumNoSpace _end)
-                , ")"
+                [ "Can build {{icon|railway|1}} from "
+                , _start
+                , " to "
+                , _end
                 ]
         MsgCanBuildRailwayPath {scriptMessagePath = _path }
             -> mconcat
                 [ "Can build {{icon|railway|1}} "
                 , toMessage _path
                 ]
-        MsgSetProvinceName {scriptMessageWhom = _whom, scriptMessageAmt = _amt}
+        MsgSetProvinceName {scriptMessageWhom = _whom, scriptMessage_where = _where}
             -> mconcat
-                [ "Rename the province ("
-                , toMessage (roundNumNoSpace _amt)
-                , ") to "
+                [ "Rename "
+                , _where
+                , " to "
                 , _whom
                 ]
-        MsgSetProvinceNameVar {}
-            -> "<!-- Something went wrong check script-->"
-        MsgSetVictoryPoints {scriptMessageAmt2 = _amt2, scriptMessageAmt = _amt}
+        MsgSetProvinceNameVar {scriptMessage_whom = _whom, scriptMessage_amt_text = _amtT}
+            -> mconcat
+                [ "Rename the province held in "
+                , typewriterText _amtT
+                , " to "
+                , _whom
+                ]
+        MsgSetVictoryPoints {scriptMessage_where = _where, scriptMessageAmt = _amt}
             -> mconcat
                 [ "Set "
                 , toMessage (plainNumMin _amt)
-                , " {{icon|vp|1}} to province ("
-                , toMessage (roundNum _amt2)
-                , ")"
+                , " {{icon|vp|1}} in "
+                , _where
                 ]
-        MsgSetVictoryPointsVar {scriptMessageAmt2 = _amt2, scriptMessageAmtText = _amtT}
+        MsgSetVictoryPointsVar {scriptMessage_where = _where, scriptMessageAmtText = _amtT}
             -> mconcat
                 [ "Set "
                 , typewriterText _amtT
-                , " {{icon|vp|1}} to province ("
-                , toMessage (roundNumNoSpace _amt2)
-                , ")"
+                , " {{icon|vp|1}} in "
+                , _where
                 ]
-        MsgAddVictoryPoints {scriptMessageAmt2 = _amt2, scriptMessageAmt = _amt}
+        MsgAddVictoryPoints {scriptMessage_where = _where, scriptMessageAmt = _amt}
             -> mconcat
                 [ addOrRemove _amt
                 , " "
                 , toMessage (plainNum _amt)
                 , " {{icon|vp|1}} "
                 , ifThenElseT (_amt > 0) "to" "from"
-                , " province ("
-                , toMessage (roundNum _amt2)
-                , ")"
+                , " "
+                , _where
                 ]
-        MsgAddVictoryPointsVar {scriptMessageAmt2 = _amt2, scriptMessageAmtText = _amtT}
+        MsgAddVictoryPointsVar {scriptMessage_where = _where, scriptMessageAmtText = _amtT}
             -> mconcat
                 [ "Add or Remove "
                 , typewriterText _amtT
-                , " {{icon|vp|1}} to province ("
-                , toMessage (roundNumNoSpace _amt2)
-                , ")"
+                , " {{icon|vp|1}} to "
+                , _where
                 ]
         MsgStockpileRatio {scriptMessageWhat = _what, scriptMessageCompare = _comp, scriptMessageAmt = _amt}
             -> mconcat
@@ -5292,19 +5290,21 @@ instance RenderMessage Script ScriptMessage where
                 , " against border of state "
                 , _where2
                 ]
-        MsgAddOffsiteBuilding {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageAmt = _amt}
+        MsgAddOffsiteBuilding {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageAmt = _amt, scriptMessage_where = _where}
             -> mconcat
                 [ "Add "
                 , toMessage $ templateColor (colourNum True _amt)
                 , " offmap "
                 , _icon
+                , ifThenElseT (T.null _where) "" (" in " <> _where)
                 ]
-        MsgAddOffsiteBuildingVar {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageAmtText = _amtT}
+        MsgAddOffsiteBuildingVar {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageAmtText = _amtT, scriptMessage_where = _where}
             -> mconcat
                 [ "Add "
                 , typewriterText _amtT
                 , " offmap "
                 , _icon
+                , ifThenElseT (T.null _where) "" (" in " <> _where)
                 ]
         MsgReleaseAutonomy {scriptMessageWho = _who, scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageAmt = _amt}
             -> mconcat
@@ -5619,19 +5619,21 @@ instance RenderMessage Script ScriptMessage where
                 , typewriterText _amtT
                 ,_prov
                 ]
-        MsgRemoveBuilding {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageAmt = _amt}
+        MsgRemoveBuilding {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageAmt = _amt, scriptMessage_where = _where}
             -> mconcat
                 [ "Remove "
                 , _icon
                 , " by up to "
                 , toMessage $ templateColor (colourNumSign True (negate _amt))
+                , ifThenElseT (T.null _where) "" (" in " <> _where)
                 ]
-        MsgRemoveBuildingVar {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageAmtText = _amtT}
+        MsgRemoveBuildingVar {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageAmtText = _amtT, scriptMessage_where = _where}
             -> mconcat
                 [ "Remove "
                 , _icon
                 , " by up to "
                 , typewriterText _amtT
+                , ifThenElseT (T.null _where) "" (" in " <> _where)
                 ]
         MsgAddProvinceModifier {scriptMessageYn = _yn, scriptMessageWhat = _type, scriptMessageProv = _prov}
             -> mconcat
@@ -5891,11 +5893,10 @@ instance RenderMessage Script ScriptMessage where
                 , toMessage (iquotes _loc)
                 , " highlighted"
                 ]
-        MsgControlsProvince {scriptMessageAmt = _amt}
+        MsgControlsProvince {scriptMessage_where = _where}
             -> mconcat
-                [ "Controls the province ("
-                , T.pack (show (round _amt :: Int))
-                , ")"
+                [ "Controls "
+                , _where
                 ]
         MsgHasResistance {scriptMessageYn = _yn}
             -> mconcat
@@ -7362,11 +7363,10 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgHasRailwayConnectionProv {scriptMessageStartProv = _start, scriptMessageEndProv = _end}
             -> mconcat
-                [ "There is a railway connection from province ("
-                , toMessage (roundNumNoSpace _start)
-                , ") to province ("
-                , toMessage (roundNumNoSpace _end)
-                , ")"
+                [ "There is a railway connection from "
+                , _start
+                , " to "
+                , _end
                 ]
         MsgHasRailwayConnectionPath {scriptMessageWhere = _where}
             -> mconcat

@@ -36,6 +36,7 @@ module HOI4.Localization (
     ,   pronoun
     ,   scopeValText
     ,   getStateLoc
+    ,   getProvinceLoc
     ,   getRegionLoc
     ,   eGetState
     ,   eGetStateText
@@ -719,11 +720,18 @@ getStateLoc n = do
         Just _ -> return $ Doc.doc2text (template "state" [stateid_t])
         -- Some scripts (e.g. prioritize lists) mix province ids in with state
         -- ids; try the victory point name for those
-        _ -> do
-            mvploc <- getGameL10nIfPresent ("VICTORY_POINTS_" <> stateid_t)
-            return $ case mvploc of
-                Just vploc -> boldText vploc <> " (province " <> stateid_t <> ")"
-                _ -> "province (" <> stateid_t <> ")"
+        _ -> getProvinceLoc n
+
+-- | Get the display text for a province id: its victory point name where it
+-- has one, always with the id itself so the reader can find it on the map.
+getProvinceLoc :: (HOI4Info g, Monad m) =>
+    Int -> PPT g m Text
+getProvinceLoc n = do
+    let provid_t = T.pack (show n)
+    mvploc <- getGameL10nIfPresent ("VICTORY_POINTS_" <> provid_t)
+    return $ case mvploc of
+        Just vploc -> boldText vploc <> " (province " <> provid_t <> ")"
+        _ -> "province (" <> provid_t <> ")"
 
 eGetState :: (HOI4Info g, Monad m) =>
              Either Text (Text, Text) -> PPT g m (Maybe Text)

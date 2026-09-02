@@ -240,7 +240,7 @@ handlersNumeric = Tr.fromList
         ,("add_research_slot"                , numeric MsgAddResearchSlot)
         ,("add_resistance"                   , numeric MsgAddResistance)
         ,("add_threat"                       , numeric MsgAddThreat)
-        ,("reset_province_name"              , numeric MsgResetProvinceName)
+        ,("reset_province_name"              , withProvince MsgResetProvinceName)
         ,("set_compliance"                   , numeric MsgSetCompliance)
         ,("set_political_power"              , numeric MsgSetPoliticalPower)
         ,("set_resistance"                   , numeric MsgSetResistance)
@@ -260,7 +260,7 @@ handlersNumeric = Tr.fromList
         ,("add_mio_funds"                    , numeric MsgAddMioFunds)
         ,("add_mio_funds_gain_factor"        , numeric MsgAddMioFundsGainFactor)
         ,("add_cic"                          , numericOrVar MsgAddCic MsgAddCicVar)
-        ,("controls_province"                , numeric MsgControlsProvince)
+        ,("controls_province"                , withProvince MsgControlsProvince)
         ,("random_select_amount"             , numeric MsgRandomSelectAmount)
         ,("add_legitimacy"                   , numericOrVar MsgAddLegitimacy MsgAddLegitimacyVar)
         ,("has_id"                           , numeric MsgHasUnitLeaderId)
@@ -846,7 +846,7 @@ handlersYesNo = Tr.fromList
 -- $textvalue
 handlersTextValue :: (HOI4Info g, Monad m) => Trie (StatementHandler g m)
 handlersTextValue = Tr.fromList
-        [("add_offsite_building"        , textValue "type" "level" MsgAddOffsiteBuilding MsgAddOffsiteBuildingVar tryLocAndIcon)
+        [("add_offsite_building"        , buildingTypeLevel MsgAddOffsiteBuilding MsgAddOffsiteBuildingVar)
         ,("add_popularity"              , textValue "ideology" "popularity" MsgAddPopularity MsgAddPopularityVar ideologyIconLoc)
         ,("add_power_balance_value"     , textValueKey "id" "value" MsgAddPowerBalanceValue MsgAddPowerBalanceValueVar)
         ,("add_days_remove"             , textValueKey "decision" "days" MsgAddDaysRemove MsgAddDaysRemoveVar)
@@ -856,12 +856,12 @@ handlersTextValue = Tr.fromList
         ,("has_volunteers_amount_from"  , textValueCompare "tag" "count" "more than" "less than" MsgHasVolunteersAmountFrom MsgHasVolunteersAmountFromVar flagNoIcon)
         ,("modify_tech_sharing_bonus"   , textValue "id" "bonus" MsgModifyTechSharingBonus MsgModifyTechSharingBonusVar tryLocMaybe) --icon ignored
         ,("power_balance_value"         , textValueCompare "id" "value" "more than" "less than" MsgPowerBalanceValue MsgPowerBalanceValueVar tryLocMaybe)
-        ,("set_province_name"           , textValue "name" "id" MsgSetProvinceName MsgSetProvinceNameVar tryLocMaybe)
-        ,("set_victory_points"          , valueValue "province" "value" MsgSetVictoryPoints MsgSetVictoryPointsVar)
-        ,("add_victory_points"          , valueValue "province" "value" MsgAddVictoryPoints MsgAddVictoryPointsVar)
+        ,("set_province_name"           , setProvinceName)
+        ,("set_victory_points"          , victoryPoints MsgSetVictoryPoints MsgSetVictoryPointsVar)
+        ,("add_victory_points"          , victoryPoints MsgAddVictoryPoints MsgAddVictoryPointsVar)
         ,("stockpile_ratio"             , textValueCompare "archetype" "ratio" "more than" "less than" MsgStockpileRatio MsgStockpileRatioVar tryLocMaybe)
         ,("strength_ratio"              , textValueCompare "tag" "ratio" "more than" "less than" MsgStrengthRatio MsgStrengthRatioVar flagNoIcon)
-        ,("remove_building"             , textValue "type" "level" MsgRemoveBuilding MsgRemoveBuildingVar tryLocAndIcon)
+        ,("remove_building"             , buildingTypeLevel MsgRemoveBuilding MsgRemoveBuildingVar)
         ,("modify_character_flag"       , withNonlocTextValue "flag" "value" MsgCharacterFlag MsgModifyFlag MsgModifyFlagVar) -- Localization/icon ignored
         ,("modify_country_flag"         , withNonlocTextValue "flag" "value" MsgCountryFlag MsgModifyFlag MsgModifyFlagVar) -- Localization/icon ignored
         ,("modify_global_flag"          , withNonlocTextValue "flag" "value" MsgGlobalFlag MsgModifyFlag MsgModifyFlagVar) -- Localization/icon ignored
