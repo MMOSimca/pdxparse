@@ -223,6 +223,8 @@ handleIdeas _ _ stmt = preStatement stmt
 
 getbareidea :: GenericStatement -> Text
 getbareidea (StatementBare (GenericLhs e [])) = e
+-- Script also names the idea in a field of its own rather than writing it bare.
+getbareidea [pdx| idea = $e |] = e
 getbareidea _ = "<!-- Check Script -->"
 
 handleIdea :: (HOI4Info g, Monad m) =>
@@ -267,8 +269,14 @@ handleIdea' always addIdea ide = do
                       | T.null ideaIcon = ""
                       | otherwise = "[[File:" <> ideaIcon <> ".png|28px]]"
             return $ Just (category, shown, ideaKey, idea_loc, effectboxNS)
-        Nothing -> case HM.lookup ide charto of
-            Nothing -> return Nothing
+        Nothing -> case ciLookup ide charto of
+            -- Not an idea of the files we read: a name built at run time out of
+            -- variables, or one a mod adds. What the script calls it is what
+            -- there is to name it by, and saying that much beats saying nothing.
+            Nothing -> do
+                category <- getGameL10n "FE_COUNTRY_SPIRIT"
+                mloc <- getGameL10nIfPresent ide
+                return $ Just (category, "", ide, fromMaybe (typewriterText ide) mloc, Nothing)
             Just cchat -> do
                 let namekey = adv_cha_id cchat
                 mloc <- getGameL10nIfPresent $ adv_cha_name cchat
