@@ -92,6 +92,7 @@ import HOI4.Types -- everything
 import HOI4.Localization
 import HOI4.WikiTables (doctrineFolders, agencyUpgradeBranches, focusPages, focusPageSplits, focusTagPages)
 import Debug.Trace
+import ParseWarnings (ParseWarning (..), warn)
 import HOI4.Handlers -- everything
 
 -----------------
@@ -188,7 +189,7 @@ handleTimedIdeas msgdays msgmonths msgvar stmt@[pdx| %_ = @scr |]
         addLine t [pdx| days = ?txt |] = t { ti_lengthvar = Just txt, ti_unit = InDays }
         addLine t [pdx| months = ?txt |] = t { ti_lengthvar = Just txt, ti_unit = InMonths }
         addLine t [pdx| years = ?txt |] = t { ti_lengthvar = Just txt, ti_unit = InYears }
-        addLine t _ = t
+        addLine t stmt = warn (UnknownSection "timed idea" stmt) t
         -- A year is twelve months, which is the one turn between units that
         -- loses nothing. A run held in a variable is left in the unit it was
         -- given in, there being no number to turn.
@@ -480,7 +481,7 @@ modifierMSG _ targ stmt@[pdx| $specmod = @scr|]
             termsg <- plainMsg' ("'''" <> ter <> "''':")
             modmsg <- fold <$> indentUp (traverse (modifierMSG False targ) scr)
             return $ termsg : modmsg
-        else trace ("unknown modifier type: " ++ show specmod ++ " IN: " ++ show stmt) $ preStatement stmt
+        else warn (UnknownSection "modifier block" stmt) $ preStatement stmt
 modifierMSG hidden targ stmt@[pdx| $mod = !(_ :: Double) |] = let lmod = T.toLower mod in case HM.lookup lmod modifiersTable of
     Just (key, msg, dec) -> do
         loc <- getGameL10n key
@@ -701,7 +702,7 @@ addDynamicModifier stmt@[pdx| %_ = @scr |] =
         addLine adm [pdx| scope = $tag |] = adm { adm_scope = Just (Left tag) }
         addLine adm [pdx| scope = $vartag:$var |] = adm { adm_scope = Just (Right (vartag, var)) }
         addLine adm [pdx| days = !amt |] = adm { adm_days = Just amt }
-        addLine adm stmt = trace ("Unknown in add_dynamic_modifier: " ++ show stmt) adm
+        addLine adm stmt = warn (UnknownSection "add_dynamic_modifier" stmt) adm
         pp_adm adm = do
             let days = maybe "" formatDays (adm_days adm)
             -- Nothing but a bare @add_dynamic_modifier@ says the country running
@@ -743,7 +744,7 @@ addDynamicModifier stmt@[pdx| %_ = @scr |] =
                 Nothing -> trace ("add_dynamic_modifier: Modifier " ++ T.unpack (adm_modifier adm) ++ " not found") $ preStatement stmt
         isAlways [pdx| always = yes |] = True
         isAlways _ = False
-addDynamicModifier stmt = trace ("Not handled in addDynamicModifier: " ++ show stmt) $ preStatement stmt
+addDynamicModifier stmt = warn (UnknownSection "add_dynamic_modifier" stmt) $ preStatement stmt
 
 -- | Fill in the numbers a dynamic modifier's entries name instead of writing
 -- out. Script keeps such a modifier's values in variables so that it can raise
@@ -1033,7 +1034,7 @@ addPowerBalanceModifier stmt@[pdx| %_ = @scr |] =
                         return ((i, MsgAddPowerBalanceModifier idpob_loc idpob locName modi) : effect)
                     _ -> trace ("add_power_balance_modifier: Modifier " ++ T.unpack modi ++ " not found") $ preStatement stmt
             _-> preStatement stmt
-addPowerBalanceModifier stmt = trace ("Not handled in addPowerBalanceModifier: " ++ show stmt) $ preStatement stmt
+addPowerBalanceModifier stmt = warn (UnknownSection "add_power_balance_modifier" stmt) $ preStatement stmt
 
 
 -----------------------------------------
@@ -1063,12 +1064,12 @@ relationModifier msg witheffects stmt@[pdx| %_ = @scr |] =
                     let locName = maybe (typewriterText modid) (Doc.doc2text . iquotes) (modLocName mod)
                     return ((i, msg locName whomflag) : effect)
                 Nothing -> trace ("relation modifier not found: " ++ T.unpack modid) $ preStatement stmt
-        _ -> trace ("relation modifier: target or modifier missing: " ++ show stmt) $ preStatement stmt
+        _ -> warn (BadValue "relation modifier" stmt) $ preStatement stmt
     where
         addLine (whom, modid) [pdx| target = $tag |] = (Just (Left tag), modid)
         addLine (whom, modid) [pdx| target = $vartag:$var |] = (Just (Right (vartag, var)), modid)
         addLine (whom, modid) [pdx| modifier = ?label |] = (whom, Just label)
-        addLine acc _ = acc
+        addLine acc stmt = warn (UnknownSection "relation modifier" stmt) acc
 relationModifier _ _ stmt = preStatement stmt
 
 
@@ -1402,7 +1403,7 @@ masteryStmt amtlabel what mkmsg stmt@[pdx| %_ = @scr |] =
         addLine acc [pdx| name = %_ |] = acc
         addLine (amt, d, ts) [pdx| $kind = $theid |]
             | kind `elem` masteryConditions = (amt, d, ts ++ [(kind, theid)])
-        addLine acc stmt = trace ("unknown section in " ++ what ++ ": " ++ show stmt) acc
+        addLine acc stmt = warn (UnknownSection (T.pack what) stmt) acc
 masteryStmt _ _ _ stmt = preStatement stmt
 
 addMastery :: forall g m. (HOI4Info g, Monad m) => Bool -> StatementHandler g m
@@ -1484,7 +1485,7 @@ setCanBeFiredInAdvisorRole stmt@[pdx| %_ = @scr |] =
         addLine (mchar, mslot, value) [pdx| slot = $slot |] = (mchar, Just slot, value)
         addLine (mchar, mslot, value) [pdx| value = yes |] = (mchar, mslot, Just True)
         addLine (mchar, mslot, value) [pdx| value = no |] = (mchar, mslot, Just False)
-        addLine acc stmt = trace ("unknown section in set_can_be_fired_in_advisor_role: " ++ show stmt) acc
+        addLine acc stmt = warn (UnknownSection "set_can_be_fired_in_advisor_role" stmt) acc
 setCanBeFiredInAdvisorRole stmt = preStatement stmt
 
 ----------------------------------------
@@ -1517,7 +1518,7 @@ addRelationRuleOverride stmt@[pdx| %_ = @scr |] =
         addLine (target, desc, rs) [pdx| $what = %rhs |]
             | GenericRhs "yes" [] <- rhs = (target, desc, rs ++ [(what, True)])
             | GenericRhs "no" [] <- rhs = (target, desc, rs ++ [(what, False)])
-        addLine acc stmt = trace ("unknown section in add_relation_rule_override: " ++ show stmt) acc
+        addLine acc stmt = warn (UnknownSection "add_relation_rule_override" stmt) acc
 
         rule "can_send_volunteers" yn = MsgRelationRuleVolunteers yn
         rule "can_access_market" yn = MsgRelationRuleMarket yn
@@ -1594,7 +1595,7 @@ handleTrait addremove stmt@[pdx| %_ = @scr |] =
         addLine ht [pdx| character = $txt |] = ht { ht_character = Just txt }
         addLine ht [pdx| ideology = $txt |] = ht { ht_ideology = Just txt }
         addLine ht [pdx| slot = %_ |] = ht
-        addLine ht stmt = trace ("Unknown in handleTrait: " ++ show stmt) ht
+        addLine ht stmt = warn (UnknownSection "handleTrait" stmt) ht
         pp_ht addremove ht = do
             traitloc <- Doc.oneLine <$> getGameL10n (ht_trait ht)
             traitmsg <- indentUp $ getLeaderTraits (ht_trait ht)
@@ -1653,7 +1654,7 @@ addTimedTrait stmt@[pdx| %_ = @scr |] =
         addLine adt [pdx| trait = $txt |] = adt { adt_trait = txt }
         addLine adt [pdx| days = !num |] = adt { adt_days = Just num }
         addLine adt [pdx| days = $txt |] = adt { adt_daysvar = Just txt }
-        addLine adt stmt = trace ("Unknown in addTimedTrait: " ++ show stmt) adt
+        addLine adt stmt = warn (UnknownSection "addTimedTrait" stmt) adt
         ppADT adt = do
             traitloc <- getGameL10n (adt_trait adt)
             traitmsg <- indentUp $ getUnitTraits (adt_trait adt)
@@ -1680,7 +1681,7 @@ swapLeaderTrait stmt@[pdx| %_ = @scr |] =
         addLine st [pdx| add = $txt |] = st { st_add = txt }
         addLine st [pdx| remove = $txt |] = st { st_remove = txt }
         addLine st [pdx| ideology = %_ |] = st -- restricts the swap to a leader of this ideology
-        addLine st stmt = trace ("Unknown in swapTrait: " ++ show stmt) st
+        addLine st stmt = warn (UnknownSection "swapTrait" stmt) st
         ppST st = do
             traitaddloc <- getGameL10n (st_add st)
             traitremoveloc <- getGameL10n (st_remove st)
@@ -2115,7 +2116,7 @@ reduceFocusCompletionCost stmt@[pdx| %_ = @scr |] = case cost of
         addLine (c, fs) [pdx| cost = !n |] = (Just n, fs)
         addLine (c, fs) [pdx| focus = @arr |] = (c, fs ++ mapMaybe getbaretraits arr)
         addLine (c, fs) [pdx| focus = $theid |] = (c, fs ++ [theid])
-        addLine acc stmt = trace ("unknown section in reduce_focus_completion_cost: " ++ show stmt) acc
+        addLine acc stmt = warn (UnknownSection "reduce_focus_completion_cost" stmt) acc
 reduceFocusCompletionCost stmt = preStatement stmt
 
 -- | One focus written the way the wiki writes it: a template call naming the page
@@ -2214,7 +2215,7 @@ removeCountryLeaderRole stmt@[pdx| %_ = @scr |] =
         addLine (c, i) [pdx| character = $ch |] = (Just ch, i)
         addLine (c, i) [pdx| character = ?ch |] = (Just ch, i)
         addLine (c, i) [pdx| ideology = $ideo |] = (c, Just ideo)
-        addLine acc stmt = trace ("unknown section in remove_country_leader_role: " ++ show stmt) acc
+        addLine acc stmt = warn (UnknownSection "remove_country_leader_role" stmt) acc
 removeCountryLeaderRole stmt = preStatement stmt
 
 -- | Handler for @can_be_country_leader@, which asks whether a character is fit

@@ -15,6 +15,7 @@ import Data.Maybe (isJust, fromMaybe)
 
 import Abstract
 import HOI4.Messages
+import ParseWarnings (ParseWarning (..), warn)
 import QQ
 import SettingsTypes
 
@@ -181,9 +182,8 @@ foldCompound funname s_tyname prefix extraArgs fieldspecs eval = do
                            -- where
                            [sigD name_addLine [t| $(conT tyname) -> GenericStatement -> $(conT tyname) |]
                            ,funD name_addLine (lineclauses ++
-                                [clause [varP name_acc, wildP]
-                                        -- TODO: Print actual line that doesn't match
-                                        (normalB [| trace (funname ++ ": Unhandled line found in " ++ show stmt) $ $var_acc |])
+                                [clause [varP name_acc, varP name_line]
+                                        (normalB [| warn (UnknownSection (T.pack funname) $(varE name_line)) $var_acc |])
                                         []
                                 ])
                            ,funD name_pp

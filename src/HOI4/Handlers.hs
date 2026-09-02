@@ -249,6 +249,7 @@ import {-# SOURCE #-} HOI4.Common (ppScript, ppMany, ppOne)
 import HOI4.Types -- everything
 
 import Debug.Trace
+import ParseWarnings (ParseWarning (..), warn)
 
 
 
@@ -343,7 +344,7 @@ ppMtth isTriggeredOnly = ppMtth' . foldl' addField newMTTH
         addField mtth [pdx| months   = !n   |] = mtth { mtth_months = Just n }
         addField mtth [pdx| days     = !n   |] = mtth { mtth_days = Just n }
         addField mtth [pdx| modifier = @rhs |] = addMTTHMod mtth rhs
-        addField mtth _ = mtth -- unrecognized
+        addField mtth stmt = warn (UnknownSection "mean_time_to_happen" stmt) mtth
         addMTTHMod mtth scr = mtth {
                 mtth_modifiers = mtth_modifiers mtth
                                  ++ [foldl' addMTTHModField newMTTHMod scr] } where
@@ -439,7 +440,7 @@ prioritize :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
 prioritize stmt@[pdx| %_ = @arr |] = do
                 let states = mapMaybe stateFromArray arr
                     stateFromArray (StatementBare (IntLhs e)) = Just e
-                    stateFromArray stmt = trace ("Unknown in prioritize array statement: " ++ show stmt) Nothing
+                    stateFromArray stmt = warn (UnknownSection "prioritize array" stmt) Nothing
                 -- The wiki has a template for a run of states, which names
                 -- them all in the one go, so the ids go to it as they are
                 -- rather than being localized one at a time. It wants a run
@@ -1007,17 +1008,17 @@ numericCompare gt lt msg msgvar stmt@[pdx| %_ = %num |] = case num of
     (floatRhs -> Just n) -> msgToPP $ msg n $ "equal to or " <> gt
     GenericRhs n [] -> msgToPP $ msgvar n $ "equal to or " <> gt
     GenericRhs nt [nv] -> let n = nt <> nv in msgToPP $ msgvar n $ "equal to or " <> gt
-    _ -> trace ("Compare '=' failed : " ++ show stmt) $ preStatement stmt
+    _ -> warn (BadValue "numeric comparison" stmt) $ preStatement stmt
 numericCompare gt lt msg msgvar stmt@[pdx| %_ > %num |] = case num of
     (floatRhs -> Just n) -> msgToPP $ msg n gt
     GenericRhs n [] -> msgToPP $ msgvar n gt
     GenericRhs nt [nv] -> let n = nt <> nv in msgToPP $ msgvar n gt
-    _ -> trace ("Compare '>' failed : " ++ show stmt) $ preStatement stmt
+    _ -> warn (BadValue "numeric comparison" stmt) $ preStatement stmt
 numericCompare gt lt msg msgvar stmt@[pdx| %_ < %num |] = case num of
     (floatRhs -> Just n) -> msgToPP $ msg n lt
     GenericRhs n [] -> msgToPP $ msgvar n lt
     GenericRhs nt [nv] -> let n = nt <> nv in msgToPP $ msgvar n lt
-    _ -> trace ("Compare '<' failed : " ++ show stmt) $ preStatement stmt
+    _ -> warn (BadValue "numeric comparison" stmt) $ preStatement stmt
 numericCompare _ _ _ _ stmt = preStatement stmt
 
 numericCompareCompound :: (HOI4Info g, Monad m) =>
@@ -1041,21 +1042,21 @@ numericCompareLoc gt lt msg msgvar stmt@[pdx| $txt = %num |] = do
         (floatRhs -> Just n) -> msgToPP $ msg n ("equal to or " <> gt) loc
         GenericRhs n [] -> msgToPP $ msgvar n ("equal to or " <> gt) loc
         GenericRhs nt [nv] -> let n = nt <> nv in msgToPP $ msgvar n ("equal to or " <> gt) loc
-        _ -> trace ("Compare '=' failed : " ++ show stmt) $ preStatement stmt
+        _ -> warn (BadValue "numeric comparison" stmt) $ preStatement stmt
 numericCompareLoc gt lt msg msgvar stmt@[pdx| $txt > %num |] = do
     loc <- getGameL10n txt
     case num of
         (floatRhs -> Just n) -> msgToPP $ msg n gt loc
         GenericRhs n [] -> msgToPP $ msgvar n gt loc
         GenericRhs nt [nv] -> let n = nt <> nv in msgToPP $ msgvar n gt loc
-        _ -> trace ("Compare '>' failed : " ++ show stmt) $ preStatement stmt
+        _ -> warn (BadValue "numeric comparison" stmt) $ preStatement stmt
 numericCompareLoc gt lt msg msgvar stmt@[pdx| $txt < %num |] = do
     loc <- getGameL10n txt
     case num of
         (floatRhs -> Just n) -> msgToPP $ msg n lt loc
         GenericRhs n [] -> msgToPP $ msgvar n lt loc
         GenericRhs nt [nv] -> let n = nt <> nv in msgToPP $ msgvar n lt loc
-        _ -> trace ("Compare '<' failed : " ++ show stmt) $ preStatement stmt
+        _ -> warn (BadValue "numeric comparison" stmt) $ preStatement stmt
 numericCompareLoc _ _ _ _ stmt = preStatement stmt
 
 numericCompareCompoundLoc :: (HOI4Info g, Monad m) =>
@@ -1100,7 +1101,7 @@ addAiStrategy stmt@[pdx| %_ = @scr |] = case aiKind of
         addLine (k, t, i, v) [pdx| id     = $who  |] = (k, t, Just (Left who), v)
         addLine (k, t, i, v) [pdx| id     = ?who  |] = (k, t, Just (Left who), v)
         addLine (k, t, i, v) [pdx| value  = !n    |] = (k, t, i, Just n)
-        addLine acc _ = acc
+        addLine acc stmt = warn (UnknownSection "ai_strategy" stmt) acc
         -- Script names the country under either key: where there is no id, the
         -- target is the country the leaning is about. Where there is one, the
         -- target instead says which dealing is meant, the kind on its own saying
@@ -1345,7 +1346,7 @@ parseTV whatlabel vallabel = foldl' addLine newTV
             = tv { tv_var = Just (vartag <> ":" <> val) }
         addLine tv [pdx| $label = $val |] | sameKey label vallabel
             = tv { tv_var = Just val }
-        addLine nor _ = nor
+        addLine nor stmt = warn (UnknownSection ("parseTV " <> whatlabel) stmt) nor
 
 data TextValueComp = TextValueComp
         {   tvc_what :: Maybe Text
@@ -1381,7 +1382,7 @@ parseTVC whatlabel vallabel gt lt = foldl' addLine newTVC
             = tvc { tvc_var = Just val, tvc_comp = Just gt }
         addLine tvc [pdx| $label < $val |] | label == vallabel
             = tvc { tvc_var = Just val, tvc_comp = Just lt  }
-        addLine nor _ = nor
+        addLine nor stmt = warn (UnknownSection ("parseTVC " <> whatlabel) stmt) nor
 
 textValue :: forall g m. (HOI4Info g, Monad m) =>
     Text                                             -- ^ Label for "what"
@@ -1491,7 +1492,7 @@ parseVV whatlabel vallabel = foldl' addLine newVV
             = vv { vv_value = Just val }
         addLine vv [pdx| $label = !val |] | label == vallabel
             = vv { vv_value = Just val }
-        addLine nor _ = nor
+        addLine nor stmt = warn (UnknownSection ("parseVV " <> whatlabel) stmt) nor
 
 valueValue :: forall g m. (HOI4Info g, Monad m) =>
     Text                                             -- ^ Label for "what"
@@ -1535,7 +1536,7 @@ parseTA whatlabel atomlabel scr = foldl' addLine newTA scr
         addLine ta [pdx| $label = ?at |]
             | sameKey label atomlabel
             = ta { ta_atom = Just at }
-        addLine ta scr = trace ("parseTA: Ignoring " ++ show scr) ta
+        addLine ta scr = warn (UnknownSection "parseTA" scr) ta
 
 
 textAtom :: forall g m. (HOI4Info g, Monad m) =>
@@ -1597,7 +1598,7 @@ parseTF whatlabel flaglabel scr = foldl' addLine newTF scr
         addLine tf [pdx| $label = $vartag:$var |]
             | label == flaglabel
             = tf { tf_flag = Just (Right (vartag, var)) }
-        addLine tf scr = trace ("parseTF: Ignoring " ++ show scr) tf
+        addLine tf scr = warn (UnknownSection "parseTF" scr) tf
 
 taTypeFlag :: forall g m. (HOI4Info g, Monad m) => Text -> Text -> (Text -> Text -> ScriptMessage) -> StatementHandler g m
 taTypeFlag tType tFlag msg stmt@[pdx| %_ = @scr |]
@@ -1621,14 +1622,14 @@ getEffectArg :: Text -> GenericStatement -> Maybe GenericRhs
 getEffectArg tArg stmt@[pdx| %_ = @scr |] = case scr of
         [[pdx| $arg = %val |]] | T.toLower arg == tArg -> Just val
         _ -> Nothing
-getEffectArg _ _ = Nothing -- CHECK FOR USEFULNESS
+getEffectArg _ _ = Nothing
 
 simpleEffectNum :: forall g m. (HOI4Info g, Monad m) => Text ->  (Double -> ScriptMessage) -> StatementHandler g m
 simpleEffectNum tArg msg stmt =
     case getEffectArg tArg stmt of
         Just (FloatRhs num) -> msgToPP (msg num)
         Just (IntRhs num) -> msgToPP (msg (fromIntegral num))
-        _ -> trace ("warning: Not handled by simpleEffectNum: " ++ show stmt) $ preStatement stmt -- CHECK FOR USEFULNESS
+        _ -> warn (UnknownSection "simpleEffectNum" stmt) $ preStatement statement
 
 simpleEffectAtom :: forall g m. (HOI4Info g, Monad m) => Text -> (Text -> Text -> ScriptMessage) -> StatementHandler g m
 simpleEffectAtom tArg msg stmt =
@@ -1636,7 +1637,7 @@ simpleEffectAtom tArg msg stmt =
         Just (GenericRhs atom _) -> do
             loc <- getGameL10n atom
             msgToPP $ msg (iconText atom) loc
-        _ -> trace ("warning: Not handled by simpleEffectAtom: " ++ show stmt) $ preStatement stmt -- CHECK FOR USEFULNESS
+        _ -> warn (UnknownSection "simpleEffectAtom" stmt) $ preStatement stmt
 
 -- AI decision factors
 
@@ -1675,7 +1676,7 @@ ppAiMod AIModifier {} =
 -- | Verify assumption about rhs
 rhsAlways :: (HOI4Info g, Monad m) => Text -> ScriptMessage -> StatementHandler g m
 rhsAlways assumedRhs msg [pdx| %_ = ?rhs |] | T.toLower rhs == assumedRhs = msgToPP msg
-rhsAlways _ _ stmt = trace ("Expectation is wrong in statement " ++ show stmt) $ preStatement stmt
+rhsAlways _ _ stmt = warn (BadValue "rhsAlways" stmt) $ preStatement stmt
 
 rhsAlwaysYes :: (HOI4Info g, Monad m) => ScriptMessage -> StatementHandler g m
 rhsAlwaysYes = rhsAlways "yes"
@@ -1731,7 +1732,7 @@ opinion msgIndef msgDur msgTrade stmt@[pdx| %_ = @scr |]
         addLine op [pdx| scope_country = $tag         |] = op { op_who = Just (Left tag) }
         addLine op [pdx| scope_country = $vartag:$var |] = op { op_who = Just (Right (vartag, var)) }
         addLine op [pdx| opinion_modifier = ?label    |] = op { op_modifier = Just label }
-        addLine op _ = op
+        addLine op stmt = warn (UnknownSection "opinion" stmt) op
         pp_add_opinion op = case (op_who op, op_modifier op) of
             (Just ewhom, Just modifier) -> do
                 mwhomflag <- eflag (Just HOI4Country) ewhom
@@ -1744,7 +1745,7 @@ opinion msgIndef msgDur msgTrade stmt@[pdx| %_ = @scr |]
                     (Just whomflag, Nothing) -> return $ msgIndef modifier mod_loc whomflag
                     (Just whomflag, Just years) -> return $ msgDur modifier mod_loc whomflag years
                     _ -> return (preMessage stmt)
-            _ -> trace ("opinion: who or modifier missing: " ++ show stmt) $ return (preMessage stmt)
+            _ -> warn (BadValue "opinion" stmt) $ return (preMessage stmt)
 opinion _ _ _ stmt = preStatement stmt
 
 -- | Handler for @has_resources_in_country@, which asks how much of a resource a
@@ -1778,7 +1779,7 @@ parseResourceCheck what = foldl' addLine (ResourceCheck Nothing Nothing "" Nothi
         -- Nothing in the wording tells the two apart as yet.
         addLine rc [pdx| buildings = %_ |] = rc
         addLine rc [pdx| collection = ?coll |] = rc { rc_collection = Just coll }
-        addLine rc stmt = trace ("unknown section in " ++ what ++ ": " ++ show stmt) rc
+        addLine rc stmt = warn (UnknownSection (T.pack what) stmt) rc
 
 hasResourcesInCountry :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
 hasResourcesInCountry stmt@[pdx| %_ = @scr |] =
@@ -1819,7 +1820,7 @@ amountTakenIdeas stmt@[pdx| %_ = @scr |] = case foldl' addLine (Nothing, []) scr
         -- written out bare where there is only the one to name.
         addLine (amt, slots) [pdx| slots = @scr |] = (amt, slots ++ mapMaybe slotName scr)
         addLine (amt, slots) [pdx| slots = $slot |] = (amt, slots ++ [slot])
-        addLine acc stmt = trace ("unknown section in amount_taken_ideas: " ++ show stmt) acc
+        addLine acc stmt = warn (UnknownSection "amount_taken_ideas" stmt) acc
         slotName (StatementBare (GenericLhs slot [])) = Just slot
         slotName _ = Nothing
 amountTakenIdeas stmt = preStatement stmt
@@ -1846,7 +1847,7 @@ hasOpinion msg stmt@[pdx| %_ = @scr |]
         addLine hop [pdx| value = $val |] = hop { hop_valuevar = Just val, hop_ltgt = "equal to or more than" } -- at least
         addLine hop [pdx| value > $val |] = hop { hop_valuevar = Just val, hop_ltgt = "more than" } -- at least
         addLine hop [pdx| value < $val |] = hop { hop_valuevar = Just val, hop_ltgt = "less than" } -- less than
-        addLine hop _ = trace ("warning: unrecognized has_opinion clause in : " ++ show stmt) hop
+        addLine hop _ = warn (UnknownSection "has_opinion" stmt) hop
         pp_hasOpinion :: HasOpinion -> PPT g m ScriptMessage
         pp_hasOpinion hop = case (hop_target hop, hop_value hop, hop_valuevar hop, hop_ltgt hop) of
             (Just target, Just value, _, ltgt) -> do
@@ -2201,7 +2202,7 @@ focusUncomplete msg stmt@[pdx| $lhs = @scr |] = do
             | GenericRhs "yes" [] <- rhs = uf { uf_uncomplete_children = True }
             | GenericRhs "no"  [] <- rhs = uf { uf_uncomplete_children = False }
         addLine uf [pdx| refund_political_power = %_ |] = uf
-        addLine uf scr = trace ("uncompleteFocus: Ignoring " ++ show scr) uf
+        addLine uf scr = warn (UnknownSection "uncomplete_national_focus" scr) uf
 
         ppuf uf = do
             mfoc <- focusIconKeyLoc (uf_focus uf)
@@ -2256,7 +2257,7 @@ setVariable msgWW msgWV stmt@[pdx| %_ = @scr |]
             = sv { sv_which = Just var, sv_which2 = Just (valtag <> ":" <> val) }
         addLine sv [pdx| $vartag:$var = $val |]
             = sv { sv_which = Just (vartag <> ":" <> var), sv_which2 = Just val }
-        addLine sv _ = trace ("failed to parse var: " ++ show stmt) sv
+        addLine sv _ = warn (BadValue "set_variable" stmt) sv
         toTT :: Text -> Text
         toTT = typewriterText
         -- A value script names as a script constant is a number like any other,
@@ -2331,7 +2332,7 @@ clampVariable msgVV msgVW msgWV msgWW stmt@[pdx| %_ = @scr |]
             = clv { clv_var = Just var}
         addLine clv [pdx| max = $var |]
             = clv { clv_var2 = Just var }
-        addLine clv _ = clv
+        addLine clv stmt = warn (UnknownSection "clamp_variable" stmt) clv
         toTT :: Text -> Text
         toTT = typewriterText
         pp_clv :: ClampVariable -> PPT g m ScriptMessage
@@ -2411,7 +2412,7 @@ checkVariable msgWW msgWV stmt@[pdx| %_ = @scr |]
         -- leaves the name on the left carrying tags of its own.
         addLine cv [pdx| $a:$b:$c = $val |] | isNothing (cv_which cv)
             = cv { cv_which = Just (a <> ":" <> b <> ":" <> c), cv_which2 = Just val, cv_comp = "equals" }
-        addLine cv _ = cv
+        addLine cv stmt = warn (UnknownSection "check_variable" stmt) cv
         toTT :: Text -> Text
         toTT = typewriterText
         pp_cv :: CheckVariable -> PPT g m ScriptMessage
@@ -2452,7 +2453,7 @@ exportVariable stmt@[pdx| %_ = @scr |] = msgToPP =<< pp_ev (foldl' addLine newEV
             = ev { ev_value = Just val }
         addLine ev [pdx| who = ?val |]
             = ev { ev_who = Just val }
-        addLine ev stmt = trace ("Unknown in export_to_variable " ++ show stmt) ev
+        addLine ev stmt = warn (UnknownSection "export_to_variable" stmt) ev
         toTT :: Text -> Text
         toTT = typewriterText
         pp_ev :: ExportVariable -> PPT g m ScriptMessage
@@ -2461,8 +2462,8 @@ exportVariable stmt@[pdx| %_ = @scr |] = msgToPP =<< pp_ev (foldl' addLine newEV
         pp_ev ExportVariable { ev_which = Just which, ev_value = Just value, ev_who = Just who } = do
             whoLoc <- Doc.doc2text <$> allowPronoun (Just HOI4Country) (fmap Doc.strictText . getGameL10n) who
             return $ MsgExportVariableWho (toTT which) value whoLoc
-        pp_ev ev = return $ trace ("Missing info for export_to_variable " ++ show ev ++ " " ++ show stmt) $ preMessage stmt
-exportVariable stmt = trace ("Not handled in export_to_variable: " ++ show stmt) $ preStatement stmt
+        pp_ev _ = return $ warn (BadValue "export_to_variable" stmt) $ preMessage stmt
+exportVariable stmt = warn (UnknownSection "export_to_variable" stmt) $ preStatement stmt
 
 -- Helper
 getMaybeRhsText :: Maybe GenericStatement -> Maybe Text
@@ -2511,8 +2512,7 @@ provSelLine what ps stmt = case stmt of
     [pdx| level > !num |] -> ps { ps_level_comp = "higher than", ps_level = Just num }
     [pdx| level < !num |] -> ps { ps_level_comp = "lower than", ps_level = Just num }
     [pdx| first = %_ |] -> ps -- picks the first valid province after reduction
-    [pdx| $other = %_ |] -> trace ("unknown section in " ++ what ++ "@province: " ++ show other) ps
-    _ -> trace ("Unknown form in " ++ what ++ "@province: " ++ show stmt) ps
+    _ -> warn (UnknownSection (T.pack (what ++ "@province")) stmt) ps
     where
         ifYes (GenericRhs "yes" []) set = set
         ifYes _ _ = ps
@@ -2569,8 +2569,7 @@ parseBuildStmt what = foldl' addLine (BuildStmt "" Nothing Nothing False newProv
         addLine b [pdx| province = @pscr |] = b { bld_prov = foldl' (provSelLine what) (bld_prov b) pscr }
         addLine b [pdx| level > !num |] = b { bld_prov = (bld_prov b) { ps_level_comp = "higher than", ps_level = Just num } }
         addLine b [pdx| level < !num |] = b { bld_prov = (bld_prov b) { ps_level_comp = "lower than", ps_level = Just num } }
-        addLine b [pdx| $other = %_ |] = trace ("unknown section in " ++ what ++ ": " ++ show other) b
-        addLine b stmt = trace ("Unknown in " ++ what ++ ": " ++ show stmt) b
+        addLine b stmt = warn (UnknownSection (T.pack what) stmt) b
 
 addBuildingConstruction :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
 addBuildingConstruction stmt@[pdx| %_ = @scr |] = msgToPP =<< do
@@ -2586,7 +2585,7 @@ addBuildingConstruction stmt@[pdx| %_ = @scr |] = msgToPP =<< do
         -- rather than an @=@ is not that number: it is a condition on
         -- what is already standing there, and has gone into 'prov'.
         _ -> MsgAddBuildingConstruction (bld_instant b) buildicon buildloc 1 prov
-addBuildingConstruction stmt = trace ("Not handled in addBuildingConstruction: " ++ show stmt) $ preStatement stmt
+addBuildingConstruction stmt = warn (UnknownSection "add_building_construction" stmt) $ preStatement stmt
 
 setBuildingLevel :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
 setBuildingLevel stmt@[pdx| %_ = @scr |] = msgToPP =<< do
@@ -2669,13 +2668,13 @@ parseWarGoal what = foldM addLine (WarGoal Nothing Nothing Nothing Nothing Nothi
                 return wg { war_generator = Just (Left vstate) } --Need to deal with existing variables here
             GenericRhs vstate _ ->
                 return wg { war_generator = Just (Left vstate) } --Need to deal with existing variables here
-            _ -> trace ("Unknown generator statement in " ++ what ++ ": " ++ show stmts) $ return wg
+            _ -> warn (BadValue (T.pack (what ++ " generator")) stmts) $ return wg
         addLine wg stmt
-            = trace ("unknown section in " ++ what ++ ": " ++ show stmt) $ return wg
+            = warn (UnknownSection (T.pack what) stmt) $ return wg
 
         stateFromArray :: GenericStatement -> Maybe Int
         stateFromArray (StatementBare (IntLhs e)) = Just e
-        stateFromArray stmt = trace ("Unknown in generator array statement: " ++ show stmt) Nothing
+        stateFromArray stmt = warn (UnknownSection "generator array" stmt) Nothing
 
 createWargoal :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
 createWargoal stmt@[pdx| %_ = @scr |] =
@@ -2783,7 +2782,7 @@ addTechBonus stmt@[pdx| %_ = @scr |]
             let oldtech = tb_technology atb
             techloc <- getGameL10n tech
             return atb { tb_technology = oldtech ++ [techloc] }
-        addLine atb _ = return atb
+        addLine atb stmt = warn (UnknownSection "add_tech_bonus" stmt) (return atb)
         pp_atb :: AddTechBonus -> PPT g m IndentedMessages
         pp_atb atb = do
             -- What the bonus goes towards has a page of the wiki to itself,
@@ -2799,7 +2798,7 @@ addTechBonus stmt@[pdx| %_ = @scr |]
                         MsgAddTechBonus bonus techcat uses
                     (_, Just ahead) ->
                         MsgAddTechBonusAhead ahead techcat uses
-                    _ -> trace ("issues in add_technology_bonus: " ++ show stmt ) $ preMessage stmt
+                    _ -> warn (BadValue "add_technology_bonus" stmt) $ preMessage stmt
             msgToPP tbmsg
 addTechBonus stmt = preStatement stmt
 
@@ -2893,7 +2892,7 @@ setFlag msgft stmt@[pdx| %_ = @scr |]
         addLine sf [pdx| days = $amt |] =
             return sf { sf_dayst = Just amt }
         addLine sf stmt
-            = trace ("unknown section in set_country_flag: " ++ show stmt) $ return sf
+            = warn (UnknownSection "set_country_flag" stmt) $ return sf
         pp_sf sf = do
             let value = case sf_value sf of
                     Just num -> T.pack $ " to " ++ show (round num)
@@ -2947,7 +2946,7 @@ hasFlag msgft stmt@[pdx| %_ = @scr |]
             let amtd = " Has been set earlier than " <> show amt <> "." in
             return hf { hf_date = Just $ T.pack amtd }
         addLine hf stmt
-            = trace ("unknown section in has_country_flag: " ++ show stmt) $ return hf
+            = warn (UnknownSection "has_country_flag" stmt) $ return hf
         pp_hf hf =
             case (hf_value hf, hf_days hf, hf_date hf) of
                 (Nothing, Nothing, Nothing) -> do
@@ -3065,7 +3064,7 @@ setPolitics stmt@[pdx| %_ = @scr |]
         addLine sp [pdx| long_name = $yn |] = return sp
         addLine sp [pdx| name = $yn |] = return sp
         addLine sp stmt
-            = trace ("unknown section in set_politics: " ++ show stmt) $ return sp
+            = warn (UnknownSection "set_politics" stmt) $ return sp
         pp_sp sp = do
             let freq = fromMaybe 0 (sp_election_frequency sp)
             party <- getGameL10n (sp_ruling_party sp)
@@ -3249,7 +3248,7 @@ setRule header [pdx| %_ = @scr |]
                     loc <- getGameL10n lhst
                     msgToPP $ MsgSetRuleYesNo "{{icon|no}}" loc
                 _ -> preStatement stmt
-        ppRule stmt = trace ("unknownsecton found in set_rule for " ++ show stmt) preStatement stmt
+        ppRule stmt = warn (UnknownSection "set_rule" stmt) (preStatement stmt)
 setRule _ stmt = preStatement stmt
 
 -------------------------------------
@@ -3303,7 +3302,7 @@ addDoctrineCostReduction stmt@[pdx| %_ = @scr |]
             let oldtech = dcr_technology dcr
             techloc <- getGameL10n tech
             return dcr { dcr_technology = oldtech ++ ["[[" <> techloc <> "]]"] }
-        addLine dcr _ = return dcr
+        addLine dcr stmt = warn (UnknownSection "doctrine cost reduction" stmt) (return dcr)
         -- What the reduction covers is said in the same breath as the
         -- reduction itself, however many doctrines that is.
         pp_dcr :: DoctrineCostReduction -> PPT g m IndentedMessages
@@ -3349,7 +3348,7 @@ freeBuildingSlots stmt@[pdx| %_ = @scr |]
         addLine fbs [pdx| province = !num |] =
             return fbs { fbs_province = Just num }
         addLine fbs stmt
-            = trace ("unknown section in free_building_slots: " ++ show stmt) $ return fbs
+            = warn (UnknownSection "free_building_slots" stmt) $ return fbs
         pp_fbs fbs = do
             let buildicon = iconText $ fbs_building fbs
                 provloc = maybe "" (\p -> " in province (" <> T.pack (show p) <> ")") (fbs_province fbs)
@@ -3408,7 +3407,7 @@ sendEquipment stmt@[pdx| %_ = @scr |]
             flagd <- eflag (Just HOI4Country) (Left tag)
             return se { se_target = flagd }
         addLine se stmt
-            = trace ("unknown section in send_equipment: " ++ show stmt) $ return se
+            = warn (UnknownSection "send_equipment" stmt) $ return se
         pp_se se = do
             let target = fromMaybe "<!-- Check Script -->" (se_target se)
             return $ MsgSendEquipment (se_amount se) (se_equipment se) target (se_old_prioritised se)
@@ -3439,7 +3438,7 @@ parseRailway what = foldM addLine (Railway 1 Nothing Nothing Nothing Nothing Not
         addLine br stmt@[pdx| $lhs = %rhs |] = case lhs of
             "level" -> case rhs of
                 (floatRhs -> Just num) -> return br { rail_level = num }
-                _ -> trace ("bad level in " ++ what) $ return br
+                _ -> warn (BadValue (T.pack (what ++ " level")) stmt) $ return br
             "build_only_on_allied" -> return br
             "fallback" -> return br
             "controller_priority" -> return br
@@ -3447,14 +3446,14 @@ parseRailway what = foldM addLine (Railway 1 Nothing Nothing Nothing Nothing Not
                 CompoundRhs arr ->
                     let provs = mapMaybe provinceFromArray arr in
                     return br { rail_path = Just provs }
-                _ -> trace ("bad path in " ++ what) $ return br
-            "start_state" -> (\loc -> br { rail_start_state = loc }) <$> stateRhs rhs
-            "target_state" -> (\loc -> br { rail_target_state = loc }) <$> stateRhs rhs
+                _ -> warn (BadValue (T.pack (what ++ " path")) stmt) $ return br
+            "start_state" -> (\loc -> br { rail_start_state = loc }) <$> stateRhs stmt rhs
+            "target_state" -> (\loc -> br { rail_target_state = loc }) <$> stateRhs stmt rhs
             "start_province" -> return br { rail_start_province = floatRhs rhs }
             "target_province" -> return br { rail_target_province = floatRhs rhs }
-            _other -> trace ("unknown section in " ++ what ++ ": " ++ show stmt) $ return br
+            _other -> warn (UnknownSection (T.pack what) stmt) $ return br
         addLine br stmt
-            = trace ("unknown form in " ++ what ++ ": " ++ show stmt) $ return br
+            = warn (UnknownSection (T.pack what) stmt) $ return br
 
         -- A state written as its id, a variable, or a tagged variable.
         stateRhs :: GenericRhs -> PPT g m (Maybe Text)
@@ -3462,11 +3461,11 @@ parseRailway what = foldM addLine (Railway 1 Nothing Nothing Nothing Nothing Not
             IntRhs num -> Just <$> getStateLoc num
             GenericRhs vartag [var] -> eGetState (Right (vartag, var))
             GenericRhs txt [] -> eGetState (Left txt)
-            _ -> trace ("bad state in " ++ what) $ return Nothing
+            _ -> warn (BadValue (T.pack (what ++ " state")) stmt) $ return Nothing
 
         provinceFromArray :: GenericStatement -> Maybe Double
         provinceFromArray (StatementBare (IntLhs e)) = Just $ fromIntegral e
-        provinceFromArray stmt = trace ("Unknown in generator array statement: " ++ show stmt) Nothing
+        provinceFromArray stmt = warn (UnknownSection "generator array" stmt) Nothing
 
 buildRailway  :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
 buildRailway stmt@[pdx| %_ = @scr |]
@@ -3630,8 +3629,7 @@ addResource stmt@[pdx| %_ = @scr |]
         addLine ar [pdx| amount = $txt |] = return ar { ar_amountvar = Just txt }
         addLine ar [pdx| state = !num |] = return ar { ar_state = Just num }
         addLine ar [pdx| show_state_in_tooltip = %_ |] = return ar
-        addLine ar [pdx| $other = %_ |] = trace ("unknown section in add_resource: " ++ show other) $ return ar
-        addLine ar stmt = trace ("unknown form in add_resource: " ++ show stmt) $ return ar
+        addLine ar stmt = warn (UnknownSection "add_resource" stmt) $ return ar
         pp_ar ar = do
             let buildicon = iconText $ ar_type ar
             stateloc <- maybe (return "") (getStateLoc . round) $ ar_state ar
@@ -3784,8 +3782,7 @@ addEquipment stmt@[pdx| %_ = @scr |]
         addLine ae [pdx| producer = ?tag |] = return ae { ae_producer = Just (Left tag) }
         addLine ae [pdx| producer = $vartag:$var |] = return ae { ae_producer = Just (Right (vartag, var)) }
         addLine ae [pdx| variant_name = ?txt |] = return ae { ae_variant = Just txt }
-        addLine ae [pdx| $other = %_ |] = trace ("unknown section in add_equipment_to_stockpile: " ++ show other) $ return ae
-        addLine ae stmt = trace ("unknown form in add_equipment_to_stockpile: " ++ show stmt) $ return ae
+        addLine ae stmt = warn (UnknownSection "add_equipment_to_stockpile" stmt) $ return ae
         ppAe ae = do
             let variant = fromMaybe "" $ ae_variant ae
             flaglocm <- case ae_producer ae of
@@ -3822,8 +3819,7 @@ giveResourceRights stmt@[pdx| %_ = @scr |]
         addLine gr [pdx| resources = @scr |] =
             let ress = mapMaybe getbareRess scr in
             return gr { gr_resource = Just ress }
-        addLine gr [pdx| $other = %_ |] = trace ("unknown section in give_resource_rights: " ++ show other) $ return gr
-        addLine gr stmt = trace ("unknown form in give_resource_rights: " ++ show stmt) $ return gr
+        addLine gr stmt = warn (UnknownSection "give_resource_rights" stmt) $ return gr
         ppGR :: GiveRights -> PPT g m ScriptMessage
         ppGR gr = do
             flag_loc <- flagText (Just HOI4Country) (gr_receiver gr)
@@ -3842,7 +3838,7 @@ giveResourceRights stmt@[pdx| %_ = @scr |]
                 _ -> return $ preMessage stmt
 
         getbareRess (StatementBare (GenericLhs e [])) = Just e
-        getbareRess stmt = trace ("Unknown in give_resource_rights array statement: " ++ show stmt) Nothing
+        getbareRess stmt = warn (UnknownSection "give_resource_rights array" stmt) Nothing
 giveResourceRights stmt = preStatement stmt
 
 -- | Whether anyone holds the rights to a state's resources. The receiver and
@@ -3871,7 +3867,7 @@ hasResourcesRights stmt = preStatement stmt
 -- or of traits.
 bareAtom :: GenericStatement -> Maybe Text
 bareAtom (StatementBare (GenericLhs atom [])) = Just atom
-bareAtom stmt = trace ("Unknown in bare array statement: " ++ show stmt) Nothing
+bareAtom stmt = warn (UnknownSection "bare atom array" stmt) Nothing
 
 -------------------------------
 -- handler for damage_units  --
@@ -3933,7 +3929,7 @@ numDivisionsInStates stmt@[pdx| %_ = @scr |] = do
         _ -> preStatement stmt
     where
         bareState (StatementBare (IntLhs n)) = Just n
-        bareState st = trace ("Unknown in num_divisions_in_states array: " ++ show st) Nothing
+        bareState st = warn (UnknownSection "num_divisions_in_states array" st) Nothing
 numDivisionsInStates stmt = preStatement stmt
 
 ------------------------------------
@@ -4198,7 +4194,7 @@ listedScope header nameOf [pdx| %_ = @scr |] = withCurrentIndent $ \i -> do
     where
         bareTarget (StatementBare (IntLhs n)) = Just (T.pack (show n))
         bareTarget (StatementBare (GenericLhs t [])) = Just t
-        bareTarget stmt = trace ("Unknown in target array: " ++ show stmt) Nothing
+        bareTarget stmt = warn (UnknownSection "target array" stmt) Nothing
 listedScope _ _ stmt = preStatement stmt
 
 -- | The name of a state written into such a list, whether by its id or through
@@ -4244,7 +4240,7 @@ setDivisionForceAllowRecruiting stmt = preStatement stmt
 -- or of strategic regions.
 bareInt :: GenericStatement -> Maybe Int
 bareInt (StatementBare (IntLhs n)) = Just n
-bareInt stmt = trace ("Unknown in bare number array: " ++ show stmt) Nothing
+bareInt stmt = warn (UnknownSection "bare number array" stmt) Nothing
 
 --------------------------------------
 -- Handler for add_ace --
@@ -4268,8 +4264,7 @@ addAce stmt@[pdx| %_ = @scr |]
         addLine aa [pdx| callsign = ?txt |] = return aa { aa_callsign = txt }
         addLine aa [pdx| type = ?_ |] = return aa
         addLine aa [pdx| is_female = ?_ |] = return aa
-        addLine aa [pdx| $other = %_ |] = trace ("unknown section in add_ace: " ++ show other) $ return aa
-        addLine aa stmt = trace ("unknown form in add_ace: " ++ show stmt) $ return aa
+        addLine aa stmt = warn (UnknownSection "add_ace" stmt) $ return aa
         ppAa aa = do
             return $ MsgAddAce (aa_name aa) (aa_callsign aa) (aa_surname aa)
 addAce stmt = preStatement stmt
@@ -4301,8 +4296,7 @@ hasNavySize stmt@[pdx| %_ = @scr |]
         addLine ns [pdx| type = $txt |] = return ns { ns_type = Just txt }
         addLine ns [pdx| unit = $txt |] = return ns { ns_type = Just txt }
         addLine ns [pdx| archetype = ?txt |] = return ns { ns_archetype = Just txt }
-        addLine ns [pdx| $other = %_ |] = trace ("unknown section in has_navy_size: " ++ show other) $ return ns
-        addLine ns stmt = trace ("unknown form in has_navy_size: " ++ show stmt) $ return ns
+        addLine ns stmt = warn (UnknownSection "has_navy_size" stmt) $ return ns
         ppNS ns = do
             typed <- case(ns_type ns, ns_archetype ns) of
                 (Just txt, _) -> getGameL10n txt
@@ -4344,8 +4338,7 @@ hasDeployedAirForceSize stmt@[pdx| %_ = @scr |]
         addLine afs [pdx| size > $num |] = return afs { afs_comp = "least", afs_sizevar = Just num }
         addLine afs [pdx| size = $num |] = return afs { afs_comp = "least", afs_sizevar = Just num }
         addLine afs [pdx| type = ?txt |] = return afs { afs_type = Just txt }
-        addLine afs [pdx| $other = %_ |] = trace ("unknown section in has_deployed_air_force_size: " ++ show other) $ return afs
-        addLine afs stmt = trace ("unknown form in has_deployed_air_force_size: " ++ show stmt) $ return afs
+        addLine afs stmt = warn (UnknownSection "has_deployed_air_force_size" stmt) $ return afs
         ppAFS afs = do
             typed <- maybe (return "") getGameL10n (afs_type afs)
             case (afs_size afs, afs_sizevar afs) of
@@ -4437,8 +4430,7 @@ damageBuilding stmt@[pdx| %_ = @scr |]
         addLine db [pdx| damage = !num |] = return db { db_damage = Just num }
         addLine db [pdx| damage = $txt |] = return db { db_damagevar = Just txt }
         addLine db [pdx| province = !num |] = return db {db_province = Just num}
-        addLine db [pdx| $other = %_ |] = trace ("unknown section in damage_building: " ++ show other) $ return db
-        addLine db stmt = trace ("unknown form in damage_building: " ++ show stmt) $ return db
+        addLine db stmt = warn (UnknownSection "damage_building" stmt) $ return db
         ppDB db = do
             let typeicon = iconText (db_type db)
                 prov = fromMaybe (-1) (db_province db)
@@ -4500,8 +4492,7 @@ divisionsInState msg stmt@[pdx| %_ = @scr |]
         addLine ds [pdx| border_state = !num |] = return ds { ds_border_state = Just num}
         addLine ds [pdx| border_state = $vartag:$var |] = return ds { ds_border_statevar = Just (Right (vartag,var))}
         addLine ds [pdx| border_state = $var |] = return ds { ds_border_statevar = Just (Left var)}
-        addLine ds [pdx| $other = %_ |] = trace ("unknown section in divisionsInState: " ++ show other) $ return ds
-        addLine ds stmt = trace ("unknown form in divisionsInState: " ++ show stmt) $ return ds
+        addLine ds stmt = warn (UnknownSection "divisionsInState" stmt) $ return ds
         ppDS :: DivisionsInState -> PPT g m ScriptMessage
         ppDS ds = do
             borderstate <- case (ds_border_state ds, ds_border_statevar ds) of
@@ -4587,8 +4578,7 @@ startBorderWar stmt@[pdx| %_ = @scr |]
         addLine sbw [pdx| minimum_duration_in_days = %_ |] = return sbw
         addLine sbw [pdx| dig_in_factor = %_ |] = return sbw
         addLine sbw [pdx| terrain_factor = %_ |] = return sbw
-        addLine sbw [pdx| $other = %_ |] = trace ("unknown section in startBorderWar: " ++ show other) $ return sbw
-        addLine sbw stmt = trace ("unknown form in startBorderWar: " ++ show stmt) $ return sbw
+        addLine sbw stmt = warn (UnknownSection "startBorderWar" stmt) $ return sbw
 
         addLine' :: Bool -> StartBorderWar -> GenericStatement -> PPT g m StartBorderWar
         addLine' atde sbw [pdx| state = !num |] = do
@@ -4621,8 +4611,7 @@ startBorderWar stmt@[pdx| %_ = @scr |]
         addLine' _ sbw [pdx| dig_in_factor = %_ |] = return sbw
         addLine' _ sbw [pdx| terrain_factor = %_ |] = return sbw
         addLine' _ sbw [pdx| modifier = %_ |] = return sbw
-        addLine' _ sbw [pdx| $other = %_ |] = trace ("unknown section in startBorderWar@attdef: " ++ show other) $ return sbw
-        addLine' _ sbw stmt = trace ("unknown form in startBorderWar@attdef: " ++ show stmt) $ return sbw
+        addLine' _ sbw stmt = warn (UnknownSection "startBorderWar@attdef" stmt) $ return sbw
         ppSBW :: StartBorderWar -> PPT g m IndentedMessages
         ppSBW sbw = do
             headMsg <- msgToPP $ MsgStartBorderWar (sbw_state_attacker sbw) (sbw_state_defender sbw) (sbw_change_state_after_war sbw)
@@ -4844,7 +4833,7 @@ shipsIn wherelabel wherelocof msg stmt@[pdx| %_ = @scr |]
             _ -> do
                 whereloc <- statedFrom (Just st)
                 return si { si_where = Just whereloc }
-        addLine si st = trace ("unknown form in shipsIn: " ++ show st) $ return si
+        addLine si st = warn (UnknownSection "shipsIn" st) $ return si
         ppSI :: ShipsIn -> PPT g m ScriptMessage
         ppSI si = do
             -- With no kind named the trigger counts every ship there is.
@@ -4886,11 +4875,10 @@ addProvinceModifier addrem stmt@[pdx| %_ = @scr |] =
         addLine (mods, ps) [pdx| static_modifiers = @mscr |] = (mapMaybe getbaremods mscr, ps)
         addLine (mods, ps) [pdx| province = !num |] = (mods, ps { ps_ids = Just [num] })
         addLine (mods, ps) [pdx| province = @pscr |] = (mods, foldl' (provSelLine "add_province_modifier") ps pscr)
-        addLine acc [pdx| $other = %_ |] = trace ("unknown section in add_province_modifier: " ++ show other) acc
-        addLine acc stmt = trace ("Unknown in add_province_modifier: " ++ show stmt) acc
+        addLine acc stmt = warn (UnknownSection "add_province_modifier" stmt) acc
 
         getbaremods (StatementBare (GenericLhs e [])) = Just e
-        getbaremods stmt = trace ("Unknown in static_modifier array statement: " ++ show stmt) Nothing
+        getbaremods stmt = warn (UnknownSection "static_modifiers array" stmt) Nothing
 
         pp_apm :: ([Text], ProvSel) -> PPT g m ScriptMessage
         pp_apm (mods, ps) = do
@@ -4904,7 +4892,7 @@ addProvinceModifier addrem stmt@[pdx| %_ = @scr |] =
                     | otherwise = "<!--CHECK SCRIPT-->"
             prov <- ppProvSel ps
             return $ MsgAddProvinceModifier addrem modloc prov
-addProvinceModifier _ stmt = trace ("Not handled in addProvinceModifier: " ++ show stmt) $ preStatement stmt
+addProvinceModifier _ stmt = warn (UnknownSection "add_province_modifier" stmt) $ preStatement stmt
 
 
 -------------------------------------------
@@ -4929,8 +4917,7 @@ powerBalanceRange stmt@[pdx| %_ = @scr |]
         addLine pbr [pdx| range = ?txt |] = return pbr { pbr_range = txt }
         addLine pbr [pdx| range > ?txt |] = return pbr { pbr_range = txt, pbr_comp = 1 }--right
         addLine pbr [pdx| range < ?txt |] = return pbr { pbr_range = txt, pbr_comp = -1 }--left
-        addLine pbr [pdx| $other = %_ |] = trace ("unknown section in powerBalanceRange: " ++ show other) $ return pbr
-        addLine pbr stmt = trace ("unknown form in powerBalanceRange: " ++ show stmt) $ return pbr
+        addLine pbr stmt = warn (UnknownSection "powerBalanceRange" stmt) $ return pbr
         ppPBR :: PowerBalanceRange -> PPT g m ScriptMessage
         ppPBR pbr = do
             idloc <- getGameL10n (pbr_id pbr)
@@ -4961,14 +4948,12 @@ navalStrengthComparison stmt@[pdx| %_ = @scr |]
         addLine nsc [pdx| ratio > !amt |] = return nsc { nsc_ratio = amt, nsc_comp = "more" }--right
         addLine nsc [pdx| ratio < !amt |] = return nsc { nsc_ratio = amt, nsc_comp = "less" }--left
         addLine nsc [pdx| sub_unit_def_weights = @scr |] = return $ foldl' addLine' nsc scr
-        addLine nsc [pdx| $other = %_ |] = trace ("unknown section in navalStrengthComparison: " ++ show other) $ return nsc
-        addLine nsc stmt = trace ("unknown form in navalStrengthComparison: " ++ show stmt) $ return nsc
+        addLine nsc stmt = warn (UnknownSection "navalStrengthComparison" stmt) $ return nsc
         addLine' :: NavalStrengthComparison -> GenericStatement -> NavalStrengthComparison
         addLine' nsc [pdx| $shiptype = !weight |] = do
             let oldweight = nsc_sub_unit_def_weights nsc
             nsc { nsc_sub_unit_def_weights = oldweight ++ [(shiptype, weight)]}
-        addLine' nsc [pdx| $other = %_ |] = trace ("unknown section in navalStrengthComparison weights: " ++ show other) nsc
-        addLine' nsc stmt = trace ("unknown form in navalStrengthComparison weights: " ++ show stmt) nsc
+        addLine' nsc stmt = warn (UnknownSection "navalStrengthComparison weights" stmt) nsc
 
         ppNSC :: NavalStrengthComparison -> PPT g m ScriptMessage
         ppNSC nsc = do
@@ -5007,7 +4992,7 @@ setDivisionTemplateLock stmt@[pdx| %_ = @scr |] = case (template, locked) of
         addLine (t, l) [pdx| division_template = ?name |] = (Just name, l)
         addLine (t, l) [pdx| is_locked = yes |] = (t, Just True)
         addLine (t, l) [pdx| is_locked = no |] = (t, Just False)
-        addLine acc _ = acc
+        addLine acc stmt = warn (UnknownSection "set_division_template_lock" stmt) acc
 setDivisionTemplateLock stmt = preStatement stmt
 
 -- | Handler for @clear_division_template_cap@, which lifts the limit on how many
@@ -5052,7 +5037,7 @@ hasResourcesAmount stmt@[pdx| %_ = @scr |] = case hra_resource hra of
         addLine h [pdx| state = !n |] = h { hra_state = Just n }
         addLine h [pdx| delivered = yes |] = h { hra_delivered = True }
         addLine h [pdx| delivered = no |] = h { hra_delivered = False }
-        addLine h stmt = trace ("unknown section in has_resources_amount: " ++ show stmt) h
+        addLine h stmt = warn (UnknownSection "has_resources_amount" stmt) h
 hasResourcesAmount stmt = preStatement stmt
 
 ---------------------------------------------
@@ -5089,7 +5074,7 @@ anyProvinceBuildingLevel stmt@[pdx| %_ = @scr |] = case apb_building apb of
         addLine a [pdx| level = !n |] = a { apb_comp = "at least", apb_level = n }
         addLine a [pdx| province = !n |] = a { apb_provinces = apb_provinces a ++ [n] }
         addLine a [pdx| province = @pscr |] = foldl' addProv a pscr
-        addLine a stmt = trace ("unknown section in any_province_building_level: " ++ show stmt) a
+        addLine a stmt = warn (UnknownSection "any_province_building_level" stmt) a
 
         addProv a [pdx| id = !n |] = a { apb_provinces = apb_provinces a ++ [n] }
         addProv a [pdx| all_provinces = yes |] = a { apb_all = True }
@@ -5098,7 +5083,7 @@ anyProvinceBuildingLevel stmt@[pdx| %_ = @scr |] = case apb_building apb of
         addProv a [pdx| limit_to_naval_base = yes |] = a { apb_naval = True }
         addProv a [pdx| limit_to_victory_point = yes |] = a { apb_victory_point = True }
         addProv a [pdx| $_ = no |] = a
-        addProv a stmt = trace ("unknown section in any_province_building_level@province: " ++ show stmt) a
+        addProv a stmt = warn (UnknownSection "any_province_building_level@province" stmt) a
 
         -- Which provinces of the state count. Nothing said means all of them,
         -- which is also what @all_provinces@ asks for outright.
@@ -5154,7 +5139,7 @@ arrayAndValue scr = case foldl' addLine (Nothing, Nothing, Nothing) scr of
         addLine (arr, val, short) [pdx| $a = ?v |] = (arr, val, Just (a, Just v))
         addLine (arr, val, short) [pdx| $a = !v |] =
             (arr, val, Just (a, Just (Doc.doc2text (plainNum (v :: Double)))))
-        addLine acc _ = acc
+        addLine acc stmt = warn (UnknownSection "array effect" stmt) acc
 
 -- | Handler for @add_to_array@ and @is_in_array@, which take an array and a
 -- value. A value left out of @add_to_array@ means whatever is in scope.
@@ -5203,7 +5188,7 @@ createShip stmt@[pdx| %_ = @scr |] = case cs_type cs of
         -- Whether a ship already in for a refit may be picked. Says nothing
         -- about what is created.
         addLine c [pdx| exclude_refitting = %_ |] = c
-        addLine c stmt = trace ("unknown section in create_ship: " ++ show stmt) c
+        addLine c stmt = warn (UnknownSection "create_ship" stmt) c
 createShip stmt = preStatement stmt
 
 ------------------------------
@@ -5228,7 +5213,7 @@ transferShip stmt@[pdx| %_ = @scr |] =
         addLine (t, tg, n) [pdx| target = ?tgt |] = (t, Just (Left tgt), n)
         addLine (t, tg, n) [pdx| prefer_name = ?nm |] = (t, tg, Just nm)
         addLine acc [pdx| exclude_refitting = %_ |] = acc
-        addLine acc stmt = trace ("unknown section in transfer_ship: " ++ show stmt) acc
+        addLine acc stmt = warn (UnknownSection "transfer_ship" stmt) acc
 transferShip stmt = preStatement stmt
 
 -------------------------------------
@@ -5252,7 +5237,7 @@ addEquipmentSubsidy stmt@[pdx| %_ = @scr |] =
         addLine (t, c, s, g) [pdx| seller_tags = @tags |] =
             (t, c, s ++ [tag | StatementBare (GenericLhs tag []) <- tags], g)
         addLine (t, c, s, g) [pdx| seller_trigger = $trg |] = (t, c, s, Just trg)
-        addLine acc stmt = trace ("unknown section in add_equipment_subsidy: " ++ show stmt) acc
+        addLine acc stmt = warn (UnknownSection "add_equipment_subsidy" stmt) acc
 addEquipmentSubsidy stmt = preStatement stmt
 
 ----------------------------------------
@@ -5297,13 +5282,13 @@ addEquipmentProduction stmt@[pdx| %_ = @scr |] = case aep_type aep of
         addLine a [pdx| amount = %_ |] = a
         -- Which organization builds it, which the wiki says nothing about yet.
         addLine a [pdx| industrial_manufacturer = %_ |] = a
-        addLine a stmt = trace ("unknown section in add_equipment_production: " ++ show stmt) a
+        addLine a stmt = warn (UnknownSection "add_equipment_production" stmt) a
 
         addEquip a [pdx| type = $t |] = a { aep_type = Just t }
         addEquip a [pdx| creator = ?c |] = a { aep_creator = Just c }
         addEquip a [pdx| version_name = ?v |] = a { aep_version = Just v }
         addEquip a [pdx| version = %_ |] = a
-        addEquip a stmt = trace ("unknown section in add_equipment_production@equipment: " ++ show stmt) a
+        addEquip a stmt = warn (UnknownSection "add_equipment_production@equipment" stmt) a
 addEquipmentProduction stmt = preStatement stmt
 
 -----------------------------------------
@@ -5328,12 +5313,12 @@ createProductionLicense stmt@[pdx| %_ = @scr |] =
         addLine (t, tg, v, c) [pdx| target = ?tgt |] = (t, Just (Left tgt), v, c)
         addLine (t, tg, v, c) [pdx| cost_factor = !n |] = (t, tg, v, Just n)
         addLine acc [pdx| new_prioritised = %_ |] = acc
-        addLine acc stmt = trace ("unknown section in create_production_license: " ++ show stmt) acc
+        addLine acc stmt = warn (UnknownSection "create_production_license" stmt) acc
 
         addEquip (t, tg, v, c) [pdx| type = $ty |] = (Just ty, tg, v, c)
         addEquip (t, tg, v, c) [pdx| version_name = ?vn |] = (t, tg, Just vn, c)
         addEquip acc [pdx| version = %_ |] = acc
-        addEquip acc stmt = trace ("unknown section in create_production_license@equipment: " ++ show stmt) acc
+        addEquip acc stmt = warn (UnknownSection "create_production_license@equipment" stmt) acc
 createProductionLicense stmt = preStatement stmt
 
 --------------------------------------------
@@ -5355,7 +5340,7 @@ createFactionFromTemplate stmt@[pdx| %_ = @scr |] =
         addLine (t, n) [pdx| name = ?nm |] = (t, Just nm)
         addLine acc [pdx| icon = %_ |] = acc
         addLine acc [pdx| color = %_ |] = acc
-        addLine acc stmt = trace ("unknown section in create_faction_from_template: " ++ show stmt) acc
+        addLine acc stmt = warn (UnknownSection "create_faction_from_template" stmt) acc
 createFactionFromTemplate [pdx| %_ = $tmpl |] = msgToPP (MsgCreateFactionFromTemplate "" tmpl)
 createFactionFromTemplate stmt = preStatement stmt
 
@@ -5376,7 +5361,7 @@ addUnitsToDivisionTemplate stmt@[pdx| %_ = @scr |] =
         addLine (n, us) [pdx| regiments = @rscr |] = (n, us ++ unitNames rscr)
         addLine (n, us) [pdx| support = @rscr |] = (n, us ++ unitNames rscr)
         addLine (n, us) [pdx| regimental_support = @rscr |] = (n, us ++ unitNames rscr)
-        addLine acc stmt = trace ("unknown section in add_units_to_division_template: " ++ show stmt) acc
+        addLine acc stmt = warn (UnknownSection "add_units_to_division_template" stmt) acc
         -- The number beside each unit is the column it goes in, not how many of
         -- it to add, so there is nothing in it worth reading on the wiki.
         unitNames uscr = [unit | [pdx| $unit = %_ |] <- uscr]
@@ -5403,7 +5388,7 @@ setDivisionTemplateCap stmt@[pdx| %_ = @scr |] =
         addLine (n, c, cv) [pdx| division_template = ?nm |] = (Just nm, c, cv)
         addLine (n, c, cv) [pdx| division_cap = !amt |] = (n, Just amt, cv)
         addLine (n, c, cv) [pdx| division_cap = $var |] = (n, c, Just var)
-        addLine acc stmt = trace ("unknown section in set_division_template_cap: " ++ show stmt) acc
+        addLine acc stmt = warn (UnknownSection "set_division_template_cap" stmt) acc
 setDivisionTemplateCap stmt = preStatement stmt
 
 -------------------------
@@ -5422,7 +5407,7 @@ setTruce stmt@[pdx| %_ = @scr |] =
         addLine (t, d) [pdx| target = $vartag:$var |] = (Just (Right (vartag, var)), d)
         addLine (t, d) [pdx| target = ?tgt |] = (Just (Left tgt), d)
         addLine (t, d) [pdx| days = !n |] = (t, Just n)
-        addLine acc stmt = trace ("unknown section in set_truce: " ++ show stmt) acc
+        addLine acc stmt = warn (UnknownSection "set_truce" stmt) acc
 setTruce stmt = preStatement stmt
 
 ----------------------------
@@ -5459,7 +5444,7 @@ puppetCountry stmt@[pdx| %_ = @scr |] =
         addLine (t, w, c) [pdx| end_civil_wars = no |] = (t, w, False)
         addLine (t, w, c) [pdx| end_civil_wars = yes |] = (t, w, True)
         addLine acc [pdx| always = %_ |] = acc
-        addLine acc stmt = trace ("unknown section in puppet: " ++ show stmt) acc
+        addLine acc stmt = warn (UnknownSection "puppet" stmt) acc
 puppetCountry stmt = withFlag MsgPuppet stmt
 
 -- | How a subject's own wars are dealt with as it is made one.
@@ -5503,7 +5488,7 @@ setPowerBalance stmt@[pdx| %_ = @scr |] =
         addLine (i, v, l, r, d) [pdx| right_side = $s |] = (i, v, l, Just s, d)
         addLine (i, v, l, r, d) [pdx| set_default = yes |] = (i, v, l, r, True)
         addLine acc [pdx| set_default = no |] = acc
-        addLine acc stmt = trace ("unknown section in set_power_balance: " ++ show stmt) acc
+        addLine acc stmt = warn (UnknownSection "set_power_balance" stmt) acc
 setPowerBalance stmt = preStatement stmt
 
 -------------------------------------------
@@ -5522,7 +5507,7 @@ getHighestScoredCountry stmt@[pdx| %_ = @scr |] =
         addLine (s, v) [pdx| scorer = $sc |] = (Just sc, v)
         addLine (s, v) [pdx| var = $vr |] = (s, Just vr)
         addLine (s, v) [pdx| var = ?vr |] = (s, Just vr)
-        addLine acc stmt = trace ("unknown section in get_highest_scored_country: " ++ show stmt) acc
+        addLine acc stmt = warn (UnknownSection "get_highest_scored_country" stmt) acc
 getHighestScoredCountry stmt = preStatement stmt
 
 ------------------------------------
@@ -5581,7 +5566,7 @@ transferUnitsFraction stmt@[pdx| %_ = @scr |] = case tu_target tu of
         addLine t [pdx| keep_unit_leaders_trigger = %_ |] = t
         addLine t [pdx| source_organization = %_ |] = t
         addLine t [pdx| target_organization = %_ |] = t
-        addLine t stmt = trace ("unknown section in transfer_units_fraction: " ++ show stmt) t
+        addLine t stmt = warn (UnknownSection "transfer_units_fraction" stmt) t
 
         share (what, mratio) = case mratio <|> tu_size tu of
             Just ratio -> msgToPP (MsgTransferUnitsShare what ratio)
@@ -5608,6 +5593,6 @@ addResistanceTarget stmt@[pdx| %_ = @scr |] =
         -- way, so this narrows which occupier rather than saying anything new.
         addLine acc [pdx| occupier = %_ |] = acc
         addLine acc [pdx| occupied = %_ |] = acc
-        addLine acc stmt = trace ("unknown section in add_resistance_target: " ++ show stmt) acc
+        addLine acc stmt = warn (UnknownSection "add_resistance_target" stmt) acc
 addResistanceTarget stmt@[pdx| %_ = !amount |] = msgToPP (MsgAddResistanceTarget amount 0 "")
 addResistanceTarget stmt = preStatement stmt
