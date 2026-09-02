@@ -1865,13 +1865,15 @@ data TriggerEvent = TriggerEvent
         { e_id :: Maybe Text
         , e_title_loc :: Maybe Text
         , e_days :: Maybe Double
+        , e_months :: Maybe Double
         , e_hours :: Maybe Double
         , e_random :: Maybe Double
         , e_random_days :: Maybe Double
         , e_random_hours :: Maybe Double
+        , e_for_controller :: Bool
         }
 newTriggerEvent :: TriggerEvent
-newTriggerEvent = TriggerEvent Nothing Nothing Nothing Nothing Nothing Nothing Nothing
+newTriggerEvent = TriggerEvent Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing False
 -- | Handler for effects that fire an event. The Bool says whether ROOT inside
 -- the event being fired is the scope it is fired in -- true of country and
 -- state events, while a news event's ROOT is each country viewing it.
@@ -1887,6 +1889,8 @@ triggerEvent rootIsRecipient evtType stmt@[pdx| %_ = @scr |]
                 return evt { e_id = Just eid, e_title_loc = mevt_t }
         addLine evt [pdx| days = %rhs |]
             = return evt { e_days = floatRhs rhs }
+        addLine evt [pdx| months = %rhs |]
+            = return evt { e_months = floatRhs rhs }
         addLine evt [pdx| hours = %rhs |]
             = return evt { e_hours = floatRhs rhs }
         addLine evt [pdx| random = %rhs |]
@@ -1895,14 +1899,28 @@ triggerEvent rootIsRecipient evtType stmt@[pdx| %_ = @scr |]
             = return evt { e_random_days = floatRhs rhs }
         addLine evt [pdx| random_hours = %rhs |]
             = return evt { e_random_hours = floatRhs rhs }
-        addLine evt _ = return evt
+        -- A state event is fired for the state's owner unless script says to
+        -- fire it for the controller instead.
+        addLine evt [pdx| trigger_for = $whom |]
+            | T.toLower whom == "controller" = return evt { e_for_controller = True }
+            | T.toLower whom == "owner" = return evt
+        -- Points the fired event's FROM.FROM at a country of the script's
+        -- choosing. That only moves a pronoun inside the event being fired;
+        -- nothing about the firing itself changes.
+        addLine evt [pdx| set_from_from = %_ |] = return evt
+        addLine evt [pdx| set_from = %_ |] = return evt
+        addLine evt stmt = warn (UnknownSection "trigger event" stmt) (return evt)
         pp_trigger_event :: TriggerEvent -> PPT g m ScriptMessage
         pp_trigger_event evt = do
-            evtType_t <- messageText evtType
+            evtType_msgt <- messageText evtType
+            -- Script may delay the event in months; the wiki counts a month
+            -- as 30 days, as the game's tooltips do.
+            let evtType_t = evtType_msgt
+                    <> (if e_for_controller evt then " (for its controller)" else "")
             case e_id evt of
                 Just msgid ->
                     let loc = fromMaybe msgid (e_title_loc evt)
-                        time = fromMaybe 0 (e_days evt) * 24 + fromMaybe 0 (e_hours evt)
+                        time = (fromMaybe 0 (e_days evt) + fromMaybe 0 (e_months evt) * 30) * 24 + fromMaybe 0 (e_hours evt)
                         timernd = time + fromMaybe 0 (e_random_days evt) * 24 + fromMaybe 0 (e_random evt) + fromMaybe 0 (e_hours evt)
                         tottimer = formatHours time <> if timernd /= time then " to " <> formatHours timernd else ""
                     in if time > 0 then
