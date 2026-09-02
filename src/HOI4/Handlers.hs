@@ -3734,10 +3734,11 @@ data AddResource = AddResource
         ,   ar_amount :: Maybe Double
         ,   ar_amountvar :: Maybe Text
         ,   ar_state :: Maybe Double
+        ,   ar_statepron :: Maybe Text
         }
 
 newAR :: AddResource
-newAR = AddResource undefined Nothing Nothing Nothing
+newAR = AddResource undefined Nothing Nothing Nothing Nothing
 addResource  :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
 addResource stmt@[pdx| %_ = @scr |]
     = msgToPP =<< pp_ar =<< foldM addLine newAR scr
@@ -3747,11 +3748,16 @@ addResource stmt@[pdx| %_ = @scr |]
         addLine ar [pdx| amount = !num |] = return ar { ar_amount = Just num }
         addLine ar [pdx| amount = $txt |] = return ar { ar_amountvar = Just txt }
         addLine ar [pdx| state = !num |] = return ar { ar_state = Just num }
+        -- The state may also be a pronoun for the state in scope.
+        addLine ar [pdx| state = $txt |] = return ar { ar_statepron = Just txt }
         addLine ar [pdx| show_state_in_tooltip = %_ |] = return ar
         addLine ar stmt = warn (UnknownSection "add_resource" stmt) $ return ar
         pp_ar ar = do
             let buildicon = iconText $ ar_type ar
-            stateloc <- maybe (return "") (getStateLoc . round) $ ar_state ar
+            stateloc <- case (ar_state ar, ar_statepron ar) of
+                (Just num, _) -> getStateLoc (round num)
+                (_, Just pron) -> eGetStateText (Left pron)
+                _ -> return ""
             buildloc <- getGameL10n $ "PRODUCTION_MATERIALS_" <> T.toUpper (ar_type ar)
             case (ar_amount ar, ar_amountvar ar) of
                     (Just amount, _) -> return $ MsgAddResource buildicon buildloc amount stateloc
