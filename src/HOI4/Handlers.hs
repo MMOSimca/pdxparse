@@ -5741,6 +5741,11 @@ transferUnitsFraction stmt@[pdx| %_ = @scr |] = case tu_target tu of
         addLine t [pdx| stockpile_ratio = !n |] = t { tu_stockpile = Just n }
         addLine t [pdx| keep_unit_leaders = yes |] = t { tu_keep_leaders = True }
         addLine t [pdx| keep_unit_leaders = no |] = t { tu_keep_leaders = False }
+        -- The block form lists ids of the leaders to keep. Script only ever
+        -- writes it empty here, which keeps no one, same as the default; a
+        -- list with ids in it means some leaders do stay behind.
+        addLine t [pdx| keep_unit_leaders = @ids |]
+            = if null ids then t else t { tu_keep_leaders = True }
         -- Which leaders go along, and which organizations they are moved
         -- between; neither says anything about how much is handed over.
         addLine t [pdx| keep_unit_leaders_trigger = %_ |] = t
