@@ -3021,8 +3021,12 @@ setAutonomy msg stmt@[pdx| %_ = @scr |]
             return sa { sa_end_civil_wars = False }
         addLine sa [pdx| release_non_owned_controlled = %_|] =
             return sa
+        -- Book-keeping for which states change controller along with the
+        -- autonomy change; nothing the reader would see.
+        addLine sa [pdx| force_change_controller_for_non_ally_controlled = %_|] =
+            return sa
         addLine sa stmt
-            = trace ("unknown section in set_autonomy: " ++ show stmt) $ return sa
+            = warn (UnknownSection "set_autonomy" stmt) $ return sa
         pp_sa sa = do
             let endwar = case (sa_end_wars sa, sa_end_civil_wars sa) of
                     (True, True) -> T.pack " and end wars and civil wars for subject"
