@@ -4622,6 +4622,8 @@ divisionsInState msg stmt@[pdx| %_ = @scr |]
         addLine ds [pdx| amount > !num |] = return ds { ds_comp = "more than", ds_size = num }
         addLine ds [pdx| amount < !num |] = return ds { ds_comp = "less than", ds_size = num }
         addLine ds [pdx| type = $txt |] = return ds { ds_type = Just txt }
+        -- Script names the division kind under either label.
+        addLine ds [pdx| unit = $txt |] = return ds { ds_type = Just txt }
         addLine ds [pdx| state = !num |] = return ds {ds_state = Just num}
         addLine ds [pdx| state = $vartag:$var |] = return ds { ds_statevar = Just (Right (vartag,var))}
         addLine ds [pdx| state = $var |] = return ds { ds_statevar = Just (Left var)}
