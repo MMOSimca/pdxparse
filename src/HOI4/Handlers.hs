@@ -3045,6 +3045,7 @@ setAutonomy _ stmt = preStatement stmt
 ------------------------------
 data SetPolitics = SetPolitics
         {   sp_ruling_party :: Text
+        ,   sp_ruling_partyvar :: Maybe Text
         ,   sp_elections_allowed :: Maybe Text
         ,   sp_last_election :: Maybe Text
         ,   sp_election_frequency :: Maybe Double
@@ -3054,13 +3055,17 @@ data SetPolitics = SetPolitics
         }
 
 newSP :: SetPolitics
-newSP = SetPolitics "<!-- Check Script -->" Nothing Nothing Nothing Nothing Nothing Nothing
+newSP = SetPolitics "<!-- Check Script -->" Nothing Nothing Nothing Nothing Nothing Nothing Nothing
 setPolitics :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
 setPolitics stmt@[pdx| %_ = @scr |]
     = msgToPP =<< pp_sp =<< foldM addLine newSP scr
     where
         addLine :: SetPolitics -> GenericStatement -> PPT g m SetPolitics
         addLine sp [pdx| ruling_party = $txt |] = return sp { sp_ruling_party = txt }
+        -- The party is picked at run time from a variable holding an ideology
+        -- group; there is no name to localize, only the variable to show.
+        addLine sp [pdx| ruling_party = $vartag:$var |] =
+            return sp { sp_ruling_partyvar = Just (vartag <> ":" <> var) }
         addLine sp [pdx| elections_allowed = %_ |] = return sp
         addLine sp [pdx| last_election = %_ |] = return sp
         addLine sp [pdx| election_frequency = $txt |] =
@@ -3073,10 +3078,14 @@ setPolitics stmt@[pdx| %_ = @scr |]
             = warn (UnknownSection "set_politics" stmt) $ return sp
         pp_sp sp = do
             let freq = fromMaybe 0 (sp_election_frequency sp)
-            party <- getGameL10n (sp_ruling_party sp)
+            (partyicon, party) <- case sp_ruling_partyvar sp of
+                Just pv -> return ("", typewriterText pv)
+                Nothing -> do
+                    party <- getGameL10n (sp_ruling_party sp)
+                    return (iconText party, party)
             case sp_election_frequencyvar sp of
-                Just freq -> return $ MsgSetPoliticsVar (iconText party) party freq
-                _ -> return $ MsgSetPolitics (iconText party) party freq
+                Just freqvar -> return $ MsgSetPoliticsVar partyicon party freqvar
+                _ -> return $ MsgSetPolitics partyicon party freq
 setPolitics stmt = preStatement stmt
 
 ------------------------------------
