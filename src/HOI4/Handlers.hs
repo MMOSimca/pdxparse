@@ -2455,8 +2455,15 @@ checkVariable msgWW msgWV stmt@[pdx| %_ = @scr |]
     = msgToPP =<< pp_cv (foldl' addLine newCV scr)
     where
         addLine :: CheckVariable -> GenericStatement -> CheckVariable
+        -- Names the text the game shows in place of the comparison. The
+        -- comparison is still what is checked, so it is what gets written
+        -- out; the key is known here so the short forms below do not take
+        -- it for the variable.
+        addLine cv [pdx| tooltip = %_ |] = cv
         addLine cv [pdx| var = $val |]
             = cv { cv_which = Just val }
+        addLine cv [pdx| var = $vartag:$val |]
+            = cv { cv_which = Just (vartag <> ":" <> val) }
         addLine cv [pdx| value = !val |]
             = cv { cv_value = Just val }
         addLine cv [pdx| value > !val |]
@@ -2501,7 +2508,21 @@ checkVariable msgWW msgWV stmt@[pdx| %_ = @scr |]
         addLine cv [pdx| $var > $vartag:$val |] | isNothing (cv_which cv)
             = cv { cv_which = Just var, cv_which2 = Just (vartag <> ":" <> val), cv_comp = "greater than" }
         -- A variable of another country's is reached through that country, which
-        -- leaves the name on the left carrying tags of its own.
+        -- leaves the name on the left carrying tags of its own. The same
+        -- happens to an array element picked out by another variable
+        -- (@arr@var:idx@), so the two-segment forms cover both.
+        addLine cv [pdx| $a:$b = !val |] | isNothing (cv_which cv)
+            = cv { cv_which = Just (a <> ":" <> b), cv_value = Just val, cv_comp = "equals" }
+        addLine cv [pdx| $a:$b < !val |] | isNothing (cv_which cv)
+            = cv { cv_which = Just (a <> ":" <> b), cv_value = Just val, cv_comp = "less than" }
+        addLine cv [pdx| $a:$b > !val |] | isNothing (cv_which cv)
+            = cv { cv_which = Just (a <> ":" <> b), cv_value = Just val, cv_comp = "greater than" }
+        addLine cv [pdx| $a:$b = $val |] | isNothing (cv_which cv)
+            = cv { cv_which = Just (a <> ":" <> b), cv_which2 = Just val, cv_comp = "equals" }
+        addLine cv [pdx| $a:$b < $val |] | isNothing (cv_which cv)
+            = cv { cv_which = Just (a <> ":" <> b), cv_which2 = Just val, cv_comp = "less than" }
+        addLine cv [pdx| $a:$b > $val |] | isNothing (cv_which cv)
+            = cv { cv_which = Just (a <> ":" <> b), cv_which2 = Just val, cv_comp = "greater than" }
         addLine cv [pdx| $a:$b:$c = $val |] | isNothing (cv_which cv)
             = cv { cv_which = Just (a <> ":" <> b <> ":" <> c), cv_which2 = Just val, cv_comp = "equals" }
         addLine cv stmt = warn (UnknownSection "check_variable" stmt) cv
