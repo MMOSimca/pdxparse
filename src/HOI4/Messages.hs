@@ -4365,9 +4365,9 @@ instance RenderMessage Script ScriptMessage where
         MsgAddDaysRemove { scriptMessageLoc = _loc, scriptMessageKey = _key, scriptMessageAmt = _amt }
             -> mconcat
                 [ increaseOrDecrease _amt
-                , " duration of decision "
+                , " the duration of the "
                 , toMessage (iquotes _loc)
-                , "<!--"
+                , "decision <!--"
                 , _key
                 , "--> by "
                 , toMessage (bold (plainNum _amt))
@@ -4375,9 +4375,9 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgAddDaysRemoveVar { scriptMessageLoc = _loc, scriptMessageKey = _key, scriptMessageAmtText = _amtT }
             -> mconcat
-                [ "Increase or Decrease duration of decision "
+                [ "Increase or decrease the duration of the "
                 , toMessage (iquotes _loc)
-                , "<!--"
+                , "decision <!--"
                 , _key
                 , "--> by "
                 , typewriterText _amtT
@@ -4386,7 +4386,7 @@ instance RenderMessage Script ScriptMessage where
         MsgAddDaysMissionTimeout { scriptMessageLoc = _loc, scriptMessageKey = _key, scriptMessageAmt = _amt }
             -> mconcat
                 [ increaseOrDecrease _amt
-                , " duration of mision "
+                , " the duration of the mission "
                 , toMessage (iquotes _loc)
                 , "<!--"
                 , _key
@@ -4396,7 +4396,7 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgAddDaysMissionTimeoutVar { scriptMessageLoc = _loc, scriptMessageKey = _key, scriptMessageAmtText = _amtT }
             -> mconcat
-                [ "Increase or Decrease duration of mision "
+                [ "Increase or decrease the duration of the mission "
                 , toMessage (iquotes _loc)
                 , "<!--"
                 , _key
