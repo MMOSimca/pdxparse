@@ -9,7 +9,7 @@ module HOI4.Settings (
 
 import Debug.Trace (trace)
 
-import Control.Monad (join, when, forM, filterM, void, unless)
+import Control.Monad (join, when, forM, forM_, filterM, void, unless)
 import Control.Monad.Trans (MonadIO (..), liftIO)
 import Control.Monad.Reader (MonadReader (..), ReaderT (..), asks)
 import Control.Monad.State (MonadState (..), StateT (..), modify, gets)
@@ -25,11 +25,14 @@ import System.IO (hPutStrLn, stderr)
 
 import Abstract -- everything
 import FileIO (buildPath, readScript)
+import ParseWarnings (ParseWarning (..), warnM)
+import QQ (pdx)
 import SettingsTypes ( PPT, Settings (..)
                      , IsGame (..), IsGameData (..), IsGameState (..)
                      , safeIndex, safeLast)
 import HOI4.Types -- everything
 import HOI4.Localization
+import HOI4.WikiTables (tagAliases)
 import Yaml (LocEntry (..))
 
 -- Handlers
@@ -452,6 +455,7 @@ readHOI4Scripts = do
                     "operations" -> "common" </> "operations"
                     "raids" -> "common" </> "raids"
                     "resistance_compliance_modifiers" -> "common" </> "resistance_compliance_modifiers"
+                    "country_tag_aliases" -> "common" </> "country_tag_aliases"
                     _          -> category
                 sourceDir = buildPath settings sourceSubdir
             direxist <- liftIO $ doesDirectoryExist sourceDir
@@ -493,9 +497,11 @@ readHOI4Scripts = do
     buildingscript <- readHOI4Script "buildings"
     mioscript <- readHOI4Script "mio"
     constantscript <- readHOI4Script "script_constants"
-    -- Read only to be searched for fired events and activated decisions.
+    -- Read only to be searched: the first four for fired events and activated
+    -- decisions, the tag aliases to be checked against the hand-kept table.
     extrascripts <- HM.fromList <$> forM
-        ["special_projects", "operations", "raids", "resistance_compliance_modifiers"]
+        ["special_projects", "operations", "raids", "resistance_compliance_modifiers"
+        ,"country_tag_aliases"]
         (\cat -> (,) cat <$> readHOI4Script cat)
     lockeys <- gets (gameL10nKeys . getSettings)
 
@@ -535,6 +541,21 @@ readHOI4Scripts = do
         ,   hoi4lockeys = lockeys
         }
 
+
+-- | Check the game's country tag aliases against the hand-kept display table
+-- ('HOI4.WikiTables.tagAliases'). An alias the table does not know would print
+-- as a bare tag wherever the script names it as a country, and a table entry
+-- the game no longer defines means the game's file moved on while the table
+-- did not; both get a warning so a version bump surfaces them.
+checkTagAliases :: Monad m => GenericScript -> PPT HOI4 m ()
+checkTagAliases scr = do
+    let defined = [ (tag, stmt) | stmt@[pdx| $tag = %_ |] <- scr ]
+    forM_ defined $ \(tag, stmt) ->
+        unless (HM.member tag tagAliases) $
+            warnM (UnknownSection "country tag aliases (add the tag to tagAliases in HOI4.WikiTables)" stmt)
+    forM_ (HM.keys tagAliases) $ \alias ->
+        unless (alias `elem` map fst defined) $
+            warnM (StaleEntry "tagAliases (HOI4.WikiTables)" alias)
 
 -- | Interpret the script ASTs as usable data.
 parseHOI4Scripts :: Monad m => PPT HOI4 m ()
@@ -583,6 +604,7 @@ parseHOI4Scripts = do
 
     extraScripts <- getExtraScripts
     let extra cat = concat (HM.elems (HM.lookupDefault HM.empty cat extraScripts))
+    checkTagAliases (extra "country_tag_aliases")
     let te1 = findTriggeredEventsInEvents HM.empty (HM.elems events)
         te2 = findTriggeredEventsInDecisions te1 (HM.elems decisions)
         te3 = findTriggeredEventsInOnActions te2 (concat (HM.elems on_actions))

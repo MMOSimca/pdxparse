@@ -58,6 +58,11 @@ data ParseWarning
     | BadValue Text GenericStatement
         -- ^ A known section carried a value of an unexpected shape:
         -- which section (e.g. @\"idea picture\"@), offending statement.
+    | StaleEntry Text Text
+        -- ^ A hand-kept table names something the game no longer defines:
+        -- which table, the entry. The entry does no harm on its own -- a
+        -- lookup for it simply never fires -- but it means the game moved
+        -- and the table has not.
 
 renderWarning :: ParseWarning -> String
 renderWarning (TotalFailure what err) =
@@ -68,6 +73,8 @@ renderWarning (UnknownSection what stmt) =
     "Unknown section in " ++ T.unpack what ++ ": " ++ show stmt
 renderWarning (BadValue what stmt) =
     "Bad value for " ++ T.unpack what ++ ": " ++ show stmt
+renderWarning (StaleEntry what entry) =
+    "Stale entry in " ++ T.unpack what ++ ": " ++ T.unpack entry
 
 -- | Report a warning from pure code, passing the given value through.
 warn :: ParseWarning -> a -> a
