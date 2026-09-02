@@ -78,7 +78,7 @@ import MessageTools (boldText, ifThenElseT, plainNum, template, typewriterText)
 import HOI4.CountryNames (casualName)
 import HOI4.Messages (message, messageText, ScriptMessage (..))
 import HOI4.Types -- everything
-import HOI4.WikiTables (iconTerm, scriptIconFileTable)
+import HOI4.WikiTables (iconTerm, scriptIconFileTable, tagAliases)
 
 -- | As 'S.getGameL10n', with the names the text asks the game for filled in.
 getGameL10n :: (HOI4Info g, Monad m) => Text -> PPT g m Text
@@ -543,7 +543,12 @@ allowPronoun expectedScope getLoc name =
 flag :: (HOI4Info g, Monad m) =>
     Maybe HOI4Scope -> Text -> PPT g m Doc
 flag expectscope = allowPronoun expectscope $ \name ->
-                    template "flag" . (:[]) <$> getCountryName name
+    case HM.lookup name tagAliases of
+        -- A tag alias is not a country of its own -- the game resolves it to
+        -- one as the script runs -- so the table says how the wiki names what
+        -- it stands for.
+        Just aliastext -> return $ Doc.strictText aliastext
+        Nothing -> template "flag" . (:[]) <$> getCountryName name
 
 -- | Emit an appropriate phrase for a pronoun.
 -- If a scope is passed, that is the type the current command expects. If they

@@ -17,6 +17,7 @@ module HOI4.WikiTables (
     ,   focusPageSplits
     ,   focusTagPages
     ,   expansionOfPrefix
+    ,   tagAliases
     ) where
 
 import Data.HashMap.Strict (HashMap)
@@ -334,7 +335,7 @@ focusPages = HM.fromList
     , ("goe_shared_saadabad_branch.txt"         , "ssb")
     , ("philippines.txt"                        , "phi")
     , ("indonesia.txt"                          , "ins")
-    , ("indonesia_joint.txt"                    , "ins_join")
+    , ("indonesia_joint.txt"                    , "inshol")
     , ("siam.txt"                               , "sia")
     , ("abdacom_shared_branch.txt"              , "abdacom")
     , ("austro_hungarian_releasable_shared.txt" , "slo")
@@ -369,4 +370,43 @@ focusTagPages :: [(Text, Text)]
 focusTagPages =
     [ ("SPR_", "spr")
     , ("SPA_", "spa")
+    ]
+
+-- | Country tag aliases and the wiki text each stands for. An alias, defined
+-- in @common/country_tag_aliases@, is a three-letter tag that is not a country
+-- of its own: the game resolves it when the script runs, by trigger (VIC is
+-- France while she runs the Vichy focus tree), by best score (SOU is whichever
+-- Soviet successor exists, Stalin's first), or by reading a variable (SB1 is
+-- whoever Switzerland is appeasing). There being no country behind the tag,
+-- there is no flag or localization to fall back on, so what the alias means is
+-- written out by hand here -- one entry per alias in the game's file, in its
+-- order. The text is finished wikitext: a flag template where the wiki has a
+-- page for the resolved country, a base flag with a qualifier where it only
+-- has the parent country's, and a phrase for the variable-driven ones.
+tagAliases :: HashMap Text Text
+tagAliases = HM.fromList
+    [ ("SPA", "{{flag|Nationalist Spain}}")
+    , ("SPB", "{{flag|Carlist Spain}}")
+    , ("SPC", "{{flag|Anarchist Spain}}")
+    , ("SPD", "{{flag|Republican Spain}}")
+    , ("VIC", "{{flag|Vichy France}}")
+    , ("BUZ", "{{flag|Bulgaria}} (Zveno government)")
+    , ("BUF", "{{flag|Bulgaria}} (Fatherland Front)")
+    , ("SOS", "{{flag|Soviet Union}} (Stalinist)")
+    , ("SOT", "{{flag|Soviet Union}} (left opposition)")
+    , ("SOB", "{{flag|Soviet Union}} (right opposition)")
+    , ("SOP", "{{flag|Soviet Union}} (provisional government)")
+    -- Whichever Soviet successor exists, Stalin's Soviet Union first.
+    , ("SOU", "{{flag|Soviet Union}}")
+    , ("RSI", "{{flag|Italian Social Republic}}")
+    , ("RDS", "{{flag|Kingdom of Italy}} (Regno del Sud)")
+    , ("SB1", "the country named in <tt>SWI.SWI_country_to_appease_1</tt>")
+    , ("SB2", "the country named in <tt>SWI.SWI_country_to_appease_2</tt>")
+    , ("SB3", "the country named in <tt>SWI.SWI_country_to_appease_3</tt>")
+    , ("SB4", "the country named in <tt>SWI.SWI_country_to_appease_4</tt>")
+    , ("FNO", "{{flag|Norway}} (fascist)")
+    , ("FGR", "{{flag|German Reich}}")
+    -- Reads @generic_operation_target@, set weekly for each major with an
+    -- intelligence agency.
+    , ("MOT", "the operation's target country")
     ]
