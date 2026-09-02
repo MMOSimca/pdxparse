@@ -696,7 +696,7 @@ compoundMessageExtract xtract header [pdx| %_ = @scr |]
     = withCurrentIndent $ \i -> do
         let (mxtracted, rest) = extractStmt (matchLhsText xtract) scr
             xtracted = case mxtracted of
-                Just [pdx| %_ = $txt |] -> txt
+                Just [pdx| %_ = ?txt |] -> txt
                 _-> "<!-- Check game Script -->"
         script_pp'd <- ppMany rest
         return ((i, header xtracted) : script_pp'd)
