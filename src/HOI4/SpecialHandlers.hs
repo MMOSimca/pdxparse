@@ -1606,10 +1606,15 @@ createOperativeLeader stmt@[pdx| %_ = @scr |]
                         flagged <- mapM (flagText (Just HOI4Country)) nats
                         return $ T.intercalate ", " flagged
                     _ -> return ""
-            basemsg <- msgToPP $ MsgCreateOperativeLeader (co_name co) natmsg (fromMaybe "" (co_gender co)) (co_bypass_recruitment co) (co_available_to_spy_master co)
+            -- Script names the operative by a localization key as often as by
+            -- a quoted name; the key resolves where one exists and stands as
+            -- written where it does not.
+            nameloc <- getGameL10n (co_name co)
+            basemsg <- msgToPP $ MsgCreateOperativeLeader nameloc natmsg (fromMaybe "" (co_gender co)) (co_bypass_recruitment co) (co_available_to_spy_master co)
             traitsmsg <- case co_traits co of
                 Just traits -> concatMapM (\t -> do
-                    namemsg <- indentUp $ plainMsg' ("'''" <> t <> "'''")
+                    tloc <- getGameL10n t
+                    namemsg <- indentUp $ plainMsg' ("'''" <> tloc <> "'''")
                     traitmsg <- indentUp $ indentUp $ getUnitTraits t
                     return $ namemsg : traitmsg
                     ) traits
