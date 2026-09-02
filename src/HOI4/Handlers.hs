@@ -5351,16 +5351,23 @@ transferShip stmt = preStatement stmt
 -- are named either outright or by a scripted trigger.
 addEquipmentSubsidy :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
 addEquipmentSubsidy stmt@[pdx| %_ = @scr |] =
-    case foldl' addLine (Nothing, 0, [], Nothing) scr of
+    case foldl' addLine (Nothing, Left 0, [], Nothing) scr of
         (Just eqtype, cic, sellers, mtrigger) -> do
             eqloc <- T.strip <$> getGameL10n eqtype
             sellerlocs <- traverse (flagText (Just HOI4Country)) sellers
-            msgToPP $ MsgAddEquipmentSubsidy cic eqloc
-                        (joinClauses sellerlocs) (fromMaybe "" mtrigger)
+            msgToPP $ case cic of
+                Left n -> MsgAddEquipmentSubsidy n eqloc
+                            (joinClauses sellerlocs) (fromMaybe "" mtrigger)
+                Right v -> MsgAddEquipmentSubsidyVar v eqloc
+                            (joinClauses sellerlocs) (fromMaybe "" mtrigger)
         _ -> preStatement stmt
     where
         addLine (t, c, s, g) [pdx| equipment_type = $ty |] = (Just ty, c, s, g)
-        addLine (t, c, s, g) [pdx| cic = !n |] = (t, n, s, g)
+        addLine (t, c, s, g) [pdx| cic = !n |] = (t, Left n, s, g)
+        -- The capacity set aside may be held in a variable or a script
+        -- constant instead of being written as a number.
+        addLine (t, c, s, g) [pdx| cic = $v |] = (t, Right v, s, g)
+        addLine (t, c, s, g) [pdx| cic = $vartag:$var |] = (t, Right (vartag <> ":" <> var), s, g)
         addLine (t, c, s, g) [pdx| seller_tags = @tags |] =
             (t, c, s ++ [tag | StatementBare (GenericLhs tag []) <- tags], g)
         addLine (t, c, s, g) [pdx| seller_trigger = $trg |] = (t, c, s, Just trg)

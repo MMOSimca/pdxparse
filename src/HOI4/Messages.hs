@@ -921,6 +921,7 @@ data ScriptMessage
     | MsgCreateShip {scriptMessageAmt :: Double, scriptMessageWhat :: Text, scriptMessageWhat2 :: Text, scriptMessageName :: Text, scriptMessageWho :: Text}
     | MsgTransferShip {scriptMessageWhat :: Text, scriptMessageName :: Text, scriptMessageWho :: Text}
     | MsgAddEquipmentSubsidy {scriptMessageAmt :: Double, scriptMessageWhat :: Text, scriptMessageWho :: Text, scriptMessageWhy :: Text}
+    | MsgAddEquipmentSubsidyVar {scriptMessageAmtText :: Text, scriptMessageWhat :: Text, scriptMessageWho :: Text, scriptMessageWhy :: Text}
     | MsgAddEquipmentProduction {scriptMessageAmt :: Double, scriptMessageWhat :: Text, scriptMessageWhat2 :: Text, scriptMessageWho :: Text, scriptMessageName :: Text, scriptMessageAmt2 :: Double, scriptMessageBonus :: Double}
     | MsgCreateProductionLicense {scriptMessageWho :: Text, scriptMessageWhat :: Text, scriptMessageWhat2 :: Text, scriptMessageBonus :: Double}
     | MsgCreateFactionFromTemplate {scriptMessageWhat :: Text, scriptMessageKey :: Text}
@@ -6183,6 +6184,15 @@ instance RenderMessage Script ScriptMessage where
             -> mconcat
                 [ "Set aside "
                 , toMessage (bold (plainNumMin _amt))
+                , " {{icon|cic|1}} to buy "
+                , _what
+                , ifThenElseT (T.null _who) "" (" from " <> _who)
+                , ifThenElseT (T.null _why) "" (" from any seller matching " <> typewriterText _why)
+                ]
+        MsgAddEquipmentSubsidyVar {scriptMessageAmtText = _amtT, scriptMessageWhat = _what, scriptMessageWho = _who, scriptMessageWhy = _why}
+            -> mconcat
+                [ "Set aside "
+                , typewriterText _amtT
                 , " {{icon|cic|1}} to buy "
                 , _what
                 , ifThenElseT (T.null _who) "" (" from " <> _who)
