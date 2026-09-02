@@ -2968,6 +2968,9 @@ foldCompound "addToWar" "AddToWar" "atw"
     [CompField "targeted_alliance" [t|Text|] Nothing True
     ,CompField "enemy" [t|Text|] Nothing True
     ,CompField "hostility_reason" [t|Text|] Nothing False -- guarantee, asked_to_join, war, ally
+    -- Joins only the war against the named enemy instead of every war the
+    -- ally is in; nothing worth writing out beyond the war already named.
+    ,CompField "single_target_only" [t|Text|] Nothing False
     ]
     [|  do
         let reason = case _hostility_reason of
