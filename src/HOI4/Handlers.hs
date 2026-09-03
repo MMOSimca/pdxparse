@@ -414,6 +414,22 @@ ppMtth isTriggeredOnly = ppMtth' . foldl' addField newMTTH
 -- General statement handlers --
 --------------------------------
 
+-- | Put a header over the lines of a block, dropping the header along with the
+-- block where it would be left standing over nothing.
+--
+-- A block whose contents all come to nothing -- script's own book-keeping,
+-- such as telling the game to draw the focus tree again -- would otherwise
+-- leave a header over an empty list, which tells the reader nothing and reads
+-- as though something had gone missing.
+--
+-- Handlers whose header names the thing being asked after do not use this: a
+-- scope trigger with no conditions written under it asks whether there is
+-- anything there at all -- whether any state lies in the region an
+-- @any_state_in@ names -- and that question is the whole of what it says.
+headed :: Int -> ScriptMessage -> IndentedMessages -> IndentedMessages
+headed _ _ [] = []
+headed i header body = (i, header) : body
+
 -- | Generic handler for a simple compound statement. Usually you should use
 -- 'compoundMessage' instead so the text can be localized.
 compound :: (HOI4Info g, Monad m) =>
@@ -423,7 +439,7 @@ compound header [pdx| %_ = @scr |]
     = withCurrentIndent $ \_ -> do -- force indent level at least 1
         headerMsg <- plainMsg (header <> ":")
         scriptMsgs <- ppMany scr
-        return $ headerMsg ++ scriptMsgs
+        return $ if null scriptMsgs then [] else headerMsg ++ scriptMsgs
 compound _ stmt = preStatement stmt
 
 -- | Generic handler for a simple compound statement.
@@ -433,7 +449,7 @@ compoundMessage :: (HOI4Info g, Monad m) =>
 compoundMessage header [pdx| %_ = @scr |]
     = withCurrentIndent $ \i -> do
         script_pp'd <- ppMany scr
-        return ((i, header) : script_pp'd)
+        return (headed i header script_pp'd)
 compoundMessage _ stmt = preStatement stmt
 
 -- | Handler for @prioritize@, which names the states a scope should pick from
@@ -476,7 +492,7 @@ compoundMessageScope header stmt@[pdx| %_ = @scr |]
         case mclause of
             Nothing -> do
                 script_pp'd <- ppMany scr
-                return ((i, header) : script_pp'd)
+                return (headed i header script_pp'd)
             Just clause -> do
                 headtext <- messageText header
                 priomsgs <- maybe (return []) prioritize mprio
@@ -486,7 +502,7 @@ compoundMessageScope header stmt@[pdx| %_ = @scr |]
                         else " (" <> T.intercalate ", " priotexts <> ")"
                     heading = T.dropWhileEnd (== ':') (T.stripEnd headtext)
                         <> aside <> " that " <> clause <> ":"
-                return ((i, MsgUnprocessed heading) : script_pp'd)
+                return (headed i (MsgUnprocessed heading) script_pp'd)
 compoundMessageScope _ stmt = preStatement stmt
 
 -- | Generic handler for a compound statement whose @limit@ block is the
@@ -504,13 +520,13 @@ compoundMessageCondition header stmt@[pdx| %_ = @scr |]
         case mclause of
             Nothing -> do
                 script_pp'd <- ppMany scr
-                return ((i, header) : script_pp'd)
+                return (headed i header script_pp'd)
             Just clause -> do
                 headtext <- messageText header
                 script_pp'd <- ppMany rest
                 let heading = T.dropWhileEnd (== ':') (T.stripEnd headtext)
                         <> " " <> clause <> ":"
-                return ((i, MsgUnprocessed heading) : script_pp'd)
+                return (headed i (MsgUnprocessed heading) script_pp'd)
 compoundMessageCondition _ stmt = preStatement stmt
 
 -- | The most conditions that will be joined onto a header line rather than
@@ -774,7 +790,7 @@ compoundMessagePronoun stmt@[pdx| $head = @scr |] = withCurrentIndent $ \i -> do
       Just val -> do
         valtext <- scopeValText val
         script_pp'd <- scope (scopeValType val) $ withThisIdent (Just val) $ ppMany scr
-        return $ (i, MsgUnprocessed (valtext <> ":")) : script_pp'd
+        return $ headed i (MsgUnprocessed (valtext <> ":")) script_pp'd
       Nothing -> do
         params <- withCurrentFile $ \f -> case T.toLower head of
             "root" -> --do --ROOT
@@ -825,10 +841,10 @@ compoundMessagePronoun stmt@[pdx| $head = @scr |] = withCurrentIndent $ \i -> do
         case params of
             (Just newscope, Just scopemsg) -> do
                 script_pp'd <- scope newscope $ withThisIdent mrootval $ ppMany scr
-                return $ (i, scopemsg) : script_pp'd
+                return $ headed i scopemsg script_pp'd
             (Nothing, Just scopemsg) -> do
                 script_pp'd <- scope HOI4Custom $ ppMany scr
-                return $ (i, scopemsg) : script_pp'd
+                return $ headed i scopemsg script_pp'd
             _ -> do
                 withCurrentFile $ \f -> do
                     traceM $ "compoundMessagePronoun: " ++ f ++ ": potentially invalid use of " ++ T.unpack head ++ " in " ++ show stmt
@@ -4169,7 +4185,7 @@ arrayLoop header [pdx| %_ = @scr |] = withCurrentIndent $ \i -> do
             Just [pdx| %_ = ?a |] -> a
             _ -> "<!-- Check Script -->"
     script_pp'd <- ppMany rest
-    return ((i, header arr) : script_pp'd)
+    return (headed i (header arr) script_pp'd)
 arrayLoop _ stmt = preStatement stmt
 
 -------------------------------
@@ -4826,7 +4842,7 @@ countTriggers stmt@[pdx| %_ = @scr |] =
         let (mamount, rest) = extractStmt (matchLhsText "amount") scr
             withAmount num comp = do
                 script_pp'd <- ppMany rest
-                return ((i, MsgCountTriggers num comp) : script_pp'd)
+                return (headed i (MsgCountTriggers num comp) script_pp'd)
         case mamount of
             Just [pdx| %_ = !num |] -> withAmount num "At least"
             Just [pdx| %_ > !num |] -> withAmount num "More than"
@@ -4861,8 +4877,8 @@ forLoopEffect [pdx| %_ = @scr |] = withCurrentIndent $ \i -> do
             Just [pdx| %_ = $var |] -> var
             _ -> "v"
     script_pp'd <- ppMany rest
-    return ((i, MsgForLoop loopvar (bound "0" mstart) (bound "0" mend) (bound "1" madd))
-            : script_pp'd)
+    return (headed i (MsgForLoop loopvar (bound "0" mstart) (bound "0" mend) (bound "1" madd))
+            script_pp'd)
 forLoopEffect stmt = preStatement stmt
 
 -----------------------------------------------------

@@ -14,8 +14,8 @@ import Control.Monad.Except (MonadError (..))
 import Control.Monad.State (gets)
 import Control.Monad.Trans (MonadIO (..))
 
-import Data.Char (isSpace, toLower)
-import Data.List (nub)
+import Data.Char (isSpace, isUpper, toLower)
+import Data.List (nub, partition)
 import Control.Arrow (first)
 import Data.Either (partitionEithers)
 import Data.Maybe (catMaybes, fromMaybe, listToMaybe, mapMaybe)
@@ -518,9 +518,95 @@ ppMutuallyExclusive (Just mex) = ppTitle mex
             let excl = [mexfol, mexcpp, PP.line]
             return excl
 
+-- | The game rule that tidies away branches the player can no longer take. It
+-- is a display setting, off the focus tree rather than on the country, and the
+-- wiki draws every focus whatever it is set to -- so nothing script hangs on it
+-- is a requirement a reader has to meet.
+obsoleteBranchRule :: Text
+obsoleteBranchRule = "obsolete_focus_branches_visibility"
+
+-- | The check that asks whether that rule is on. Script writes it out, or
+-- reaches it through @has_hide_rule@, a scripted trigger the game defines as
+-- that one check and nothing else.
+isObsoleteBranchRule :: GenericStatement -> Bool
+isObsoleteBranchRule [pdx| has_game_rule = @scr |] = any named scr
+    where
+        named [pdx| rule = $r |] = r == obsoleteBranchRule
+        named _ = False
+isObsoleteBranchRule [pdx| has_hide_rule = yes |] = True
+isObsoleteBranchRule _ = False
+
+-- | Whether these statements ask nothing but which focuses have been completed,
+-- through whatever logic blocks script wraps them in. A country named in front
+-- of the check -- a joint tree asking after its partner's progress -- is still
+-- only a focus check.
+onlyFocusChecks :: GenericScript -> Bool
+onlyFocusChecks = all isFocusCheck
+    where
+        isFocusCheck [pdx| has_completed_focus = %_ |] = True
+        isFocusCheck [pdx| $lhs = @scr |]
+            | T.toLower lhs `elem` ["not", "or", "and"] = onlyFocusChecks scr
+            | isCountryTag lhs = onlyFocusChecks scr
+        isFocusCheck _ = False
+        isCountryTag t = T.length t == 3 && T.all isUpper t
+
+-- | Whether a statement of an @allow_branch@ block does nothing but hide a
+-- branch the player has already turned away from. Script writes that two ways:
+--
+-- @
+--     if = { limit = { has_game_rule = { rule = obsolete_focus_branches_visibility option = HIDE } }
+--            NOT = { has_completed_focus = ... } }
+--     NOT = { AND = { has_game_rule = { rule = obsolete_focus_branches_visibility option = HIDE }
+--                     OR = { has_completed_focus = ... } } }
+-- @
+--
+-- Both come to nothing unless the player has turned the rule on, and what they
+-- turn on is only which focuses are done, so neither says anything the wiki
+-- shows. A branch that asks something else of the country as well -- Denmark's
+-- ask that she is nobody's subject -- is a real requirement and is kept.
+hidesObsoleteBranch :: GenericStatement -> Bool
+hidesObsoleteBranch [pdx| $lhs = @scr |]
+    | T.toLower lhs == "if"
+    , (limits, rest) <- partition isLimit scr
+    , [[pdx| %_ = @lim |]] <- limits
+    = not (null lim) && all isObsoleteBranchRule lim && onlyFocusChecks rest
+    | T.toLower lhs == "not"
+    , [[pdx| $inner = @conds |]] <- scr
+    , T.toLower inner == "and"
+    , (rules, rest) <- partition isObsoleteBranchRule conds
+    = not (null rules) && onlyFocusChecks rest
+    where
+        isLimit [pdx| limit = @_ |] = True
+        isLimit _ = False
+hidesObsoleteBranch _ = False
+
+-- | Take the obsolete-branch rule check out of the conditions that are kept,
+-- and tidy away what that leaves behind: a block holding nothing else goes with
+-- it, and an @if@ left without its @limit@ tests nothing, so what it held is
+-- written where it stood.
+stripObsoleteBranchRule :: GenericScript -> GenericScript
+stripObsoleteBranchRule = concatMap strip
+    where
+        -- The check reached through the scripted trigger carries a plain
+        -- @yes@, so what it is written on is tested before its shape.
+        strip stmt | isObsoleteBranchRule stmt = []
+        strip (Statement lhs op (CompoundRhs scr)) =
+            case stripObsoleteBranchRule scr of
+                [] -> []
+                scr' | isIf lhs, not (any isLimit scr') -> scr'
+                     | otherwise -> [Statement lhs op (CompoundRhs scr')]
+        strip stmt = [stmt]
+        isIf (GenericLhs t []) = T.toLower t == "if"
+        isIf _ = False
+        isLimit [pdx| limit = @_ |] = True
+        isLimit _ = False
+
 ppAllowBranch :: (HOI4Info g, Monad m) => Maybe GenericScript -> PPT g m [Doc]
 ppAllowBranch Nothing = return [""]
-ppAllowBranch (Just abr) = ppTitle abr
+ppAllowBranch (Just abr) =
+    case stripObsoleteBranchRule (filter (not . hidesObsoleteBranch) abr) of
+        [] -> return [""]
+        kept -> ppTitle kept
     where
         ppTitle awbr = do
             let awbrfol = mconcat [Doc.strictText "* Allow Branch if:", PP.line]
