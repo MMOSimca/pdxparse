@@ -7650,7 +7650,7 @@ type StatementHandler g m = GenericStatement -> PPT g m IndentedMessages
 -- and how many decimal places the game writes it to -- 'Nothing' for as many as
 -- the value happens to have. The three are the same three things the game's own
 -- @common\/modifier_definitions@ gives for a modifier a mod adds.
--- See "HOI4.SpecialHandlers".modifiersTable.
+-- See "HOI4.ModifierTable".modifiersTable.
 type ModifierDisplay = (Text, Text -> Maybe Int -> Double -> ScriptMessage, Maybe Int)
 
 -- | A modifier that is only ever on or off writes no number, so it has no
@@ -7892,7 +7892,7 @@ choicesAbove = go []
 
 -- | Tell Template:States to write "or" between the last two states it names,
 -- wherever the line naming them stands under a heading that asks for only one.
--- 'HOI4.SpecialHandlers.chunkStates' draws such a run together where what
+-- 'HOI4.Handlers.Chunks.chunkStates' draws such a run together where what
 -- stands under it can be seen, and it reaches here as a template already
 -- written out rather than as a run of lines still to be drawn together.
 --
@@ -7939,7 +7939,7 @@ rollUpHeaders = go
 --
 -- Only lines with nothing written under them are drawn together. A line with a
 -- list of its own under it is a heading, and two headings saying the same need
--- not head the same thing; those are 'HOI4.SpecialHandlers.chunkStates' to draw
+-- not head the same thing; those are 'HOI4.Handlers.Chunks.chunkStates' to draw
 -- together, where what stands under them can be seen.
 rollUpStates :: [SaidLine] -> [SaidLine]
 rollUpStates said = map rejoin (groupBy alike (zip3 said standalone choices))

@@ -44,7 +44,7 @@ import qualified Doc
 import HOI4.Messages
 import MessageTools
 
-import HOI4.SpecialHandlers (modifierMSG)
+import HOI4.Handlers.Modifiers (modifierMSG)
 import System.FilePath (takeBaseName)
 
 parseHOI4OpinionModifiers :: (HOI4Info g, Monad m) =>

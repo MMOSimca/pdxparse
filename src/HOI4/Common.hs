@@ -48,7 +48,6 @@ import HOI4.Handlers -- everything
 import HOI4.Localization (flagText, eflag, isTag, getStateLoc, getRegionLoc, pronoun, eGetState
                          , tryLoc, tryLocAndIcon, tryLocAndIconTitle, tryLocMaybe, flagMaybeText
                          , advisorName, mioName)
-import HOI4.SpecialHandlers -- everything
 import HOI4.Types -- everything
 
 -- no particular order from here... TODO: organize this!
@@ -600,7 +599,7 @@ handlersLocRhs = Tr.fromList
         ,("has_state_category"    , withLocAtom MsgHasStateCategory)
         ,("has_country_leader_ideology" , withLocAtom MsgHasCountryLeaderIdeology)
         -- The rules are localized under their name in capitals, the same way
-        -- 'HOI4.Handlers.setRule' looks them up.
+        -- 'HOI4.Handlers.Politics.setRule' looks them up.
         ,("has_rule"              , withLocAtom' MsgHasCountryRule T.toUpper)
         ,("is_researching_technology" , withLocAtom MsgIsResearchingTechnology)
         ,("set_faction_name"      , withLocAtom MsgSetFactionName)

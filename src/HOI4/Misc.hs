@@ -382,7 +382,7 @@ parseHOI4ModifierDefinition = onTopLevelCompound "modifier definition" $ \id par
 
 
 -- | The modifier localization keys that read as headings (all-caps), in the
--- order the given key list puts them; 'HOI4.SpecialHandlers.sortmods' sorts
+-- order the given key list puts them; 'HOI4.Handlers.Modifiers.sortmods' sorts
 -- modifier blocks by them.
 parseHOI4LocKeys :: Monad m => [Text] -> PPT g m [Text]
 parseHOI4LocKeys order = return $ map fst (sortOn (\x -> elemIndex (snd x) order) . filter (modchk . snd) . HM.toList . HM.map (\(loc,_,_) -> loc) $ modifiersTable)
