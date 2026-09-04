@@ -87,7 +87,7 @@ ppMany scr = indentUp (concat <$> (mapM ppChunk =<< chunkScript scr))
 -- | Extract the appropriate message(s) from one chunk of a script.
 ppChunk :: (HOI4Info g, Monad m) => ScriptChunk -> PPT g m IndentedMessages
 ppChunk (PlainStmt stmt) = ppOne stmt
-ppChunk (DynModChunk dmod isSet mods) = ppDynModChunk dmod isSet mods
+ppChunk (DynModChunk tts dmods isSet mods) = ppDynModChunk tts dmods isSet mods
 ppChunk (IdeaSlotChunk tt ideas) = ppIdeaSlotChunk tt ideas
 ppChunk (StateChunk states block_pp) = do
     header <- msgToPP (MsgState states)

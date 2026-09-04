@@ -13,9 +13,11 @@ module HOI4.Handlers.Chunks (
     ,   ppDynModChunk
     ) where
 
+import Control.Monad (foldM)
+import Data.Foldable (fold)
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
-import Data.List (foldl', groupBy)
+import Data.List (foldl', groupBy, nub, sortOn)
 import Data.Maybe
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -23,7 +25,7 @@ import qualified Data.Text as T
 import Abstract -- everything
 import qualified Doc -- everything
 import QQ -- everything
-import SettingsTypes (PPT, scope, concatMapM)
+import SettingsTypes (PPT, scope, concatMapM, indentUp)
 
 import {-# SOURCE #-} HOI4.Common (ppMany, ppOne)
 import HOI4.Localization
@@ -32,7 +34,7 @@ import HOI4.Types -- everything
 
 import HOI4.Handlers.Core (msgToPP, plainMsg)
 import HOI4.Handlers.Ideas (showIdea, showIdeaUnderHeading)
-import HOI4.Handlers.Modifiers (ppDynModBox)
+import HOI4.Handlers.Modifiers (modifierMSG, ppDynModBox)
 
 -------------------------------------------------------
 -- Runs of statements that only make sense together  --
@@ -45,9 +47,13 @@ data DynModOp = DynModSet | DynModAdd | DynModSub deriving (Eq)
 -- together pulled out of it.
 data ScriptChunk
     = PlainStmt GenericStatement
-    | DynModChunk HOI4DynamicModifier Bool [(Text, Double)]
-      -- ^ The modifier, whether its values are set rather than added to, and
-      --   the modifier keys affected with their new values.
+    | DynModChunk [GenericStatement] [HOI4DynamicModifier] Bool [(Text, Double)]
+      -- ^ The statements announcing which modifier is about to change, if
+      --   any; the modifiers reading the variables written -- usually one, but
+      --   script sometimes has several read the same ones, so that the country
+      --   can swap one for another and keep what it has built up -- whether
+      --   their values are set rather than added to, and the modifier keys
+      --   affected with their new values.
     | IdeaSlotChunk GenericStatement [GenericStatement]
       -- ^ The tooltip announcing that a slot's ideas change, and the
       --   @show_ideas_tooltip@ statements naming the ideas it announces.
@@ -151,34 +157,84 @@ chunkDynModVars scr
     | not (any (isJust . dynModVarOp) scr) = return (map PlainStmt scr)
     | otherwise = do
         varTable <- dynModVarTable <$> getDynamicModifiers
-        return $ reverse $ foldl' (addChunk varTable) [] scr
+        effects <- getScriptedEffects
+        reverse <$> foldM (addChunk varTable effects) [] scr
     where
-        addChunk table chunks stmt = case resolve table =<< dynModVarOp stmt of
-            Nothing -> PlainStmt stmt : chunks
-            Just (dmod, key, isSet, val) -> case chunks of
-                DynModChunk dmod' isSet' mods : rest
-                    | dmodName dmod' == dmodName dmod && isSet' == isSet ->
-                        DynModChunk dmod' isSet' (mods ++ [(key, val)]) : rest
+        addChunk table effects chunks stmt = case resolve table =<< dynModVarOp stmt of
+            Nothing -> return (PlainStmt stmt : chunks)
+            Just (dmods, key, isSet, val) -> case chunks of
+                -- Sibling modifiers reading the same variables do not always
+                -- read every one of them, and a run written as one is shown
+                -- as one: it is the same modifier (whichever the country has)
+                -- changing, so the run keeps every modifier it touches.
+                DynModChunk tts dmods' isSet' mods : rest
+                    | any (`elem` map dmodName dmods') (map dmodName dmods) && isSet' == isSet ->
+                        return (DynModChunk tts (union dmods' dmods) isSet' (mods ++ [(key, val)]) : rest)
                 -- The tooltip right before such a run is the game's way of
-                -- announcing which modifier is about to change; the effect box
-                -- says as much, so drop it rather than say it twice.
-                PlainStmt prev : rest | isCustomTooltip prev ->
-                    DynModChunk dmod isSet [(key, val)] : rest
-                _ -> DynModChunk dmod isSet [(key, val)] : chunks
+                -- announcing which modifier is about to change, so it goes
+                -- with the run rather than standing on its own before it.
+                _ -> do
+                    (tts, rest) <- announcement effects chunks
+                    return (DynModChunk tts dmods isSet [(key, val)] : rest)
         resolve table (op, var, val) = do
-            (dmod, key) <- HM.lookup var table
-            return (dmod, key, op == DynModSet, if op == DynModSub then negate val else val)
+            (dmods, key) <- HM.lookup var table
+            return (dmods, key, op == DynModSet, if op == DynModSub then negate val else val)
+        union old new = sortOn dmodName $
+            old ++ filter ((`notElem` map dmodName old) . dmodName) new
+        -- The statements at the front of the chunks (which run backwards)
+        -- that announce which modifier is about to change, in the order they
+        -- were written, and the chunks left once they are taken off.
+        --
+        -- Where which modifier is changing depends on the state of the game
+        -- -- the country has swapped one modifier for another reading the
+        -- same variables, or has not -- script writes a tooltip for each case,
+        -- under @if@ and @else@, or calls a scripted effect holding nothing
+        -- but that chain. A tooltip with no text between the announcement and
+        -- the run is only spacing, and is passed over.
+        announcement effects chunks = case chunks of
+            PlainStmt prev : rest
+                | isCustomTooltip prev -> do
+                    quiet <- saysNothing (PlainStmt prev)
+                    if quiet then announcement effects rest else return ([prev], rest)
+                | announces effects prev -> return $ case branch prev of
+                    Just lhs | lhs /= "if" -> fromMaybe ([], chunks) (chain [prev] rest)
+                    _ -> ([prev], rest)
+            _ -> return ([], chunks)
+        -- An @else@ is only an announcement along with the @if@ it belongs to.
+        -- If the chain back to that has anything else in it, nothing is taken.
+        chain sofar (PlainStmt prev : rest)
+            | announces HM.empty prev, Just lhs <- branch prev =
+                if lhs == "if" then Just (prev : sofar, rest) else chain (prev : sofar) rest
+        chain _ _ = Nothing
+        -- Whether a statement does nothing but say which modifier is about to
+        -- change: a tooltip, a branch holding only those, or a call to a
+        -- scripted effect holding only those.
+        announces effects stmt = case stmt of
+            [pdx| custom_effect_tooltip = %_ |] -> True
+            [pdx| $_ = @scr |] | isJust (branch stmt) -> announcesAll (filter (not . isLimit) scr)
+            [pdx| $name = yes |] | Just [pdx| %_ = @scr |] <- HM.lookup name effects
+                -> announcesAll scr
+            _ -> False
+            where announcesAll body = not (null body) && all (announces HM.empty) body
+        branch [pdx| $lhs = @_ |]
+            | T.toLower lhs `elem` ["if", "else_if", "else"] = Just (T.toLower lhs)
+        branch _ = Nothing
         isCustomTooltip [pdx| custom_effect_tooltip = %_ |] = True
         isCustomTooltip _ = False
+        isLimit [pdx| limit = %_ |] = True
+        isLimit _ = False
 
--- | Map each variable that a dynamic modifier reads a value from to that
--- modifier and the modifier key it supplies.
-dynModVarTable :: HashMap Text HOI4DynamicModifier -> HashMap Text (HOI4DynamicModifier, Text)
-dynModVarTable = HM.fromList . concatMap entries . HM.elems
+-- | Map each variable that a dynamic modifier reads a value from to the
+-- modifiers reading it and the modifier key it supplies. The modifiers are
+-- named in a settled order, since the table they come from has none.
+dynModVarTable :: HashMap Text HOI4DynamicModifier -> HashMap Text ([HOI4DynamicModifier], Text)
+dynModVarTable = HM.map settle . HM.fromListWith shared . concatMap entries . HM.elems
     where
         entries dmod = mapMaybe (entry dmod) (dmodEffects dmod)
-        entry dmod [pdx| $key = $var |] = Just (var, (dmod, key))
+        entry dmod [pdx| $key = $var |] = Just (var, ([dmod], key))
         entry _ _ = Nothing
+        shared (dmods, key) (dmods', _) = (dmods ++ dmods', key)
+        settle (dmods, key) = (sortOn dmodName dmods, key)
 
 -- | Recognise an effect that writes a plain number to a single variable, i.e.
 -- @add_to_variable = { some_var = 0.025 }@ or the @var@/@value@ spelling of it.
@@ -209,11 +265,46 @@ dynModVarOp _ = Nothing
 
 -- | Present a run of writes to a dynamic modifier's variables as an effect box
 -- listing what the modifier grants after the change.
+--
+-- Where several modifiers read the same variables, every one of them changes,
+-- and no one of them can be the box's. Which of them the country has is a
+-- matter of the game's state, and the announcement script writes before the
+-- run is the game's own way of saying which under what conditions, so that
+-- heads the changes instead. Failing one, the modifiers are named together.
 ppDynModChunk :: forall g m. (HOI4Info g, Monad m) =>
-    HOI4DynamicModifier -> Bool -> [(Text, Double)] -> PPT g m IndentedMessages
-ppDynModChunk dmod isSet mods = do
+    [GenericStatement] -> [HOI4DynamicModifier] -> Bool -> [(Text, Double)] -> PPT g m IndentedMessages
+-- The box says which modifier it is, so the announcement would say it twice.
+ppDynModChunk _ [dmod] isSet mods = do
     headmsg <- msgToPP $ if isSet then MsgSetDynamicModifier else MsgModifyDynamicModifier
     box <- ppDynModBox dmod (map modStmt mods)
     return (headmsg ++ box)
-    where
-        modStmt (key, val) = Statement (GenericLhs key []) OpEq (FloatRhs val)
+ppDynModChunk announcement dmods isSet mods = do
+    headmsg <- if null announcement
+        then do
+            let names = nub [fromMaybe (dmodName dmod) (dmodLocName dmod) | dmod <- dmods]
+                several = length names > 1
+            msgToPP $ if isSet then MsgSetDynamicModifiers (namedTogether names) several
+                               else MsgModifyDynamicModifiers (namedTogether names) several
+        else concatMapM ppOne announcement
+    modmsg <- indentUp (fold <$> traverse (modifierMSG False "" . modStmt) mods)
+    -- The changes stand under the last line of the announcement -- the tooltip
+    -- ending in "by:" -- which may itself stand under a branch, so that a lone
+    -- change folds onto the line announcing it the way the wiki writes any
+    -- heading over a single line.
+    let under = case (reverse headmsg, modmsg) of
+            ((lvl, _) : _, (first, _) : _) -> lvl + 1 - first
+            _ -> 0
+    return (headmsg ++ [(lvl + under, msg) | (lvl, msg) <- modmsg])
+
+modStmt :: (Text, Double) -> GenericStatement
+modStmt (key, val) = Statement (GenericLhs key []) OpEq (FloatRhs val)
+
+-- | Names written as one list in running text, each picked out in bold. Two
+-- modifiers can go by the same name -- one for each side of a civil war, say
+-- -- and the name is worth saying once.
+namedTogether :: [Text] -> Text
+namedTogether names = case map bold (nub names) of
+    [] -> ""
+    [one] -> one
+    several -> T.intercalate ", " (init several) <> " and " <> last several
+    where bold name = "'''" <> name <> "'''"

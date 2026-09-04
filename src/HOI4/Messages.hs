@@ -810,6 +810,8 @@ data ScriptMessage
     | MsgAddDynamicModifierNamed {scriptMessageWho :: Text, scriptMessageDaysText :: Text, scriptMessageIcon :: Text, scriptMessageKey :: Text, scriptMessageLoc :: Text}
     | MsgModifyDynamicModifier
     | MsgSetDynamicModifier
+    | MsgModifyDynamicModifiers {scriptMessageWhat :: Text, scriptMessageYn :: Bool}
+    | MsgSetDynamicModifiers {scriptMessageWhat :: Text, scriptMessageYn :: Bool}
     | MsgIsFactionLeader {scriptMessageYn :: Bool}
     | MsgHasWargoalAgainst {scriptMessageWhom :: Text,scriptMessageWhat :: Text}
     | MsgHasWargoalAgainstType {scriptMessageWhom :: Text, scriptMessageWhat :: Text, scriptMessageWhere :: Text}
@@ -5454,6 +5456,23 @@ instance RenderMessage Script ScriptMessage where
             -> "Modify the Dynamic Modifier by:"
         MsgSetDynamicModifier
             -> "Set the Dynamic Modifier to:"
+        -- Several modifiers reading their values from the same variables all
+        -- change together, so they are named together -- once, where they all
+        -- go by the same name.
+        MsgModifyDynamicModifiers {scriptMessageWhat = _what, scriptMessageYn = _several}
+            -> mconcat
+                [ "Modify the dynamic modifier"
+                , ifThenElseT _several "s " " "
+                , _what
+                , " by:"
+                ]
+        MsgSetDynamicModifiers {scriptMessageWhat = _what, scriptMessageYn = _several}
+            -> mconcat
+                [ "Set the dynamic modifier"
+                , ifThenElseT _several "s " " "
+                , _what
+                , " to:"
+                ]
         MsgIsFactionLeader {scriptMessageYn  = _yn}
             -> mconcat
                 [ "Is"

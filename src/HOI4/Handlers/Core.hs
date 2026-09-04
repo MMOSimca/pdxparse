@@ -49,7 +49,7 @@ module HOI4.Handlers.Core (
     ,   tooltipText
     ) where
 
-import Data.Char (isAlpha, isUpper, toLower)
+import Data.Char (isAlpha, isSpace, isUpper, toLower)
 import Data.Foldable (fold)
 import Data.Maybe
 import Data.Text (Text)
@@ -666,4 +666,28 @@ tooltipText :: (HOI4Info g, Monad m) =>
 tooltipText msg loc
     | T.null stripped = return []
     | otherwise = msgToPP (msg (Doc.nl2br stripped))
-    where stripped = T.strip loc
+    where stripped = T.strip (dropEffectiveChange loc)
+
+-- | Drop an @Effective change:@ that a tooltip ends on. The game writes that
+-- heading over the lines it draws next -- what the effects after the tooltip
+-- come to, worked out from the state of the game as it draws them. Nothing
+-- outside the game can work those out the same way, and the effects are
+-- written out under the tooltip in their own right here, so the heading would
+-- stand over nothing. One in the middle of a tooltip heads lines the tooltip
+-- itself goes on to say, and stays.
+dropEffectiveChange :: Text -> Text
+dropEffectiveChange txt = maybe txt tidy heading
+    where
+        body = T.stripEnd txt
+        -- The heading is often picked out in colour, which becomes bold here.
+        closing = T.takeWhileEnd (== '\'') body
+        unclosed = T.dropEnd (T.length closing) body
+        heading = listToMaybe
+            [ T.dropEnd (T.length h) unclosed
+            | h <- ["effective changes:", "effective change:"]
+            , h `T.isSuffixOf` T.toLower unclosed ]
+        -- What opened the bold around the heading has nothing left to wrap, and
+        -- the punctuation that led into the heading nothing left to lead into.
+        tidy before =
+            let opened = if T.null closing then before else T.dropWhileEnd (== '\'') before
+            in T.dropWhileEnd (\c -> isSpace c || c == ',' || c == '.') opened
