@@ -15,16 +15,15 @@ import HOI4.Messages (ScriptMessage (..), ModifierDisplay, modYesNo, modNoYes)
 modifiersTable :: HashMap Text ModifierDisplay
 modifiersTable = HM.fromList
         [
-        --general modifiers
+        -- General
          ("monthly_population"              , ("MODIFIER_GLOBAL_MONTHLY_POPULATION", MsgModifierPcPosReduced, Just 1))
         ,("nuclear_production_factor"       , ("MODIFIER_NUCLEAR_PRODUCTION_FACTOR", MsgModifierPcPosReduced, Just 0))
         ,("research_sharing_per_country_bonus" , ("MODIFIER_RESEARCH_SHARING_PER_COUNTRY_BONUS", MsgModifierPcPosReduced, Just 2))
         ,("research_sharing_per_country_bonus_factor" , ("MODIFIER_RESEARCH_SHARING_PER_COUNTRY_BONUS_FACTOR", MsgModifierPcPosReduced, Just 2))
         ,("research_speed_factor"           , ("MODIFIER_RESEARCH_SPEED_FACTOR", MsgModifierPcPosReduced, Just 2))
+        
+        -- Resources
         ,("local_resources_factor"          , ("MODIFIER_LOCAL_RESOURCES_FACTOR", MsgModifierPcPosReduced, Just 2))
-        -- The same modifier narrowed to one resource. Script writes
-        -- @local_resources_@ and any resource name, and each is localized under
-        -- the modifier's own name rather than under a MODIFIER_ key.
         ,("local_resources_oil_factor"      , ("local_resources_oil_factor", MsgModifierPcPosReduced, Just 2))
         ,("local_resources_aluminium_factor" , ("local_resources_aluminium_factor", MsgModifierPcPosReduced, Just 2))
         ,("local_resources_rubber_factor"   , ("local_resources_rubber_factor", MsgModifierPcPosReduced, Just 2))
@@ -32,16 +31,8 @@ modifiersTable = HM.fromList
         ,("local_resources_steel_factor"    , ("local_resources_steel_factor", MsgModifierPcPosReduced, Just 2))
         ,("local_resources_chromium_factor" , ("local_resources_chromium_factor", MsgModifierPcPosReduced, Just 2))
         ,("local_resources_coal_factor"     , ("local_resources_coal_factor", MsgModifierPcPosReduced, Just 2))
-        ,("surrender_limit"                 , ("MODIFIER_SURRENDER_LIMIT", MsgModifierPcPosReduced, Just 2))
-        ,("command_cap_increase"            , ("MODIFIER_COMMAND_CAP", MsgModifierColourPos, Just 0))
-        -- What a spirit of the given branch costs to take. Each is
-        -- localized under the modifier's own name.
-        ,("army_spirit_category_type_cost_factor" , ("army_spirit_category_type_cost_factor", MsgModifierPcNegReduced, Just 2))
-        ,("air_spirit_category_type_cost_factor" , ("air_spirit_category_type_cost_factor", MsgModifierPcNegReduced, Just 2))
-        ,("navy_spirit_category_type_cost_factor" , ("navy_spirit_category_type_cost_factor", MsgModifierPcNegReduced, Just 2))
-        ,("max_surrender_limit_offset"      , ("MODIFIER_MAX_SURRENDER_LIMIT_OFFSET", MsgModifierPcPosReduced, Just 2))
 
-            -- Politics modifiers
+        -- Politics
         ,("min_export"                      , ("MODIFIER_MIN_EXPORT_FACTOR", MsgModifierPcReducedSign, Just 0))
         ,("trade_opinion_factor"            , ("MODIFIER_TRADE_OPINION_FACTOR", MsgModifierPcReducedSign, Just 2))
         ,("economy_cost_factor"             , ("economy_cost_factor", MsgModifierPcNegReduced, Nothing))
@@ -62,6 +53,12 @@ modifiersTable = HM.fromList
         ,("air_advisor_cost_factor"         , ("MODIFIER_AIR_ADVISOR_COST_FACTOR", MsgModifierPcNegReduced, Just 0))
         ,("army_advisor_cost_factor"        , ("MODIFIER_ARMY_ADVISOR_COST_FACTOR", MsgModifierPcNegReduced, Just 0))
         ,("navy_advisor_cost_factor"        , ("MODIFIER_NAVY_ADVISOR_COST_FACTOR", MsgModifierPcNegReduced, Just 0))
+        ,("command_cap_increase"            , ("MODIFIER_COMMAND_CAP", MsgModifierColourPos, Just 0))
+        ,("army_spirit_category_type_cost_factor" , ("army_spirit_category_type_cost_factor", MsgModifierPcNegReduced, Just 2))
+        ,("air_spirit_category_type_cost_factor" , ("air_spirit_category_type_cost_factor", MsgModifierPcNegReduced, Just 2))
+        ,("navy_spirit_category_type_cost_factor" , ("navy_spirit_category_type_cost_factor", MsgModifierPcNegReduced, Just 2))
+        ,("surrender_limit"                 , ("MODIFIER_SURRENDER_LIMIT", MsgModifierPcPosReduced, Just 2))
+        ,("max_surrender_limit_offset"      , ("MODIFIER_MAX_SURRENDER_LIMIT_OFFSET", MsgModifierPcPosReduced, Just 2))
         ,("offensive_war_stability_factor"  , ("MODIFIER_STABILITY_OFFENSIVE_WAR_FACTOR", MsgModifierPcPosReduced, Just 2))
         ,("defensive_war_stability_factor"  , ("MODIFIER_STABILITY_DEFENSIVE_WAR_FACTOR", MsgModifierPcPosReduced, Just 2))
         ,("unit_leader_as_advisor_cp_cost_factor" , ("MODIFIER_UNIT_LEADER_AS_ADVISOR_CP_COST_FACTOR", MsgModifierPcNegReduced, Just 1))
@@ -92,7 +89,7 @@ modifiersTable = HM.fromList
         ,("fascism_acceptance"              , ("fascism_acceptance", MsgModifierColourPos, Nothing))
         ,("neutrality_acceptance"           , ("neutrality_acceptance", MsgModifierColourPos, Nothing))
 
-            -- Diplomacy
+        -- Diplomacy
         ,("civil_war_involvement_tension"   , ("MODIFIER_CIVIL_WAR_INVOLVEMENT_TENSION", MsgModifierPcNegReduced, Just 1))
         ,("enemy_declare_war_tension"       , ("MODIFIER_ENEMY_DECLARE_WAR_TENSION", MsgModifierPcPosReduced, Just 1))
         ,("enemy_justify_war_goal_time"     , ("MODIFIER_ENEMY_JUSTIFY_WAR_GOAL_TIME", MsgModifierPcPosReduced, Just 1))
@@ -119,10 +116,9 @@ modifiersTable = HM.fromList
         ,("air_volunteer_cap"               , ("MODIFIER_AIR_VOLUNTEER_CAP", MsgModifierColourPos, Just 0))
         ,("embargo_threshold_factor"        , ("MODIFIER_EMBARGO_THRESHOLD_FACTOR", MsgModifierPcNegReduced, Just 1))
         ,("embargo_cost_factor"             , ("MODIFIER_EMBARGO_COST_FACTOR", MsgModifierPcNegReduced, Just 1))
-
         ,("resource_trade_cost_bonus_per_factory", ("MODIFIER_RESOURCE_TRADE_COST_BONUS_PER_FACTORY", MsgModifierColourPos, Just 0))
 
-            -- autonomy
+        -- Autonomy
         ,("autonomy_gain"                   , ("MODIFIER_AUTONOMY_GAIN", MsgModifierColourPos, Just 1))
         ,("autonomy_gain_global_factor"     , ("MODIFIER_AUTONOMY_GAIN_GLOBAL_FACTOR", MsgModifierPcPosReduced, Just 1))
         ,("subjects_autonomy_gain"          , ("MODIFIER_AUTONOMY_SUBJECT_GAIN", MsgModifierColourPos, Just 2))
@@ -136,7 +132,7 @@ modifiersTable = HM.fromList
         ,("master_ideology_drift"           , ("MODIFIER_MASTER_IDEOLOGY_DRIFT", MsgModifierColourPos, Just 2))
         ,("overlord_trade_cost_factor"      , ("MODIFIER_TRADE_COST_FACTOR", MsgModifierPcNegReduced, Just 2))
 
-            -- Governments in exile
+        -- Governments in Exile
         ,("dockyard_donations"              , ("MODIFIER_DOCKYARD_DONATIONS", MsgModifierColourPos, Just 0))
         ,("industrial_factory_donations"    , ("MODIFIER_INDUSTRIAL_FACTORY_DONATIONS", MsgModifierColourPos, Just 0))
         ,("military_factory_donations"      , ("MODIFIER_MILITARY_FACTORY_DONATIONS", MsgModifierColourPos, Just 0))
@@ -145,7 +141,7 @@ modifiersTable = HM.fromList
         ,("legitimacy_daily"                , ("MODIFIER_LEGITIMACY_DAILY", MsgModifierColourPos, Just 2))
         ,("legitimacy_gain_factor"          , ("MODIFIER_LEGITIMACY_FACTOR", MsgModifierPcPosReduced, Just 0))
 
-            -- Equipment
+        -- Equipment
         ,("equipment_capture"               , ("MODIFIER_EQUIPMENT_CAPTURE", MsgModifierPcPosReduced, Just 1))
         ,("equipment_capture_factor"        , ("MODIFIER_EQUIPMENT_CAPTURE_FACTOR", MsgModifierPcPosReduced, Just 1))
         ,("equipment_conversion_speed"      , ("MODIFIER_EQUIPMENT_CONVERSION_SPEED", MsgModifierPcPosReduced, Just 0))
@@ -162,7 +158,7 @@ modifiersTable = HM.fromList
         ,("production_lack_of_resource_penalty_factor" , ("MODIFIER_PRODUCTION_LACK_OF_RESOURCE_PENALTY_FACTOR", MsgModifierPcNegReduced, Just 2))
         ,("refit_speed"                     , ("MODIFIER_INDUSTRIAL_REFIT_SPEED_FACTOR", MsgModifierPcPosReduced, Just 0))
 
-            -- Military outside of combat
+        -- Military Out of Combat
         ,("command_power_gain"              , ("MODIFIER_COMMAND_POWER_GAIN", MsgModifierColourPos, Just 2))
         ,("command_power_gain_mult"         , ("MODIFIER_COMMAND_POWER_GAIN_MULT", MsgModifierPcPosReduced, Just 0))
         ,("conscription"                    , ("MODIFIER_CONSCRIPTION_FACTOR", MsgModifierPcReducedSignMin, Just 2))
@@ -192,7 +188,7 @@ modifiersTable = HM.fromList
         ,("command_abilities_cost_factor"   , ("MODIFIER_COMMAND_ABILITIES_COST_FACTOR", MsgModifierPcNegReduced, Just 2))
         ,("special_forces_cap_flat"         ,("MODIFIER_SPECIAL_FORCES_CAP_FLAT", MsgModifierColourPos, Just 0))
 
-            -- Fuel and supplies
+        -- Fuel and supplies
         ,("base_fuel_gain"                  , ("MODIFIER_BASE_FUEL_GAIN_ADD", MsgModifierColourPos, Just 0))
         ,("base_fuel_gain_factor"           , ("MODIFIER_BASE_FUEL_GAIN_FACTOR", MsgModifierPcPosReduced, Just 2))
         ,("fuel_cost"                       , ("MODIFIER_FUEL_COST", MsgModifierColourNeg, Just 0))
@@ -220,7 +216,7 @@ modifiersTable = HM.fromList
         ,("special_forces_no_supply_grace"  , ("MODIFIER_SPECIAL_FORCES_NO_SUPPLY_GRACE", MsgModifierColourPos, Just 1))
         ,("special_forces_out_of_supply_factor" , ("MODIFIER_SPECIAL_FORCES_OUT_OF_SUPPLY_FACTOR", MsgModifierPcNegReduced, Just 2))
 
-            -- buildings
+        -- Buildings
         ,("civilian_factory_use"            , ("MODIFIER_CIVILIAN_FACTORY_USE", MsgModifierColourNeg, Just 0))
         ,("industry_free_repair_factor"     , ("MODIFIER_INDUSTRY_FREE_REPAIR_FACTOR", MsgModifierPcPosReduced, Just 2))
         ,("consumer_goods_factor"           , ("MODIFIER_CONSUMER_GOODS_FACTOR", MsgModifierPcReducedSignMin, Just 1))
@@ -241,7 +237,7 @@ modifiersTable = HM.fromList
         ,("coastal_bunker_effectiveness_factor" , ("MODIFIER_COASTAL_BUNKER_EFFECTIVENESS_FACTOR", MsgModifierPcPosReduced, Just 0))
         ,("land_bunker_effectiveness_factor" , ("MODIFIER_LAND_BUNKER_EFFECTIVENESS_FACTOR", MsgModifierPcPosReduced, Just 0))
 
-            -- resistance and compliance
+        -- Compliance and Resistance
         ,("compliance_growth_on_our_occupied_states" , ("MODIFIER_COMPLIANCE_GROWTH_ON_OUR_OCCUPIED_STATES", MsgModifierPcNegReduced, Just 0))
         ,("no_compliance_gain"              , ("MODIFIER_NO_COMPLIANCE_GAIN", modNoYes, Just 0))
         ,("occupation_cost"                 , ("MODIFIER_OCCUPATION_COST", MsgModifierColourNeg, Nothing))
@@ -252,7 +248,7 @@ modifiersTable = HM.fromList
         ,("resistance_growth_on_our_occupied_states" , ("MODIFIER_RESISTANCE_GROWTH_ON_OUR_OCCUPIED_STATES", MsgModifierPcPosReduced, Just 0))
         ,("resistance_target_on_our_occupied_states" , ("MODIFIER_RESISTANCE_TARGET_ON_OUR_OCCUPIED_STATES", MsgModifierPcPosReduced, Just 0))
 
-            -- Intelligence
+        -- Intelligence
         ,("agency_upgrade_time"             , ("MODIFIER_AGENCY_UPGRADE_TIME", MsgModifierPcNegReduced, Just 1))
         ,("decryption"                      , ("MODIFIER_DECRYPTION", MsgModifierColourPos, Just 2))
         ,("decryption_factor"               , ("MODIFIER_DECRYPTION_FACTOR", MsgModifierPcPosReduced, Just 2))
@@ -287,7 +283,7 @@ modifiersTable = HM.fromList
         ,("intelligence_agency_defense"     , ("MODIFIER_INTELLIGENCE_AGENCY_DEFENSE", MsgModifierColourPos, Just 2))
         ,("root_out_resistance_effectiveness_factor", ("MODIFIER_ROOT_OUT_RESISTANCE_EFFECTIVENESS_FACTOR", MsgModifierPcPosReduced, Just 0))
 
-            -- Operatives
+        -- Operatives
         ,("own_operative_detection_chance_factor" , ("MODIFIER_OWN_OPERATIVE_DETECTION_CHANCE_FACTOR", MsgModifierPcNegReduced, Just 0))
         ,("enemy_operative_capture_chance_factor" , ("MODIFIER_ENEMY_OPERATIVE_CAPTURE_CHANCE_FACTOR", MsgModifierPcNegReduced, Just 0))
         ,("enemy_operative_detection_chance" , ("MODIFIER_ENEMY_OPERATIVE_DETECTION_CHANCE", MsgModifierPcPos, Just 2))
@@ -296,7 +292,7 @@ modifiersTable = HM.fromList
         ,("new_operative_slot_bonus"        , ("MODIFIER_NEW_OPERATIVE_SLOT_BONUS", MsgModifierColourPos, Just 0))
         ,("operative_slot"                  , ("MODIFIER_OPERATIVE_SLOT", MsgModifierColourPos, Just 0))
 
-            -- AI
+        -- AI
         ,("ai_badass_factor"                , ("MODIFIER_AI_BADASS_FACTOR", MsgModifierPcReducedSign, Just 1))
         ,("ai_call_ally_desire_factor"      , ("MODIFIER_AI_GET_ALLY_DESIRE_FACTOR", MsgModifierSign, Just 0))
         ,("ai_desired_divisions_factor"     , ("MODIFIER_AI_DESIRED_DIVISIONS_FACTOR", MsgModifierPcReducedSign, Just 1))
@@ -313,11 +309,17 @@ modifiersTable = HM.fromList
         ,("ai_join_ally_desire_factor"      , ("MODIFIER_AI_JOIN_ALLY_DESIRE_FACTOR", MsgModifierSign, Just 0))
         ,("ai_license_acceptance"           , ("MODIFIER_AI_LICENSE_ACCEPTANCE", MsgModifierSign, Just 0))
 
-            -- MIOs
-        ,("military_industrial_organization_funds_gain" , ("MODIFIER_MIO_FUNDS_GAIN", MsgModifierPcPosReduced, Just 0))
+        -- MIOs
+        ,("military_industrial_organization_funds_gain"                          , ("MODIFIER_MIO_FUNDS_GAIN", MsgModifierPcPosReduced, Just 0))
+        ,("military_industrial_organization_design_team_assign_cost"             , ("MODIFIER_MIO_DESIGN_TEAM_ASSIGN_COST", MsgModifierPcNegReduced, Just 0))
+        ,("military_industrial_organization_design_team_change_cost"             , ("MODIFIER_MIO_DESIGN_TEAM_CHANGE_COST", MsgModifierPcNegReduced, Just 0))
+        ,("military_industrial_organization_industrial_manufacturer_assign_cost" , ("MODIFIER_MIO_INDUSTRIAL_MANUFACTURER_ASSIGN_COST", MsgModifierPcNegReduced, Just 0))
+        ,("military_industrial_organization_policy_cooldown"                     , ("MODIFIER_MIO_POLICY_COOLDOWN_FACTOR", MsgModifierPcNegReduced, Just 0))
+        ,("military_industrial_organization_policy_cost"                         , ("MODIFIER_MIO_POLICY_COST_FACTOR", MsgModifierPcNegReduced, Just 0))
+        ,("military_industrial_organization_size_up_requirement"                 , ("MODIFIER_MIO_FUNDS_SIZE_UP_REQUIREMENT", MsgModifierPcNegReduced, Just 0))
+        ,("military_industrial_organization_task_capacity"                       , ("MODIFIER_MIO_TASK_CAPACITY", MsgModifierColourPos, Just 0))
 
-            -- Unit Leaders
-        ,("female_random_army_leader_chance", ("MODIFIER_FEMALE_ARMY_LEADER_CHANCE", MsgModifierPcReducedSign, Just 0))
+        -- Unit Leaders
         ,("army_leader_cost_factor"         , ("MODIFIER_ARMY_LEADER_COST_FACTOR", MsgModifierPcNegReduced, Just 1))
         ,("army_leader_start_level"         , ("MODIFIER_ARMY_LEADER_START_LEVEL", MsgModifierColourPos, Just 0))
         ,("army_leader_start_attack_level"  , ("MODIFIER_ARMY_LEADER_START_ATTACK_LEVEL", MsgModifierColourPos, Just 0))
@@ -327,13 +329,18 @@ modifiersTable = HM.fromList
         ,("military_leader_cost_factor"     , ("MODIFIER_MILITARY_LEADER_COST_FACTOR", MsgModifierPcNegReduced, Just 1))
         ,("navy_leader_start_attack_level"  , ("MODIFIER_NAVY_LEADER_START_ATTACK_LEVEL", MsgModifierColourPos, Just 0))
         ,("grant_medal_cost_factor"         , ("MODIFIER_GRANT_MEDAL_COST_FACTOR", MsgModifierPcNegReduced, Just 1))
+        ,("female_random_army_leader_chance", ("MODIFIER_FEMALE_ARMY_LEADER_CHANCE", MsgModifierPcReducedSign, Just 0))
         ,("female_divisional_commander_chance", ("MODIFIER_FEMALE_DIVISIONAL_COMMANDER_CHANCE", MsgModifierPcReducedSign, Just 0))
+        ,("female_random_admiral_chance"    , ("MODIFIER_FEMALE_ADMIRAL_CHANCE", MsgModifierSign, Just 0))
+        ,("female_random_country_leader_chance" , ("MODIFIER_FEMALE_COUNTRY_LEADER_CHANCE", MsgModifierSign, Just 0))
+        ,("female_random_operative_chance"  , ("MODIFIER_FEMALE_OPERATIVE_CHANCE", MsgModifierSign, Just 0))
+        ,("female_random_scientist_chance"  , ("MODIFIER_FEMALE_SCIENTIST_CHANCE", MsgModifierSign, Just 0))
 
-            -- General Combat
+        -- General Combat
         ,("offence"                         , ("MODIFIER_OFFENCE", MsgModifierPcPosReduced, Just 2))
         ,("defence"                         , ("MODIFIER_DEFENCE", MsgModifierPcPosReduced, Just 2))
 
-            -- Land Combat
+        -- Land Combat
         ,("acclimatization_cold_climate_gain_factor", ("MODIFIER_ACCLIMATIZATION_COLD_CLIMATE_GAIN_FACTOR", MsgModifierPcPosReduced, Just 1))
         ,("acclimatization_hot_climate_gain_factor", ("MODIFIER_ACCLIMATIZATION_HOT_CLIMATE_GAIN_FACTOR", MsgModifierPcPosReduced, Just 1))
         ,("air_superiority_bonus_in_combat" , ("MODIFIER_AIR_SUPERIORITY_BONUS_IN_COMBAT", MsgModifierPcPosReduced, Just 1))
@@ -391,14 +398,14 @@ modifiersTable = HM.fromList
         ,("org_loss_when_moving"            , ("MODIFIER_ORG_LOSS_WHEN_MOVING", MsgModifierPcNegReduced, Just 1))
         ,("planning_speed"                  , ("MODIFIER_PLANNING_SPEED", MsgModifierPcPosReduced, Just 1))
 
-            -- naval invasions
+        -- Naval Invasions
         ,("naval_invasion_prep_speed"       , ("MODIFIER_NAVAL_INVASION_PREPARATION_SPEED", MsgModifierPcPosReduced, Just 1))
         ,("naval_invasion_capacity"         , ("MODIFIER_NAVAL_INVASION_CAPACITY", MsgModifierColourPos, Just 0))
         ,("amphibious_invasion"             , ("MODIFIER_AMPHIBIOUS_INVASION", MsgModifierPcPosReduced, Just 1))
         ,("amphibious_invasion_defence"     , ("MODIFIER_NAVAL_INVASION_DEFENSE", MsgModifierPcPosReduced, Just 0))
         ,("invasion_preparation"            , ("MODIFIER_NAVAL_INVASION_PREPARATION", MsgModifierPcNegReduced, Just 1))
 
-            -- Naval combat
+        -- Naval Combat
         ,("convoy_escort_efficiency"        , ("MODIFIER_MISSION_CONVOY_ESCORT_EFFICIENCY", MsgModifierPcPosReduced, Just 1))
         ,("convoy_raiding_efficiency_factor" , ("MODIFIER_CONVOY_RAIDING_EFFICIENCY_FACTOR", MsgModifierPcPosReduced, Just 2))
         ,("convoy_retreat_speed"            , ("MODIFIER_CONVOY_RETREAT_SPEED", MsgModifierPcPosReduced, Just 0))
@@ -420,7 +427,7 @@ modifiersTable = HM.fromList
         ,("naval_hit_chance"                , ("MODIFIER_NAVAL_HIT_CHANCE", MsgModifierPcPosReduced, Just 0))
         ,("naval_mines_effect_reduction"    , ("MODIFIER_NAVAL_MINES_EFFECT_REDUCTION", MsgModifierPcPosReduced, Just 0))
         ,("naval_morale_factor"             , ("MODIFIER_NAVAL_MORALE_FACTOR", MsgModifierPcPosReduced, Just 1))
-        ,("naval_night_attack"             , ("MODIFIER_NAVAL_MORALE_FACTOR", MsgModifierPcPosReduced, Just 1))
+        ,("naval_night_attack"              , ("MODIFIER_NAVAL_MORALE_FACTOR", MsgModifierPcPosReduced, Just 1))
         ,("naval_retreat_chance"            , ("MODIFIER_NAVAL_RETREAT_CHANCE", MsgModifierPcPosReduced, Just 0))
         ,("naval_retreat_speed"             , ("MODIFIER_NAVAL_RETREAT_SPEED", MsgModifierPcPosReduced, Just 1))
         ,("navy_org"                        , ("MODIFIER_NAVY_ORG", MsgModifierColourPos, Just 1))
@@ -448,7 +455,7 @@ modifiersTable = HM.fromList
         ,("strike_force_movement_org_loss"  , ("MODIFIER_STRIKE_FORCE_MOVING_ORG", MsgModifierPcNegReduced, Just 2))
         ,("sub_retreat_speed"               , ("MODIFIER_SUB_RETREAT_SPEED", MsgModifierPcPosReduced, Just 0))
 
-            -- carriers and their planes
+         -- Carriers and their planes
         ,("navy_carrier_air_agility_factor" , ("MODIFIER_NAVAL_CARRIER_AIR_AGILITY_FACTOR", MsgModifierPcPosReduced, Just 2))
         ,("navy_carrier_air_attack_factor"  , ("MODIFIER_NAVAL_CARRIER_AIR_ATTACK_FACTOR", MsgModifierPcPosReduced, Just 2))
         ,("navy_carrier_air_targetting_factor" , ("MODIFIER_NAVAL_CARRIER_AIR_TARGETTING_FACTOR", MsgModifierPcPosReduced, Just 2))
@@ -456,7 +463,7 @@ modifiersTable = HM.fromList
         ,("sortie_efficiency"               , ("MODIFIER_STAT_CARRIER_SORTIE_EFFICIENCY", MsgModifierPcPosReduced, Just 0))
         ,("fighter_sortie_efficiency"       , ("MODIFIER_CARRIER_FIGHTER_SORTIE_EFFICIENCY_FACTOR", MsgModifierPcPosReduced, Just 0))
 
-            -- Air combat
+        -- Air Combat
         ,("air_accidents_factor"            , ("MODIFIER_AIR_ACCIDENTS_FACTOR", MsgModifierPcNegReduced, Just 1))
         ,("air_ace_generation_chance_factor" , ("MODIFIER_AIR_ACE_GENERATION_CHANCE_FACTOR", MsgModifierPcPosReduced, Just 2))
         ,("air_agility_factor"              , ("MODIFIER_AIR_AGILITY_FACTOR", MsgModifierPcPosReduced, Just 0))
@@ -464,13 +471,12 @@ modifiersTable = HM.fromList
         ,("air_defence_factor"              , ("MODIFIER_AIR_DEFENCE_FACTOR", MsgModifierPcPosReduced, Just 0))
         ,("air_close_air_support_org_damage_factor" , ("MODIFIER_AIR_CAS_ORG_DAMAGE_FACTOR", MsgModifierPcPosReduced, Just 0))
         ,("rocket_attack_factor"            , ("MODIFIER_ROCKET_ATTACK_FACTOR", MsgModifierPcPosReduced, Just 1))
-
         ,("air_close_air_support_agility_factor" , ("MODIFIER_CAS_AGILITY_FACTOR", MsgModifierPcPosReduced, Nothing))
         ,("air_close_air_support_attack_factor" , ("MODIFIER_CAS_ATTACK_FACTOR", MsgModifierPcPosReduced, Nothing))
         ,("air_close_air_support_defence_factor" , ("MODIFIER_CAS_DEFENCE_FACTOR", MsgModifierPcPosReduced, Nothing))
-        ,("air_air_superiority_agility_factor", ("MODIFIER_AIR_SUPERIORITY_AGILITY_FACTOR", MsgModifierPcPosReduced, Nothing))
-        ,("air_air_superiority_attack_factor", ("MODIFIER_AIR_SUPERIORITY_ATTACK_FACTOR", MsgModifierPcPosReduced, Nothing))
-        ,("air_air_superiority_defence_factor", ("MODIFIER_AIR_SUPERIORITY_DEFENCE_FACTOR", MsgModifierPcPosReduced, Nothing))
+        ,("air_air_superiority_agility_factor" , ("MODIFIER_AIR_SUPERIORITY_AGILITY_FACTOR", MsgModifierPcPosReduced, Nothing))
+        ,("air_air_superiority_attack_factor" , ("MODIFIER_AIR_SUPERIORITY_ATTACK_FACTOR", MsgModifierPcPosReduced, Nothing))
+        ,("air_air_superiority_defence_factor" , ("MODIFIER_AIR_SUPERIORITY_DEFENCE_FACTOR", MsgModifierPcPosReduced, Nothing))
         ,("air_interception_agility_factor"  , ("MODIFIER_INTERCEPTION_AGILITY_FACTOR", MsgModifierPcPosReduced, Nothing))
         ,("air_interception_attack_factor"  , ("MODIFIER_INTERCEPTION_ATTACK_FACTOR", MsgModifierPcPosReduced, Nothing))
         ,("air_interception_defence_factor" , ("MODIFIER_INTERCEPTION_DEFENCE_FACTOR", MsgModifierPcPosReduced, Nothing))
@@ -482,7 +488,6 @@ modifiersTable = HM.fromList
         ,("air_paradrop_attack_factor"      , ("MODIFIER_PARADROP_ATTACK_FACTOR", MsgModifierPcPosReduced, Nothing))
         ,("air_paradrop_agility_factor"     , ("MODIFIER_AIR_SUPERIORITY_AGILITY_FACTOR", MsgModifierPcPosReduced, Nothing))
         ,("air_paradrop_defence_factor"     , ("MODIFIER_PARADROP_DEFENCE_FACTOR", MsgModifierPcPosReduced, Nothing))
-
         ,("naval_strike_targetting_factor"  , ("MODIFIER_NAVAL_STRIKE_TARGETTING_FACTOR", MsgModifierPcPosReduced, Just 0))
         ,("air_bombing_targetting"          , ("MODIFIER_AIR_BOMBING_TARGETTING", MsgModifierPcPosReduced, Just 1))
         ,("air_cas_efficiency"              , ("MODIFIER_AIR_CAS_EFFICIENCY", MsgModifierPcPosReduced, Just 0))
@@ -506,7 +511,7 @@ modifiersTable = HM.fromList
         ,("mines_planting_by_air_factor"    , ("MODIFIER_MINES_PLANTING_BY_AIR_FACTOR", MsgModifierPcPosReduced, Just 0))
         ,("strategic_bomb_visibility"       , ("MODIFIER_STRAT_BOMBING_VISIBILITY", MsgModifierPcNegReduced, Just 0))
 
-            -- targeted
+        -- Targeted
         ,("extra_trade_to_target_factor"    , ("MODIFIER_TRADE_TO_TARGET_FACTOR", MsgModifierPcPosReduced, Just 2))
         ,("trade_cost_for_target_factor"    , ("MODIFIER_TRADE_COST_TO_TARGET_FACTOR", MsgModifierPcNegReduced, Just 2))
         ,("generate_wargoal_tension_against" , ("MODIFIER_GENERATE_WARGOAL_TENSION_LIMIT_AGAINST_COUNTRY", MsgModifierPcReducedSign, Just 1))
@@ -517,6 +522,21 @@ modifiersTable = HM.fromList
         ,("targeted_legitimacy_daily"       , ("MODIFIER_TARGETED_LEGITIMACY_DAILY", MsgModifierColourPos, Just 2))
         ,("breakthrough_bonus_against"      , ("MODIFIER_BREAKTHROUGH_BONUS_AGAINST_A_COUNTRY", MsgModifierPcPosReduced, Just 1))
         ,("defense_bonus_against"           , ("MODIFIER_DEFENSE_BONUS_AGAINST_A_COUNTRY", MsgModifierPcPosReduced, Just 1))
+        ,("invasion_preparation_against"    , ("MODIFIER_NAVAL_INVASION_PREPARATION_AGAINST_A_COUNTRY", MsgModifierColourNeg, Just 1))
+        ,("lend_lease_tension_with_overlord" , ("MODIFIER_LEND_LEASE_TENSION_LIMIT_WITH_OVERLORD", MsgModifierPcNegReduced, Just 1))
+        ,("naval_critical_score_chance_factor_against" , ("MODIFIER_NAVAL_CRITICAL_SCORE_CHANCE_FACTOR_AGAINST_A_COUNTRY", MsgModifierPcPosReduced, Just 2))
+        ,("amphibious_invasion_against"     , ("MODIFIER_AMPHIBIOUS_INVASION_AGAINST_A_COUNTRY", MsgModifierPcPosReduced, Just 1))
+        ,("naval_hit_chance_against"        , ("MODIFIER_NAVAL_HIT_CHANCE_AGAINST_A_COUNTRY", MsgModifierPcPosReduced, Just 0))
+        ,("naval_invasion_planning_bonus_speed" , ("MODIFIER_NAVAL_INVASION_PLANNING_SPEED", MsgModifierPcPosReduced, Just 0))
+        ,("naval_invasion_prep_days"        , ("MODIFIER_NAVAL_INVASION_PREPARATION_DAYS", MsgModifierColourNeg, Just 0))
+        ,("navy_capital_ship_attack_factor_against" , ("MODIFIER_NAVY_CAPITAL_SHIP_ATTACK_FACTOR_AGAINST_A_COUNTRY", MsgModifierPcPosReduced, Just 2))
+        ,("navy_capital_ship_defence_factor_against" , ("MODIFIER_NAVY_CAPITAL_SHIP_DEFENCE_FACTOR_AGAINST_A_COUNTRY", MsgModifierPcPosReduced, Just 2))
+        ,("navy_screen_attack_factor_against" , ("MODIFIER_NAVY_SCREEN_ATTACK_FACTOR_AGAINST_A_COUNTRY", MsgModifierPcPosReduced, Just 2))
+        ,("navy_screen_defence_factor_against" , ("MODIFIER_NAVY_SCREEN_DEFENCE_FACTOR_AGAINST_A_COUNTRY", MsgModifierPcPosReduced, Just 2))
+        ,("paratrooper_weight_factor"       , ("MODIFIER_UNIT_SIZE_FACTOR_FOR_PARADROP", MsgModifierPcNegReduced, Just 1))
+        ,("river_crossing_factor"           , ("MODIFIER_RIVER_CROSSING_PENALTY_FACTOR", MsgModifierPcNegReduced, Just 2))
+        ,("river_crossing_factor_against"   , ("MODIFIER_RIVER_CROSSING_PENALTY_FACTOR_AGAINST_A_COUNTRY", MsgModifierPcNegReduced, Just 2))
+        ,("spotting_chance_against"         , ("MODIFIER_SPOTTING_CHANCE_AGAINST_A_COUNTRY", MsgModifierPcPosReduced, Just 0))
 
         -- State Scope
         ,("army_speed_factor_for_controller" , ("MODIFIER_ARMY_SPEED_FACTOR_FOR_CONTROLLER", MsgModifierPcPosReduced, Just 2))
@@ -573,7 +593,7 @@ modifiersTable = HM.fromList
         ,("wounded_chance_factor"           , ("MODIFIER_WOUNDED_CHANCE_FACTOR", MsgModifierPcNegReduced, Just 1))
         ,("shore_bombardment_bonus"         , ("MODIFIER_SHORE_BOMBARDMENT", MsgModifierPcPosReduced, Just 1))
 
-        -- Strategic region scope
+        -- Strategic Region scope
         ,("air_accidents"                   , ("MODIFIER_AIR_ACCIDENTS", MsgModifierPcNegReduced, Just 1))
         ,("air_detection"                   , ("MODIFIER_AIR_DETECTION", MsgModifierPcPosReduced, Just 1))
 
@@ -581,7 +601,7 @@ modifiersTable = HM.fromList
         ,("special_project_facility_supply_consumption_factor"  , (T.replace "$FACTOR$" "" "MODIFIER_SPECIAL_PROJECT_FACILITY_SUPPLY_CONSUMPTION_FACTOR", MsgModifierPcNegReduced, Just 2))
         ,("special_project_speed_factor"    , ("MODIFIER_SPECIAL_PROJECT_SPEED_FACTOR", MsgModifierPcPosReduced, Just 2))
 
-        -- equipment/stats
+        -- Equipment/Land Stats
         ,("build_cost_ic"           , ("STAT_COMMON_BUILD_COST_IC", MsgModifierPcNegReduced, Nothing))
         ,("reliability"             , ("STAT_COMMON_RELIABILITY", MsgModifierPcPosReduced, Nothing))
         ,("armor_value"             , ("STAT_COMMON_ARMOR", MsgModifierPcPosReduced, Nothing))
@@ -589,20 +609,17 @@ modifiersTable = HM.fromList
         ,("fuel_consumption"        , ("STAT_COMMON_FUEL_CONSUMPTION", MsgModifierPcNegReduced, Nothing))
         ,("ap_attack"               , ("STAT_COMMON_PIERCING", MsgModifierPcPosReduced, Nothing))
         ,("max_strength"            , ("STAT_COMMON_MAX_STRENGTH", MsgModifierPcPosReduced, Nothing))
-
         ,("attack"                  , ("STAT_ADJUSTER_ATTACK", MsgModifierPcPosReduced, Nothing))
         ,("defense"                 , ("STAT_ADJUSTER_DEFENCE", MsgModifierPcPosReduced, Nothing))
         ,("movement"                , ("STAT_ADJUSTER_MOVEMENT", MsgModifierPcPosReduced, Nothing))
-
         ,("breakthrough"            , ("STAT_ARMY_BREAKTHROUGH", MsgModifierPcPosReduced, Nothing))
         ,("hardness"                , ("STAT_ARMY_HARDNESS", MsgModifierPcPosReduced, Nothing))
-        ,("supply_consumption"      , ("STAT_ARMY_SUPPLY_CONSUMPTION", MsgModifierPcPosReduced, Nothing)) --precision 0
+        ,("supply_consumption"      , ("STAT_ARMY_SUPPLY_CONSUMPTION", MsgModifierPcPosReduced, Nothing))
         ,("soft_attack"             , ("STAT_ARMY_SOFT_ATTACK", MsgModifierPcPosReduced, Nothing))
         ,("hard_attack"             , ("STAT_ARMY_HARD_ATTACK", MsgModifierPcPosReduced, Nothing))
-        -- The narrower a division, the more of them fit into a battle, so this
-        -- one is good news when it goes down.
         ,("combat_width"            , ("STAT_ARMY_COMBAT_WIDTH", MsgModifierPcNegReduced, Nothing))
 
+        -- Air Stats
         ,("air_agility"             , ("STAT_AIR_AGILITY", MsgModifierPcPosReduced, Nothing))
         ,("air_attack"              , ("STAT_AIR_ATTACK", MsgModifierPcPosReduced, Nothing))
         ,("air_range"               , ("STAT_AIR_RANGE", MsgModifierPcPosReduced, Nothing))
@@ -611,6 +628,7 @@ modifiersTable = HM.fromList
         ,("air_bombing"             , ("STAT_AIR_BOMBING", MsgModifierPcPosReduced, Nothing))
         ,("naval_strike_attack"     , ("STAT_AIR_NAVAL_STRIKE_ATTACK", MsgModifierPcPosReduced, Nothing))
 
+        -- Naval Stats
         ,("surface_detection"       , ("STAT_NAVY_SURFACE_DETECTION", MsgModifierPcPosReduced, Nothing))
         ,("sub_detection"           , ("STAT_NAVY_SUB_DETECTION", MsgModifierPcPosReduced, Nothing))
         ,("sub_visibility"          , ("STAT_NAVY_SUB_VISIBILITY", MsgModifierPcNegReduced, Nothing))
@@ -869,37 +887,11 @@ modifiersTable = HM.fromList
         -- the game.
         ,("additional_brigade_column_size"                                       , ("MODIFIER_BRIGADE_SIZE", MsgModifierColourPos, Just 0))
         ,("air_invasion_prep_days"                                               , ("MODIFIER_AIR_INVASION_PREPARATION_DAYS", MsgModifierColourNeg, Just 1))
-        ,("amphibious_invasion_against"                                          , ("MODIFIER_AMPHIBIOUS_INVASION_AGAINST_A_COUNTRY", MsgModifierPcPosReduced, Just 1))
         ,("can_guarantee_other_ideologies"                                       , ("MODIFIER_GUARANTEE_OTHER_IDEOLOGIES", modYesNo, Just 0))
         ,("choose_preferred_tactics_cost"                                        , ("MODIFIER_CHOOSE_PREFERRED_TACTIC_COST", MsgModifierColourNeg, Just 0))
         ,("disable_strategic_redeployment_for_controller"                        , ("MODIFIER_STRATEGIC_REDEPLOYMENT_DISABLED_FOR_CONTROLLER", modNoYes, Just 0))
         ,("experience_gain_army_unit"                                            , ("MODIFIER_XP_GAIN_ARMY_UNIT", MsgModifierColourPos, Just 1))
         ,("experience_gain_navy_unit"                                            , ("MODIFIER_XP_GAIN_NAVY_UNIT", MsgModifierColourPos, Just 1))
-        ,("female_random_admiral_chance"                                         , ("MODIFIER_FEMALE_ADMIRAL_CHANCE", MsgModifierSign, Just 0))
-        ,("female_random_country_leader_chance"                                  , ("MODIFIER_FEMALE_COUNTRY_LEADER_CHANCE", MsgModifierSign, Just 0))
-        ,("female_random_operative_chance"                                       , ("MODIFIER_FEMALE_OPERATIVE_CHANCE", MsgModifierSign, Just 0))
-        ,("female_random_scientist_chance"                                       , ("MODIFIER_FEMALE_SCIENTIST_CHANCE", MsgModifierSign, Just 0))
         ,("fortification_damage"                                                 , ("MODIFIER_FORTIFICATION_COLLATERAL_DAMAGE", MsgModifierPcPosReduced, Just 1))
-        ,("invasion_preparation_against"                                         , ("MODIFIER_NAVAL_INVASION_PREPARATION_AGAINST_A_COUNTRY", MsgModifierColourNeg, Just 1))
-        ,("lend_lease_tension_with_overlord"                                     , ("MODIFIER_LEND_LEASE_TENSION_LIMIT_WITH_OVERLORD", MsgModifierPcNegReduced, Just 1))
         ,("max_fuel_building"                                                    , ("MODIFIER_MAX_FUEL_ADD", MsgModifierColourPos, Just 2))
-        ,("military_industrial_organization_design_team_assign_cost"             , ("MODIFIER_MIO_DESIGN_TEAM_ASSIGN_COST", MsgModifierPcNegReduced, Just 0))
-        ,("military_industrial_organization_design_team_change_cost"             , ("MODIFIER_MIO_DESIGN_TEAM_CHANGE_COST", MsgModifierPcNegReduced, Just 0))
-        ,("military_industrial_organization_industrial_manufacturer_assign_cost" , ("MODIFIER_MIO_INDUSTRIAL_MANUFACTURER_ASSIGN_COST", MsgModifierPcNegReduced, Just 0))
-        ,("military_industrial_organization_policy_cooldown"                     , ("MODIFIER_MIO_POLICY_COOLDOWN_FACTOR", MsgModifierPcNegReduced, Just 0))
-        ,("military_industrial_organization_policy_cost"                         , ("MODIFIER_MIO_POLICY_COST_FACTOR", MsgModifierPcNegReduced, Just 0))
-        ,("military_industrial_organization_size_up_requirement"                 , ("MODIFIER_MIO_FUNDS_SIZE_UP_REQUIREMENT", MsgModifierPcNegReduced, Just 0))
-        ,("military_industrial_organization_task_capacity"                        , ("MODIFIER_MIO_TASK_CAPACITY", MsgModifierColourPos, Just 0))
-        ,("naval_critical_score_chance_factor_against"                           , ("MODIFIER_NAVAL_CRITICAL_SCORE_CHANCE_FACTOR_AGAINST_A_COUNTRY", MsgModifierPcPosReduced, Just 2))
-        ,("naval_hit_chance_against"                                             , ("MODIFIER_NAVAL_HIT_CHANCE_AGAINST_A_COUNTRY", MsgModifierPcPosReduced, Just 0))
-        ,("naval_invasion_planning_bonus_speed"                                  , ("MODIFIER_NAVAL_INVASION_PLANNING_SPEED", MsgModifierPcPosReduced, Just 0))
-        ,("naval_invasion_prep_days"                                             , ("MODIFIER_NAVAL_INVASION_PREPARATION_DAYS", MsgModifierColourNeg, Just 0))
-        ,("navy_capital_ship_attack_factor_against"                              , ("MODIFIER_NAVY_CAPITAL_SHIP_ATTACK_FACTOR_AGAINST_A_COUNTRY", MsgModifierPcPosReduced, Just 2))
-        ,("navy_capital_ship_defence_factor_against"                             , ("MODIFIER_NAVY_CAPITAL_SHIP_DEFENCE_FACTOR_AGAINST_A_COUNTRY", MsgModifierPcPosReduced, Just 2))
-        ,("navy_screen_attack_factor_against"                                    , ("MODIFIER_NAVY_SCREEN_ATTACK_FACTOR_AGAINST_A_COUNTRY", MsgModifierPcPosReduced, Just 2))
-        ,("navy_screen_defence_factor_against"                                   , ("MODIFIER_NAVY_SCREEN_DEFENCE_FACTOR_AGAINST_A_COUNTRY", MsgModifierPcPosReduced, Just 2))
-        ,("paratrooper_weight_factor"                                            , ("MODIFIER_UNIT_SIZE_FACTOR_FOR_PARADROP", MsgModifierPcNegReduced, Just 1))
-        ,("river_crossing_factor"                                                , ("MODIFIER_RIVER_CROSSING_PENALTY_FACTOR", MsgModifierPcNegReduced, Just 2))
-        ,("river_crossing_factor_against"                                        , ("MODIFIER_RIVER_CROSSING_PENALTY_FACTOR_AGAINST_A_COUNTRY", MsgModifierPcNegReduced, Just 2))
-        ,("spotting_chance_against"                                              , ("MODIFIER_SPOTTING_CHANCE_AGAINST_A_COUNTRY", MsgModifierPcPosReduced, Just 0))
         ]
