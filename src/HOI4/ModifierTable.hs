@@ -24,13 +24,7 @@ modifiersTable = HM.fromList
         
         -- Resources
         ,("local_resources_factor"          , ("MODIFIER_LOCAL_RESOURCES_FACTOR", MsgModifierPcPosReduced, Just 2))
-        ,("local_resources_oil_factor"      , ("local_resources_oil_factor", MsgModifierPcPosReduced, Just 2))
-        ,("local_resources_aluminium_factor" , ("local_resources_aluminium_factor", MsgModifierPcPosReduced, Just 2))
-        ,("local_resources_rubber_factor"   , ("local_resources_rubber_factor", MsgModifierPcPosReduced, Just 2))
-        ,("local_resources_tungsten_factor" , ("local_resources_tungsten_factor", MsgModifierPcPosReduced, Just 2))
-        ,("local_resources_steel_factor"    , ("local_resources_steel_factor", MsgModifierPcPosReduced, Just 2))
-        ,("local_resources_chromium_factor" , ("local_resources_chromium_factor", MsgModifierPcPosReduced, Just 2))
-        ,("local_resources_coal_factor"     , ("local_resources_coal_factor", MsgModifierPcPosReduced, Just 2))
+        ,("state_resources_factor"          , ("MODIFIER_STATE_RESOURCES_FACTOR", MsgModifierPcPosReduced, Just 0))
 
         -- Politics
         ,("min_export"                      , ("MODIFIER_MIN_EXPORT_FACTOR", MsgModifierPcReducedSign, Just 0))
@@ -568,7 +562,6 @@ modifiersTable = HM.fromList
         ,("resistance_growth"               , ("MODIFIER_RESISTANCE_GROWTH", MsgModifierPcNegReduced, Just 0))
         ,("resistance_target"               , ("MODIFIER_RESISTANCE_TARGET", MsgModifierPcNegReduced, Just 0))
         ,("starting_compliance"             , ("MODIFIER_COMPLIANCE_STARTING_VALUE", MsgModifierPcPosReduced, Just 0))
-        ,("state_resources_factor"          , ("MODIFIER_STATE_RESOURCES_FACTOR", MsgModifierPcPosReduced, Just 0))
         ,("state_production_speed_buildings_factor" , ("MODIFIER_STATE_PRODUCTION_SPEED_BUILDINGS_FACTOR", MsgModifierPcPosReduced, Just 0))
         ,("enemy_operative_detection_chance_factor_over_occupied_tag" , ("MODIFIER_ENEMY_OPERATIVE_DETECTION_CHANCE_FACTOR_OVER_OCCUPIED_TAG", MsgModifierPcPosReduced, Just 0)) --precision 0
 
