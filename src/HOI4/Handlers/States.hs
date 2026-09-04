@@ -23,8 +23,9 @@ module HOI4.Handlers.States (
     ,   anyProvinceBuildingLevel
     ) where
 
-import Data.List (foldl', intercalate)
+import Data.List (foldl', intercalate, nub, sort)
 import Data.Maybe
+import qualified Data.HashMap.Strict as HM
 import Data.Text (Text)
 import qualified Data.Text as T
 
@@ -47,17 +48,21 @@ import HOI4.Handlers.Core (msgToPP, preMessage, preStatement)
 import HOI4.Handlers.Generic (numericCompare, parseTV, parseVV, TextValue (..), ValueValue (..))
 
 -- | Handler for a building's own name used as a trigger, which compares how many
--- levels of the building the state has.
+-- levels of the building the state has. Every building the game defines is
+-- one of these; "HOI4.Common" sends any of them here.
 buildingLevel :: (HOI4Info g, Monad m) => Text -> StatementHandler g m
-buildingLevel building = numericCompare "more than" "fewer than"
-    (MsgBuildingLevel (iconText building)) (MsgBuildingLevelVar (iconText building))
+buildingLevel building stmt = do
+    icon <- buildingIcon building
+    numericCompare "more than" "fewer than"
+        (MsgBuildingLevel icon) (MsgBuildingLevelVar icon) stmt
 
 -- | Handler for @construct_building_in_random_province@, whose block names the
 -- building to put up and how many levels of it.
 constructBuildingInRandomProvince :: (HOI4Info g, Monad m) => StatementHandler g m
 constructBuildingInRandomProvince stmt@[pdx| %_ = @scr |] = case scr of
-    [[pdx| $building = !level |]] ->
-        msgToPP $ MsgConstructBuildingInRandomProvince (iconText building) level
+    [[pdx| $building = !level |]] -> do
+        icon <- buildingIcon building
+        msgToPP $ MsgConstructBuildingInRandomProvince icon level
     _ -> preStatement stmt
 constructBuildingInRandomProvince stmt = preStatement stmt
 
@@ -80,10 +85,12 @@ buildingTypeLevel valmsg varmsg stmt@[pdx| %_ = @scr |] = do
     let tv = parseTV "type" "level" scr'
     case (tv_what tv, tv_value tv, tv_var tv) of
         (Just what, Just value, _) -> do
-            (icon, loc) <- tryLocAndIcon what
+            icon <- buildingIcon what
+            loc <- getGameL10n what
             msgToPP $ valmsg icon loc value provloc
         (Just what, _, Just var) -> do
-            (icon, loc) <- tryLocAndIcon what
+            icon <- buildingIcon what
+            loc <- getGameL10n what
             msgToPP $ varmsg icon loc var provloc
         _ -> preStatement stmt
 buildingTypeLevel _ _ stmt = preStatement stmt
@@ -229,7 +236,7 @@ parseBuildStmt what = foldl' addLine (BuildStmt "" Nothing Nothing False newProv
 addBuildingConstruction :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
 addBuildingConstruction stmt@[pdx| %_ = @scr |] = msgToPP =<< do
     let b = parseBuildStmt "add_building_construction" scr
-        buildicon = iconText (bld_type b)
+    buildicon <- buildingIcon (bld_type b)
     prov <- ppProvSel (bld_prov b)
     buildloc <- getGameL10n (bld_type b)
     return $ case (bld_level b, bld_levelvar b) of
@@ -245,7 +252,7 @@ addBuildingConstruction stmt = warn (UnknownSection "add_building_construction" 
 setBuildingLevel :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
 setBuildingLevel stmt@[pdx| %_ = @scr |] = msgToPP =<< do
     let b = parseBuildStmt "set_building_level" scr
-        buildicon = iconText (bld_type b)
+    buildicon <- buildingIcon (bld_type b)
     prov <- ppProvSel (bld_prov b)
     buildloc <- getGameL10n (bld_type b)
     return $ case (bld_level b, bld_levelvar b) of
@@ -293,8 +300,8 @@ freeBuildingSlots stmt@[pdx| %_ = @scr |]
         addLine fbs stmt
             = warn (UnknownSection "free_building_slots" stmt) $ return fbs
         pp_fbs fbs = do
-            let buildicon = iconText $ fbs_building fbs
-                provloc = maybe "" (\p -> " in province (" <> T.pack (show p) <> ")") (fbs_province fbs)
+            buildicon <- buildingIcon (fbs_building fbs)
+            let provloc = maybe "" (\p -> " in province (" <> T.pack (show p) <> ")") (fbs_province fbs)
                 buildiconloc = buildicon <> provloc
             return $ MsgFreeBuildingSlots (fbs_comp fbs) (fbs_size fbs) buildiconloc (fbs_include_locked fbs)
 freeBuildingSlots stmt = preStatement stmt
@@ -432,6 +439,7 @@ setStateProvinceController stmt = preStatement stmt
 
 data DamageBuilding = DamageBuilding
         {   db_type :: Text
+        ,   db_tags :: [Text]
         ,   db_damage :: Maybe Double
         ,   db_damagevar :: Maybe Text
         ,   db_province :: Maybe Int
@@ -441,16 +449,19 @@ data DamageBuilding = DamageBuilding
         }
 
 newDB :: DamageBuilding
-newDB = DamageBuilding "" Nothing Nothing Nothing Nothing Nothing Nothing
+newDB = DamageBuilding "" [] Nothing Nothing Nothing Nothing Nothing Nothing
 
+-- | Handler for @damage_building@, which names the building either outright
+-- or by a tag the building definitions give it (@dam_building@ for the three
+-- dams), and says where it stands and how badly it is hit.
 damageBuilding :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
 damageBuilding stmt@[pdx| %_ = @scr |]
     = msgToPP =<< ppDB =<< foldM addLine newDB scr
     where
         addLine :: DamageBuilding -> GenericStatement -> PPT g m DamageBuilding
         addLine db [pdx| type = ?txt |] = return db { db_type = txt }
-        addLine db [pdx| tags = ?txt |] = return db { db_type = txt }
-        addLine db [pdx| tags = @_ |] = return db { db_type = "<!-- Multiple tags check script -->" }
+        addLine db [pdx| tags = ?txt |] = return db { db_tags = db_tags db ++ [txt] }
+        addLine db [pdx| tags = @tags |] = return db { db_tags = db_tags db ++ [ tag | StatementBare (GenericLhs tag []) <- tags ] }
         addLine db [pdx| damage = !num |] = return db { db_damage = Just num }
         addLine db [pdx| damage = $txt |] = return db { db_damagevar = Just txt }
         addLine db [pdx| province = !num |] = return db {db_province = Just num}
@@ -463,7 +474,17 @@ damageBuilding stmt@[pdx| %_ = @scr |]
         addLine db [pdx| repair_speed_modifier = !num |] = return db {db_repair = Just num}
         addLine db stmt = warn (UnknownSection "damage_building" stmt) $ return db
         ppDB db = do
-            let typeicon = iconText (db_type db)
+            typeicon <- case db_tags db of
+                [] -> buildingIcon (db_type db)
+                -- Whichever buildings carry the tag: the three dams are one
+                -- icon, so they are named once.
+                tags -> do
+                    blds <- getBuildings
+                    icons <- traverse buildingIcon $ sort
+                        [ bld_id bld | bld <- HM.elems blds, any (`elem` bld_tags bld) tags ]
+                    return $ case nub icons of
+                        [] -> T.intercalate ", " (map typewriterText tags)
+                        found -> T.intercalate " or " found
             whereloc <- case (db_state db, db_province db, db_provincevar db) of
                 (Just state, _, _) -> getStateLoc state
                 (_, Just prov, _) -> getProvinceLoc prov
@@ -533,7 +554,9 @@ newAPB = AnyProvBuilding Nothing "at least" 0 [] False False False False False
 -- level given.
 anyProvinceBuildingLevel :: forall g m. (HOI4Info g, Monad m) => StatementHandler g m
 anyProvinceBuildingLevel stmt@[pdx| %_ = @scr |] = case apb_building apb of
-        Just bld -> msgToPP $ MsgAnyProvinceBuildingLevel (iconText bld)
+        Just bld -> do
+            icon <- buildingIcon bld
+            msgToPP $ MsgAnyProvinceBuildingLevel icon
                         (apb_comp apb) (apb_level apb) whichProvinces
         Nothing -> preStatement stmt
     where

@@ -392,10 +392,14 @@ parseHOI4LocKeys order = return $ map fst (sortOn (\x -> elemIndex (snd x) order
 -- buildings --
 ---------------
 
--- | The buildings, keyed on the token script names them by. Only the modifiers a
--- building gives the state it stands in are kept: those are what the game shows
--- when script points at a building by name, and the rest of a building's entry
--- says how to build it rather than what it does.
+-- | The buildings, keyed on the token script names them by. Only the tags a
+-- building carries and the modifiers it gives the state it stands in are kept:
+-- those are what script points at a building by, and what the game shows when
+-- it does, and the rest of a building's entry says how to build it rather than
+-- what it does.
+--
+-- The spawn points share the file with the buildings -- a @dam_spawn@ sits
+-- next to the @dam@ -- and are told apart by the @type@ line only they have.
 parseHOI4Buildings :: (IsGameState (GameState g), IsGameData (GameData g), Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap Text HOI4Building)
 parseHOI4Buildings scripts = return $ HM.unions
@@ -405,12 +409,17 @@ parseHOI4Buildings scripts = return $ HM.unions
         named = \case
             [pdx| buildings = @blds |] -> blds
             _ -> []
-        building file [pdx| $bid = @scr |] = Just HOI4Building
-            {   bld_id = bid
-            ,   bld_state_modifiers = fst (extractStmt (matchLhsText "state_modifiers") scr)
-            ,   bld_filepath = file
-            }
+        building file [pdx| $bid = @scr |]
+            | any (matchLhsText "type") scr = Nothing -- a spawn point
+            | otherwise = Just HOI4Building
+                {   bld_id = bid
+                ,   bld_tags = concatMap tagsOf scr
+                ,   bld_state_modifiers = fst (extractStmt (matchLhsText "state_modifiers") scr)
+                ,   bld_filepath = file
+                }
         building _ _ = Nothing
+        tagsOf [pdx| tags = @tags |] = [ tag | StatementBare (GenericLhs tag []) <- tags ]
+        tagsOf _ = []
 
 ---------------------------------------
 -- military industrial organizations --

@@ -26,6 +26,8 @@ module HOI4.Localization (
     ,   constantValue
     ,   icon
     ,   iconText
+    ,   buildingIcon
+    ,   isLandmark
     ,   isTag
     ,   isPronoun
     ,   flag
@@ -76,7 +78,7 @@ import Doc (Doc)
 import qualified Doc
 import MessageTools (boldText, ifThenElseT, plainNum, template, typewriterText)
 import HOI4.CountryNames (casualName)
-import HOI4.Messages (message, messageText, ScriptMessage (..))
+import HOI4.Messages (message, messageText, isLandmark, ScriptMessage (..))
 import HOI4.Types -- everything
 import HOI4.WikiTables (iconTerm, scriptIconFileTable, tagAliases)
 
@@ -506,6 +508,19 @@ icon what = case HM.lookup what scriptIconFileTable of
             template "icon" [iconTerm what, "1"]
 iconText :: Text -> Text
 iconText = Doc.doc2text . icon
+
+-- | How a building is shown wherever script names one: its icon, which on the
+-- wiki carries the building's name with it. Every handler that names a
+-- building goes through here, so they all show one the same way.
+--
+-- The landmarks are the exception: the wiki draws them all with one icon, so
+-- a landmark is shown as that icon followed by its own name.
+buildingIcon :: (HOI4Info g, Monad m) => Text -> PPT g m Text
+buildingIcon bld
+    | isLandmark bld = do
+        name <- getGameL10n bld
+        return $ Doc.doc2text (template "icon" ["landmark"]) <> " " <> name
+    | otherwise = return (iconText bld)
 
 -- Argument may be a tag or a tagged variable. Emit a flag in the former case,
 -- and localize in the latter case.

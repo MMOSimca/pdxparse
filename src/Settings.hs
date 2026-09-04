@@ -191,6 +191,7 @@ readSettings = do
                             , gameInterface = HM.empty -- filled in later
                             , gameL10n = HM.empty -- filled in later
                             , gameL10nKeys = [] -- filled in later
+                            , gameBuildingKeys = [] -- filled in later
                             , langs = ["en"]
                             , settingsFile = settingsFilePath
                             , inlineScriptLimit = fromMaybe 10 (inlineScriptLimitI settingsIn)

@@ -63,6 +63,11 @@ data ParseWarning
         -- which table, the entry. The entry does no harm on its own -- a
         -- lookup for it simply never fires -- but it means the game moved
         -- and the table has not.
+    | MissingEntry Text Text
+        -- ^ A hand-kept table says nothing about something the game defines:
+        -- which table (and where to add to it), the entry. Whatever the table
+        -- is for falls back to something a reader can see is wrong until the
+        -- entry is added.
 
 renderWarning :: ParseWarning -> String
 renderWarning (TotalFailure what err) =
@@ -75,6 +80,8 @@ renderWarning (BadValue what stmt) =
     "Bad value for " ++ T.unpack what ++ ": " ++ show stmt
 renderWarning (StaleEntry what entry) =
     "Stale entry in " ++ T.unpack what ++ ": " ++ T.unpack entry
+renderWarning (MissingEntry what entry) =
+    "Missing entry in " ++ T.unpack what ++ ": " ++ T.unpack entry
 
 -- | Report a warning from pure code, passing the given value through.
 warn :: ParseWarning -> a -> a

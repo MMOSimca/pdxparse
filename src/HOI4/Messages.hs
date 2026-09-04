@@ -33,6 +33,7 @@ module HOI4.Messages (
     ,   templateColor, templateColor'
     ,   wikifyLocColours
     ,   message, messageText
+    ,   isLandmark
     ,   imsg2doc, imsg2doc_html
     ,   IndentedMessage, IndentedMessages
     ) where
@@ -347,12 +348,6 @@ data ScriptMessage
     | MsgHasStabilityVar {scriptMessageAmtText :: Text, scriptMessageCompare :: Text}
     | MsgHasWarSupport {scriptMessageAmt :: Double, scriptMessageCompare :: Text}
     | MsgHasWarSupportVar {scriptMessageAmtText :: Text, scriptMessageCompare :: Text}
-    | MsgIndustrialComplex {scriptMessageAmt :: Double, scriptMessageCompare :: Text}
-    | MsgIndustrialComplexVar {scriptMessageAmtText :: Text, scriptMessageCompare :: Text}
-    | MsgInfrastructure {scriptMessageAmt :: Double, scriptMessageCompare :: Text}
-    | MsgInfrastructureVar {scriptMessageAmtText :: Text, scriptMessageCompare :: Text}
-    | MsgNuclearReactor {scriptMessageAmt :: Double, scriptMessageCompare :: Text}
-    | MsgNuclearReactorVar {scriptMessageAmtText :: Text, scriptMessageCompare :: Text}
     | MsgNumOfControlledFactories {scriptMessageAmt :: Double, scriptMessageCompare :: Text}
     | MsgNumOfControlledFactoriesVar {scriptMessageAmtText :: Text, scriptMessageCompare :: Text}
     | MsgNumOfControlledStates {scriptMessageAmt :: Double, scriptMessageCompare :: Text}
@@ -685,23 +680,17 @@ data ScriptMessage
     | MsgHasGovernment {scriptMessageIcon :: Text, scriptMessageWhat :: Text}
     | MsgIsHistoricalFocusOn { scriptMessageYn :: Bool }
     | MsgIsOperativeCaptured { scriptMessageYn :: Bool }
-    | MsgAirBase {scriptMessageAmt :: Double, scriptMessageCompare :: Text}
-    | MsgAirBaseVar {scriptMessageAmtText :: Text, scriptMessageCompare :: Text}
     | MsgAllianceStrengthRatio {scriptMessageAmt :: Double, scriptMessageCompare :: Text}
     | MsgAllianceStrengthRatioVar {scriptMessageAmtText :: Text, scriptMessageCompare :: Text}
     | MsgAmountResearchSlots {scriptMessageAmt :: Double, scriptMessageCompare :: Text}
     | MsgAmountResearchSlotsVar {scriptMessageAmtText :: Text, scriptMessageCompare :: Text}
     | MsgAnyWarScore {scriptMessageAmt :: Double, scriptMessageCompare :: Text}
     | MsgAnyWarScoreVar {scriptMessageAmtText :: Text, scriptMessageCompare :: Text}
-    | MsgArmsFactory {scriptMessageAmt :: Double, scriptMessageCompare :: Text}
-    | MsgArmsFactoryVar {scriptMessageAmtText :: Text, scriptMessageCompare :: Text}
     | MsgCommandPower {scriptMessageAmt :: Double, scriptMessageCompare :: Text}
     | MsgCommandPowerVar {scriptMessageAmtText :: Text, scriptMessageCompare :: Text}
     | MsgCompareAutonomyProgressRatio {scriptMessageAmt :: Double, scriptMessageCompare :: Text}
     | MsgCompareAutonomyProgressRatioVar {scriptMessageAmtText :: Text, scriptMessageCompare :: Text}
     | MsgDate {scriptMessageCompare :: Text, scriptMessageMonth :: Text, scriptMessageDay :: Double, scriptMessageYear :: Double}
-    | MsgDockyard {scriptMessageAmt :: Double, scriptMessageCompare :: Text}
-    | MsgDockyardVar {scriptMessageAmtText :: Text, scriptMessageCompare :: Text}
     | MsgCompliance {scriptMessageAmt :: Double, scriptMessageCompare :: Text}
     | MsgComplianceVar {scriptMessageAmtText :: Text, scriptMessageCompare :: Text}
     | MsgResistance {scriptMessageAmt :: Double, scriptMessageCompare :: Text}
@@ -2257,54 +2246,6 @@ instance RenderMessage Script ScriptMessage where
                 , " "
                 , typewriterText _amtT
                 , " {{icon|war support|1}}"
-                ]
-        MsgIndustrialComplex {scriptMessageAmt = _amt, scriptMessageCompare = _comp}
-            -> mconcat
-                [ "Has "
-                , _comp
-                , " "
-                , toMessage (bold (plainNumMin _amt))
-                , " {{icon|cic|1}}"
-                ]
-        MsgIndustrialComplexVar {scriptMessageAmtText = _amtT, scriptMessageCompare = _comp}
-            -> mconcat
-                [ "Has "
-                , _comp
-                , " "
-                , typewriterText _amtT
-                , " {{icon|cic|1}}"
-                ]
-        MsgInfrastructure {scriptMessageAmt = _amt, scriptMessageCompare = _comp}
-            -> mconcat
-                [ "Has "
-                , _comp
-                , " "
-                , toMessage (bold (plainNumMin _amt))
-                , " {{icon|infrastructure|1}}"
-                ]
-        MsgInfrastructureVar {scriptMessageAmtText = _amtT, scriptMessageCompare = _comp}
-            -> mconcat
-                [ "Has "
-                , _comp
-                , " "
-                , typewriterText _amtT
-                , " {{icon|infrastructure|1}}"
-                ]
-        MsgNuclearReactor {scriptMessageAmt = _amt, scriptMessageCompare = _comp}
-            -> mconcat
-                [ "Has "
-                , _comp
-                , " "
-                , toMessage (bold (plainNumMin _amt))
-                , " {{icon|reactor|1}}"
-                ]
-        MsgNuclearReactorVar {scriptMessageAmtText = _amtT, scriptMessageCompare = _comp}
-            -> mconcat
-                [ "Has "
-                , _comp
-                , " "
-                , typewriterText _amtT
-                , " {{icon|reactor|1}}"
                 ]
         MsgNumOfControlledFactories {scriptMessageAmt = _amt, scriptMessageCompare = _comp}
             -> mconcat
@@ -4569,22 +4510,6 @@ instance RenderMessage Script ScriptMessage where
                 , toMessage (ifThenElseT _yn "" "'''not'''")
                 , " captured"
                 ]
-        MsgAirBase {scriptMessageAmt = _amt, scriptMessageCompare = _comp}
-            -> mconcat
-                [ "Has "
-                , _comp
-                , " "
-                , toMessage (bold (plainNumMin _amt))
-                , " {{icon|air base|1}} "
-                ]
-        MsgAirBaseVar {scriptMessageAmtText = _amtT, scriptMessageCompare = _comp}
-            -> mconcat
-                [ "Has "
-                , _comp
-                , " "
-                , typewriterText _amtT
-                , " {{icon|air base|1}} "
-                ]
         MsgAllianceStrengthRatio {scriptMessageAmt = _amt, scriptMessageCompare = _comp}
             -> mconcat
                 [ "Estimated army strength ratio of "
@@ -4634,22 +4559,6 @@ instance RenderMessage Script ScriptMessage where
                 , typewriterText _amtT
                 , " war progress"
                 ]
-        MsgArmsFactory {scriptMessageAmt = _amt, scriptMessageCompare = _comp}
-            -> mconcat
-                [ "Has "
-                , _comp
-                , " "
-                , toMessage (bold (plainNumMin _amt))
-                , " {{icon|mic|1}}"
-                ]
-        MsgArmsFactoryVar {scriptMessageAmtText = _amtT, scriptMessageCompare = _comp}
-            -> mconcat
-                [ "Has "
-                , _comp
-                , " "
-                , typewriterText _amtT
-                , " {{icon|mic|1}}"
-                ]
         MsgCommandPower {scriptMessageAmt = _amt, scriptMessageCompare = _comp}
             -> mconcat
                 [ "Has "
@@ -4681,22 +4590,6 @@ instance RenderMessage Script ScriptMessage where
                 , " "
                 , typewriterText _amtT
                 , " {{icon|autonomy|1}} progress"
-                ]
-        MsgDockyard {scriptMessageAmt = _amt, scriptMessageCompare = _comp}
-            -> mconcat
-                [ "Has "
-                , _comp
-                , " "
-                , toMessage (bold (plainNumMin _amt))
-                , " {{icon|nic|1}}"
-                ]
-        MsgDockyardVar {scriptMessageAmtText = _amtT, scriptMessageCompare = _comp}
-            -> mconcat
-                [ "Has "
-                , _comp
-                , " "
-                , typewriterText _amtT
-                , " {{icon|nic|1}}"
                 ]
         MsgCompliance {scriptMessageAmt = _amt, scriptMessageCompare = _comp}
             -> mconcat
@@ -7670,29 +7563,25 @@ messageText msg = do
     mlangs <- getLangs
     wikifyLocColours <$> buildingsToIcons (renderMessage Script mlangs msg)
 
--- | Script keys of the game's buildings. Buildings are shown as their icon
--- rather than their name, so their names have to be recognised wherever the
+-- | Every name the localization knows a building by, in lower case, given the
+-- script keys of the buildings (which the game's files say, see
+-- 'SettingsTypes.gameBuildingKeys'). Buildings are shown as their icon rather
+-- than their name, so their names have to be recognised wherever the
 -- localization colours them, see 'buildingsToIcons'.
-buildingKeys :: [Text]
-buildingKeys =
-    ["infrastructure", "industrial_complex", "arms_factory", "dockyard"
-    ,"air_base", "naval_base", "bunker", "coastal_bunker", "anti_air_building"
-    ,"synthetic_refinery", "radar_station", "rocket_site", "nuclear_reactor"
-    ,"fuel_silo", "supply_node", "rail_way", "energy_infrastructure"
-    ,"industrial_infrastructure", "naval_headquarters", "naval_supply_hub"
-    ,"nuclear_facility", "air_facility", "naval_facility", "land_facility"
-    ,"stronghold_network", "mega_gun_emplacement"
-    ]
-
--- | Every name the localization knows a building by, in lower case. A building
--- is named both by its own entry ("Railways") and by the construction speed
--- modifier that mentions it ("Railway"), and the two don't always agree, so
--- collect both. The localization also names buildings mid-sentence in lower
--- case ("2 land forts"), so names are compared without regard to case.
-buildingNames :: HashMap Text LocEntry -> HashSet Text
-buildingNames l10n = HS.fromList
+--
+-- A building is named both by its own entry ("Railways") and by the
+-- construction speed modifier that mentions it ("Railway"), and the two don't
+-- always agree, so collect both. The localization also names buildings
+-- mid-sentence in lower case ("2 land forts"), so names are compared without
+-- regard to case.
+--
+-- The landmarks are left out: the wiki has one icon for all of them rather
+-- than one each, so a landmark named in text keeps its name.
+buildingNames :: [Text] -> HashMap Text LocEntry -> HashSet Text
+buildingNames buildingKeys l10n = HS.fromList
     [ form
     | bld <- buildingKeys
+    , not (isLandmark bld)
     , name <- map T.toLower (namesOf bld)
     , not (T.null name) && not ("$" `T.isInfixOf` name)
     , form <- [name, plural name]
@@ -7731,6 +7620,13 @@ namedIdea shown key loc = mconcat
     ]
     where byTemplate = T.isPrefixOf "{{icon|"
 
+-- | Whether a building is one of the landmarks, which the game keeps under a
+-- common prefix. The wiki draws them all with one icon, so they are shown
+-- differently from the other buildings wherever a building is named; see
+-- 'HOI4.Localization.buildingIcon'.
+isLandmark :: Text -> Bool
+isLandmark = T.isPrefixOf "landmark_"
+
 -- | Replace coloured building names with the building's icon. The game gives
 -- building names a colour wherever they turn up in its localization; the wiki
 -- always shows the icon for a building instead, never its name in colour. The
@@ -7742,7 +7638,8 @@ buildingsToIcons t
     | otherwise = do
         lang <- gets (language . getSettings)
         l10n <- gets (gameL10n . getSettings)
-        return $ substColoured (buildingNames (HM.findWithDefault HM.empty lang l10n)) t
+        keys <- gets (gameBuildingKeys . getSettings)
+        return $ substColoured (buildingNames keys (HM.findWithDefault HM.empty lang l10n)) t
 
 -- | Rewrite each building named inside a @{{color|X|...}}@ to that building's
 -- icon. A colour template rarely holds only the name, so the icon is lifted out

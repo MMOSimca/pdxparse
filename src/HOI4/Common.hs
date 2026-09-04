@@ -276,8 +276,7 @@ handlersNumeric = Tr.fromList
 -- | Handlers for numeric statements that compare
 handlersNumericCompare :: (HOI4Info g, Monad m) => Trie (StatementHandler g m)
 handlersNumericCompare = Tr.fromList
-        [("air_base"                         , numericCompare "more than" "less than" MsgAirBase MsgAirBaseVar)
-        ,("faction_manifest_fulfillment"     , numericCompare "more than" "less than" MsgFactionManifestFulfillment MsgFactionManifestFulfillmentVar)
+        [("faction_manifest_fulfillment"     , numericCompare "more than" "less than" MsgFactionManifestFulfillment MsgFactionManifestFulfillmentVar)
         ,("faction_influence_rank"           , numericCompare "lower than" "higher than" MsgFactionInfluenceRank MsgFactionInfluenceRankVar)
         ,("days_since_last_strategic_bombing" , numericCompare "more than" "fewer than" MsgDaysSinceLastStrategicBombing MsgDaysSinceLastStrategicBombingVar)
         -- A state names each of its resources as a trigger of its own.
@@ -306,10 +305,8 @@ handlersNumericCompare = Tr.fromList
         ,("alliance_strength_ratio"          , numericCompare "more than" "less than" MsgAllianceStrengthRatio MsgAllianceStrengthRatioVar)
         ,("amount_research_slots"            , numericCompare "more than" "less than" MsgAmountResearchSlots MsgAmountResearchSlotsVar)
         ,("any_war_score"                    , numericCompare "over" "under" MsgAnyWarScore MsgAnyWarScoreVar)
-        ,("arms_factory"                     , numericCompare "more than" "less than" MsgArmsFactory MsgArmsFactoryVar)
         ,("command_power"                    , numericCompare "more than" "less than" MsgCommandPower MsgCommandPowerVar)
         ,("compare_autonomy_progress_ratio"  , numericCompare "over" "under" MsgCompareAutonomyProgressRatio MsgCompareAutonomyProgressRatioVar)
-        ,("dockyard"                         , numericCompare "more than" "less than" MsgDockyard MsgDockyardVar)
         ,("compliance"                       , numericCompare "more than" "less than" MsgCompliance MsgComplianceVar)
         ,("resistance"                       , numericCompare "more than" "less than" MsgResistance MsgResistanceVar)
         ,("enemies_strength_ratio"           , numericCompare "over" "under" MsgEnemiesStrengthRatio MsgEnemiesStrengthRatioVar)
@@ -328,9 +325,6 @@ handlersNumericCompare = Tr.fromList
         ,("political_power_daily"            , numericCompare "more than" "less than" MsgPoliticalPowerDaily MsgPoliticalPowerDailyVar)
         ,("has_stability"                    , numericCompare "more than" "less than" MsgHasStability MsgHasStabilityVar)
         ,("has_war_support"                  , numericCompare "more than" "less than" MsgHasWarSupport MsgHasWarSupportVar)
-        ,("industrial_complex"               , numericCompare "more than" "fewer than" MsgIndustrialComplex MsgIndustrialComplexVar)
-        ,("infrastructure"                   , numericCompare "more than" "fewer than" MsgInfrastructure MsgInfrastructureVar)
-        ,("nuclear_reactor"                  , numericCompare "more than" "less than" MsgNuclearReactor MsgNuclearReactorVar)
         ,("num_of_controlled_factories"      , numericCompare "more than" "fewer than" MsgNumOfControlledFactories MsgNumOfControlledFactoriesVar)
         ,("num_of_controlled_states"         , numericCompare "more than" "fewer than" MsgNumOfControlledStates MsgNumOfControlledStatesVar)
         ,("num_of_civilian_factories"        , numericCompare "More" "Fewer" MsgNumOfCivilianFactories MsgNumOfCivilianFactoriesVar)
@@ -355,29 +349,6 @@ handlersNumericCompare = Tr.fromList
         ,("average_stats"                    , numericCompare "more than" "less than" MsgAverageStats MsgAverageStatsVar)
         ,("political_power_growth"           , numericCompare "more than" "less than" MsgPoliticalPowerGrowth MsgPoliticalPowerGrowthVar)
         ,("agency_upgrade_number"            , numericCompare "more than" "fewer than" MsgAgencyUpgrades MsgAgencyUpgradesVar)
-        -- A building's own name is a trigger for how many levels of it a state
-        -- has. The ones above have a message of their own; the rest are named by
-        -- their icon. See 'HOI4.Messages.buildingKeys'.
-        ,("anti_air_building"                , buildingLevel "anti_air_building")
-        ,("air_facility"                     , buildingLevel "air_facility")
-        ,("bunker"                           , buildingLevel "bunker")
-        ,("coastal_bunker"                   , buildingLevel "coastal_bunker")
-        ,("energy_infrastructure"            , buildingLevel "energy_infrastructure")
-        ,("fuel_silo"                        , buildingLevel "fuel_silo")
-        ,("industrial_infrastructure"        , buildingLevel "industrial_infrastructure")
-        ,("land_facility"                    , buildingLevel "land_facility")
-        ,("mega_gun_emplacement"             , buildingLevel "mega_gun_emplacement")
-        ,("naval_base"                       , buildingLevel "naval_base")
-        ,("naval_facility"                   , buildingLevel "naval_facility")
-        ,("naval_headquarters"               , buildingLevel "naval_headquarters")
-        ,("naval_supply_hub"                 , buildingLevel "naval_supply_hub")
-        ,("nuclear_facility"                 , buildingLevel "nuclear_facility")
-        ,("radar_station"                    , buildingLevel "radar_station")
-        ,("rail_way"                         , buildingLevel "rail_way")
-        ,("rocket_site"                      , buildingLevel "rocket_site")
-        ,("stronghold_network"               , buildingLevel "stronghold_network")
-        ,("supply_node"                      , buildingLevel "supply_node")
-        ,("synthetic_refinery"               , buildingLevel "synthetic_refinery")
         ]
 
 -- | Handlers for numeric statements with icons
@@ -1250,7 +1221,14 @@ ppOne' stmt lhs rhs = case lhs of
                             _ -> case HM.lookup label scripttrigger of
                                 Just trigger -> ppScriptedBlock "Scripted Trigger: " label trigger stmt
                                 _ -> preStatement stmt
-                _ -> preStatement stmt
+                -- A building's own name is a trigger for how many levels of
+                -- it a state has. The buildings are read from the game's
+                -- files, so a new one needs no entry in the tables above.
+                _ -> do
+                    blds <- getBuildings
+                    if HM.member label blds
+                        then buildingLevel label stmt
+                        else preStatement stmt
     AtLhs _ -> return [] -- don't know how to handle these
     IntLhs n -> do -- Treat as a province tag
         case rhs of

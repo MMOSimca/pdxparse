@@ -241,6 +241,12 @@ data Settings = Settings {
     ,   gameL10n    :: L10n     -- ^ Game localization table. See "Yaml" for
                                 --   the definition of this type.
     ,   gameL10nKeys :: [Text]
+    ,   gameBuildingKeys :: [Text] -- ^ Script keys of the game's buildings,
+                                   --   filled in once the building definitions
+                                   --   have been read. The message renderer
+                                   --   needs them to recognise building names
+                                   --   in localized text and show the building's
+                                   --   icon instead.
     ,   langs       :: [Lang]   -- ^ Preferential list of output languages.
                                 --   Currently only \"en\" is supported.
     ,   settingsFile :: FilePath -- ^ Path to @settings.yaml@.

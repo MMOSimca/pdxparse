@@ -704,10 +704,13 @@ data HOI4Technology = HOI4Technology
     } deriving (Show)
 
 -- | A building, as far as anything outside the construction interface needs it:
--- the modifiers it gives the state it stands in, which the game will show for a
--- building the script has just granted.
+-- the tags script can pick it out by (@damage_building@ names a dam by
+-- @dam_building@ rather than by any of the three dams), and the modifiers it
+-- gives the state it stands in, which the game will show for a building the
+-- script has just granted.
 data HOI4Building = HOI4Building
     {   bld_id :: Text
+    ,   bld_tags :: [Text]
     ,   bld_state_modifiers :: Maybe GenericStatement
     ,   bld_filepath :: FilePath
     } deriving (Show)

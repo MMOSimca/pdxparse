@@ -7,6 +7,7 @@ script atom, and which wiki page each doctrine and national focus is written on.
 -}
 module HOI4.WikiTables (
         scriptIconTable
+    ,   buildingIconTable
     ,   iconTerm
     ,   scriptIconFileTable
     ,   iconKey
@@ -60,12 +61,19 @@ expansionPrefixes = HM.fromList
     , ("taog", "taog")  -- Thunder at Our Gates
     ]
 
--- | Table of script atom -> icon key. Only ones that are different are listed.
--- This is for buildings and the like named by a script atom; buildings named by
--- the localization keep their localized name as their icon key, see
--- 'HOI4.Messages.buildingsToIcons'.
-scriptIconTable :: HashMap Text Text
-scriptIconTable = HM.fromList
+-- | The key the wiki's icon template knows each building by, for the buildings
+-- whose script name is not that key. The game's building list comes from its
+-- files ('HOI4.Misc.parseHOI4Buildings'); this table only says how the wiki
+-- draws each, which is nothing the game files can tell us, so it has to be kept
+-- by hand. 'HOI4.Settings.checkBuildingIcons' warns when the two drift apart:
+-- a building the game defines that has no entry and whose name the template
+-- cannot know, or an entry for a building the game no longer defines.
+--
+-- Buildings named by the localization keep their localized name as their icon
+-- key, see 'HOI4.Messages.buildingsToIcons'. The landmarks have no table
+-- entry: they share one icon, see 'HOI4.Localization.buildingIcon'.
+buildingIconTable :: HashMap Text Text
+buildingIconTable = HM.fromList
     [("industrial_complex"  , "cic")
     ,("arms_factory"        , "mic")
     ,("dockyard"            , "nic")
@@ -77,6 +85,8 @@ scriptIconTable = HM.fromList
     ,("radar_station"       , "radar station")
     ,("rocket_site"         , "rocket site")
     ,("nuclear_reactor"     , "reactor")
+    ,("nuclear_reactor_heavy_water" , "hw reactor")
+    ,("commercial_nuclear_reactor" , "civilian nuclear reactor")
     ,("bunker"              , "land fort")
     ,("supply_node"         , "supply hub")
     ,("rail_way"            , "railway")
@@ -89,8 +99,23 @@ scriptIconTable = HM.fromList
     ,("air_facility"        , "air facility")
     ,("naval_facility"      , "naval facility")
     ,("land_facility"       , "land facility")
+    ,("stronghold_network"  , "stronghold network")
+    ,("mega_gun_emplacement" , "mega gun emplacement")
+    -- The three dams are one building to the wiki, and the two canals are
+    -- their own.
+    ,("dam_mountain"        , "dam")
+    ,("cataract_dam_mountain" , "dam")
+    ,("canal_kiel"          , "kiel canal locks")
+    ,("canal_panama"        , "panama canal locks")
+    ]
+
+-- | Table of script atom -> icon key. Only ones that are different are listed.
+-- This is for buildings and the like named by a script atom.
+scriptIconTable :: HashMap Text Text
+scriptIconTable = HM.union buildingIconTable $ HM.fromList
+    [
     -- autonomy
-    ,("autonomy_dominion"   , "dominion")
+     ("autonomy_dominion"   , "dominion")
     ,("autonomy_satellite"  , "satellite")
     -- ideologies. Script keeps the non-aligned under a word neither the game
     -- nor the wiki shows a reader: the files say "neutrality" where both say

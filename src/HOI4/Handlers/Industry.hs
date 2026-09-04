@@ -243,8 +243,8 @@ foldCompound "modifyBuildingResources" "ModifyBuildingResources" "mbr"
     ,CompField "amount" [t|Double|] Nothing True
     ]
     [|  do
-        let buildicon = iconText _building
-            resourceicon = iconText _resource
+        buildicon <- buildingIcon _building
+        let resourceicon = iconText _resource
         return $ MsgModifyBuildingResources buildicon resourceicon _amount
     |]
 

@@ -16,6 +16,8 @@ import Control.Monad.State (MonadState (..), StateT (..), modify, gets)
 
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
+import Data.Text (Text)
+import qualified Data.Text as T
 
 import Data.Maybe (listToMaybe)
 
@@ -32,7 +34,7 @@ import SettingsTypes ( PPT, Settings (..)
                      , safeIndex, safeLast)
 import HOI4.Types -- everything
 import HOI4.Localization
-import HOI4.WikiTables (tagAliases)
+import HOI4.WikiTables (tagAliases, buildingIconTable)
 import Yaml (LocEntry (..))
 
 -- Handlers
@@ -557,6 +559,23 @@ checkTagAliases scr = do
         unless (alias `elem` map fst defined) $
             warnM (StaleEntry "tagAliases (HOI4.WikiTables)" alias)
 
+-- | Check the game's buildings against the hand-kept icon table
+-- ('HOI4.WikiTables.buildingIconTable'). The wiki's icon template knows each
+-- building by a term of its own, and a building the table says nothing about
+-- is shown under its script name. The template knows a few of those -- the
+-- one-word names, "dam" or "infrastructure" -- but a name with an underscore
+-- in it is certainly not one, so such a building gets a warning and surfaces
+-- on a version bump. A table entry for a building the game no longer defines
+-- gets one as well. The landmarks all share one icon and need no entry.
+checkBuildingIcons :: Monad m => HashMap Text HOI4Building -> PPT HOI4 m ()
+checkBuildingIcons blds = do
+    forM_ (HM.keys blds) $ \bld ->
+        unless (HM.member bld buildingIconTable || isLandmark bld || not ("_" `T.isInfixOf` bld)) $
+            warnM (MissingEntry "buildingIconTable (HOI4.WikiTables)" bld)
+    forM_ (HM.keys buildingIconTable) $ \bld ->
+        unless (HM.member bld blds) $
+            warnM (StaleEntry "buildingIconTable (HOI4.WikiTables)" bld)
+
 -- | Interpret the script ASTs as usable data.
 parseHOI4Scripts :: Monad m => PPT HOI4 m ()
 parseHOI4Scripts = do
@@ -598,6 +617,7 @@ parseHOI4Scripts = do
     bops <- parseHOI4BopRanges =<< getBopScripts
     techspathed <- parseHOI4TechnologiesPath =<< getTechnologyScripts
     buildings <- parseHOI4Buildings =<< getBuildingScripts
+    checkBuildingIcons buildings
     (mionames, mioincludes) <- parseHOI4MioNames =<< getMioScripts
     constants <- parseHOI4ScriptConstants =<< getScriptConstantScripts
     modkeys <- parseHOI4LocKeys =<< getLocKeys
@@ -662,6 +682,9 @@ parseHOI4Scripts = do
             ,   hoi4mioincludes = mioincludes
             ,   hoi4scriptconstants = constants
             ,   hoi4modkeys = modkeys
+            -- The message renderer cannot see the game data, only the
+            -- settings, and it has to know the buildings by name.
+            ,   hoi4settings = (hoi4settings s) { gameBuildingKeys = HM.keys buildings }
             }
 
 -- | Output the game data as wiki text.

@@ -14,7 +14,7 @@ import Control.Monad.State (MonadState (..), gets)
 import Control.Monad.Trans (MonadIO (..))
 
 import Data.List ( foldl', sortOn )
-import Data.Maybe (fromMaybe, mapMaybe, isJust)
+import Data.Maybe (fromMaybe, mapMaybe, isJust, listToMaybe)
 
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
@@ -394,11 +394,20 @@ ppTechEffects tech equip modul units buildings unitmod catmod globals = if all n
                 ,"|-", PP.line
                 ,"| style=\"border: none; width: 50%; padding-right: 10px;\"| '''<!--statname here-->:''' <span style=\"float:right;\"><!-- number here --></span>", PP.line
                 ,"| style=\"border: none; width: 50%; padding-left: 10px;\"| '''<!--statname here-->:''' <span style=\"float:right;\"><!-- number here --></span>", PP.line]
+        -- A building the technology makes available, and up to what level.
         buildingthing :: forall g m. (HOI4Info g, Monad m) => GenericScript -> PPT g m [Doc]
         buildingthing build = do
+            let mbld = listToMaybe [ bld | [pdx| building = $bld |] <- build ]
+                mlevel = listToMaybe [ level | [pdx| level = !level |] <- build ] :: Maybe Double
+            shown <- case mbld of
+                Just bld -> do
+                    icon <- buildingIcon bld
+                    return $ icon <> "<!-- " <> bld <> " -->"
+                        <> maybe "" (\level -> " up to level " <> T.pack (show (round level :: Int))) mlevel
+                Nothing -> return "<!-- CHECK SCRIPT: enable_building without a building -->"
             return
                 ["|-", PP.line
-                ,"| colspan=\"2\" style=\"text-align: center; border: none;\" | [[File:<!--buildingiconnamehere-->.png|link=<!--linknamehere-->]] <!--building name here>" , PP.line]
+                ,"| colspan=\"2\" style=\"text-align: center; border: none;\" | ", Doc.strictText shown, PP.line]
 
         unitmodthing unitmod = do
             return
