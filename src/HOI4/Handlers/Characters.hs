@@ -292,6 +292,10 @@ promoteCharacter stmt@[pdx| %_ = @scr |] =
         ppPC ta = case (ta_what ta, ta_atom ta) of
             (Just what, Just atom) -> promomessage what atom stmt
             (_, Just atom) -> promomessage "" atom stmt
+            -- The block may name only the character, leaving the party to be
+            -- the one their own entry writes them for, the same as when script
+            -- names them on the right of the statement itself.
+            (Just what, _) -> promomessage what "" stmt
             _ -> preStatement stmt
 promoteCharacter stmt@[pdx| %_ = $txt |]
     -- The character is whoever the script has scoped to, who the scope names
