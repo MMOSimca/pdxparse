@@ -89,6 +89,7 @@ ppChunk :: (HOI4Info g, Monad m) => ScriptChunk -> PPT g m IndentedMessages
 ppChunk (PlainStmt stmt) = ppOne stmt
 ppChunk (DynModChunk tts dmods isSet mods) = ppDynModChunk tts dmods isSet mods
 ppChunk (IdeaSlotChunk tt ideas) = ppIdeaSlotChunk tt ideas
+ppChunk (TooltipEffectChunk tt scr) = ppTooltipEffectChunk tt scr
 ppChunk (StateChunk states block_pp) = do
     header <- msgToPP (MsgState states)
     return (header ++ block_pp)
@@ -540,6 +541,10 @@ handlersCompound = Tr.fromList
         -- What follows is done to the country made up here, not to the one the
         -- script was about.
         ,("create_dynamic_country"  , scope HOI4Country . compoundMessageExtractTag "original_tag" MsgCreateDynamicCountry)
+
+        -- What follows is done to the special project named after the "sp:",
+        -- not to the country or state the script was scoped to.
+        ,("sp"                          , specialProjectScope)
         ]
 
 -- | Handlers for simple statements where RHS is a localizable atom

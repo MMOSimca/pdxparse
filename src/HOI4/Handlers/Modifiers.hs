@@ -20,6 +20,7 @@ module HOI4.Handlers.Modifiers (
     ,   ppDynModBox
     ,   removeDynamicModifier
     ,   projectInBlock
+    ,   specialProjectScope
     ,   stripProjectPrefix
     ,   hasDynamicModifier
     ) where
@@ -50,7 +51,7 @@ import HOI4.Messages -- everything
 import HOI4.ModifierTable (modifiersTable)
 import HOI4.Types -- everything
 
-import HOI4.Handlers.Core (msgToPP, plainMsg', preStatement, tooltipText)
+import HOI4.Handlers.Core (compoundMessage, msgToPP, plainMsg', preStatement, tooltipText)
 import HOI4.Handlers.Generic (numericLoc, textAtom, withLocAtom, withLocAtom')
 import HOI4.Handlers.Research (masteryGainModifier)
 
@@ -478,6 +479,15 @@ projectInBlock msg stmt = withLocAtom' msg stripProjectPrefix stmt
 -- itself is localized under the key without it.
 stripProjectPrefix :: Text -> Text
 stripProjectPrefix key = fromMaybe key (T.stripPrefix "sp:" key)
+
+-- | Handler for the @sp:@ scope, which runs what is inside it on the special
+-- project it names rather than on whatever the script was scoped to. The
+-- project heads the block, the way any other scope names what it scopes to.
+specialProjectScope :: (HOI4Info g, Monad m) => StatementHandler g m
+specialProjectScope stmt@[pdx| $_:$proj = @_ |] = do
+    loc <- getGameL10n proj
+    compoundMessage (MsgSpecialProjectScope loc) stmt
+specialProjectScope stmt = preStatement stmt
 
 hasDynamicModifier :: (HOI4Info g, Monad m) => StatementHandler g m
 hasDynamicModifier stmt@[pdx| %_ = @dyn |] = if length dyn == 2

@@ -973,6 +973,7 @@ data ScriptMessage
     | MsgSetOccupationLawWhereAvailable {scriptMessageWhat :: Text}
     | MsgCompleteSpecialProject {scriptMessageWhat :: Text}
     | MsgIsSpecialProjectBeingResearched {scriptMessageWhat :: Text}
+    | MsgSpecialProjectScope {scriptMessageWhat :: Text}
     | MsgNumDivisions {scriptMessageAmt :: Double, scriptMessageCompare :: Text}
     | MsgNumDivisionsVar {scriptMessageAmtText :: Text, scriptMessageCompare :: Text}
     | MsgDifficulty {scriptMessageAmt :: Double, scriptMessageCompare :: Text}
@@ -6477,6 +6478,12 @@ instance RenderMessage Script ScriptMessage where
             -> mconcat
                 [ "Is researching special project "
                 , toMessage (iquotes _what)
+                ]
+        MsgSpecialProjectScope {scriptMessageWhat = _what}
+            -> mconcat
+                [ "Special project "
+                , toMessage (bold (Doc.strictText _what))
+                , ":"
                 ]
         MsgNumDivisions {scriptMessageAmt = _amt, scriptMessageCompare = _comp}
             -> mconcat
