@@ -10,6 +10,7 @@ module HOI4.Handlers.Chunks (
         ScriptChunk (..)
     ,   chunkScript
     ,   ppIdeaSlotChunk
+    ,   ppTooltipEffectChunk
     ,   ppDynModChunk
     ) where
 
@@ -25,7 +26,7 @@ import qualified Data.Text as T
 import Abstract -- everything
 import qualified Doc -- everything
 import QQ -- everything
-import SettingsTypes (PPT, scope, concatMapM, indentUp)
+import SettingsTypes (PPT, scope, concatMapM, indentDown, indentUp)
 
 import {-# SOURCE #-} HOI4.Common (ppMany, ppOne)
 import HOI4.Localization
@@ -57,13 +58,45 @@ data ScriptChunk
     | IdeaSlotChunk GenericStatement [GenericStatement]
       -- ^ The tooltip announcing that a slot's ideas change, and the
       --   @show_ideas_tooltip@ statements naming the ideas it announces.
+    | TooltipEffectChunk GenericStatement GenericScript
+      -- ^ The tooltip saying in a sentence what a run of effects comes to,
+      --   and the body of the @effect_tooltip@ standing for those effects.
     | StateChunk Text IndentedMessages
       -- ^ The states a run of scopes names, written out as one, and what the
       --   block every one of them holds comes to.
 
 -- | Split a script into the chunks that are shown as a whole.
 chunkScript :: (HOI4Info g, Monad m) => GenericScript -> PPT g m [ScriptChunk]
-chunkScript scr = chunkStates =<< chunkIdeaSlots <$> chunkDynModVars scr
+chunkScript scr = chunkStates =<< (chunkIdeaSlots . chunkTooltipEffects) <$> chunkDynModVars scr
+
+-- | Group a tooltip with the @effect_tooltip@ that follows it. Script writes
+-- the pair where the game is to say in one sentence what a run of effects comes
+-- to and then draw the effects under that sentence: the tooltip is the heading
+-- for what follows it, not a line standing beside it. An @effect_tooltip@ with
+-- no tooltip before it is left as the plain statement it was, since there is
+-- nothing for its contents to be listed under.
+chunkTooltipEffects :: [ScriptChunk] -> [ScriptChunk]
+chunkTooltipEffects = reverse . foldl' addChunk []
+    where
+        addChunk chunks chunk = case chunk of
+            PlainStmt [pdx| effect_tooltip = @scr |]
+                | PlainStmt tt : rest <- chunks
+                , isCustomTooltip tt -> TooltipEffectChunk tt scr : rest
+            _ -> chunk : chunks
+        isCustomTooltip [pdx| custom_effect_tooltip = %_ |] = True
+        isCustomTooltip _ = False
+
+-- | Present the tooltip announcing what a run of effects comes to as a heading,
+-- with the effects it stands for under it. Where the tooltip has nothing to show
+-- -- script spaces its blocks out with tooltips whose text is empty -- the
+-- effects stand where the pair did, as an @effect_tooltip@ on its own does.
+ppTooltipEffectChunk :: (HOI4Info g, Monad m) =>
+    GenericStatement -> GenericScript -> PPT g m IndentedMessages
+ppTooltipEffectChunk tt scr = do
+    ttmsg <- ppOne tt
+    if null ttmsg
+        then indentDown (ppMany scr)
+        else (ttmsg ++) <$> ppMany scr
 
 -- | Group each run of consecutive state scopes that come to the same thing, so
 -- that what befalls all of them is said once with the states named together,
