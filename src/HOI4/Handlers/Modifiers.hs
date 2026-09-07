@@ -177,6 +177,7 @@ modifierMSG hidden targ stmt@[pdx| $mod = !(_ :: Double) |] = let lmod = T.toLow
             "_design_cost_factor" `T.isSuffixOf` lmod ->
             famModNum hidden targ (familyPrecision lmod) lmod MsgModifierPcNegReduced stmt
         | ("state_resource_" `T.isPrefixOf` lmod && not ("state_resource_cost_" `T.isPrefixOf` lmod)) || --precision 0
+            ("local_resource_" `T.isPrefixOf` lmod && not ("local_resource_cost_" `T.isPrefixOf` lmod)) || --precision 0
             ("country_resource_" `T.isPrefixOf` lmod && not ("country_resource_cost_" `T.isPrefixOf` lmod)) || --precision 0
             "temporary_state_resource_" `T.isPrefixOf` lmod -> --precision 0
             famModNum hidden targ (familyPrecision lmod) lmod MsgModifierColourPos stmt
