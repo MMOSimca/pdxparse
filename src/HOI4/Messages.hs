@@ -3752,11 +3752,10 @@ instance RenderMessage Script ScriptMessage where
                 , ": "
                 , typewriterText _amtT
                 ]
+        -- Like a custom effect tooltip, this is the game's own sentence for
+        -- what the modifiers around it come to, so it is given as it stands.
         MsgCustomModifierTooltip {scriptMessageLoc = _what}
-            -> mconcat
-                [ "Custom modifier tooltip: "
-                , _what
-                ]
+            -> _what
         MsgAddCompliance {scriptMessageAmt = _amt}
             -> mconcat
                 [ "Compliance:"
