@@ -269,7 +269,7 @@ familyPrecision lmod = Just $
             [ "experience_gain_"          -- experience_gain_<Unit>_combat_factor
             , "sp_", "specialization_"    -- <SpecialProject>_speed_factor
             , "operation_"               -- <Operation>_cost, _outcome and _risk
-            , "state_resource_", "country_resource_", "temporary_state_resource_", 'local_resources_"
+            , "state_resource_", "country_resource_", "temporary_state_resource_", "local_resources_"
             , "production_cost_max_"     -- production_cost_max_<NavalEquipment>
             , "cat_"                     -- <IdeaCategory>_category_type_cost_factor
             , "modifier_army_sub_" ]
