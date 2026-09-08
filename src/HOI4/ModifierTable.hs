@@ -592,7 +592,11 @@ modifiersTable = HM.fromList
 
         -- Special Projects
         ,("special_project_facility_supply_consumption_factor"  , (T.replace "$FACTOR$" "" "MODIFIER_SPECIAL_PROJECT_FACILITY_SUPPLY_CONSUMPTION_FACTOR", MsgModifierPcNegReduced, Just 2))
-        ,("special_project_speed_factor"    , ("MODIFIER_SPECIAL_PROJECT_SPEED_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("special_project_speed_factor"           , ("MODIFIER_SPECIAL_PROJECT_SPEED_FACTOR", MsgModifierPcPosReduced, Just 2))
+        ,("specialization_air_speed_factor"        , ("specialization_air_speed_factor", MsgModifierPcPosReduced, Just 1))
+        ,("specialization_land_speed_factor"       , ("specialization_land_speed_factor", MsgModifierPcPosReduced, Just 1))
+        ,("specialization_naval_speed_factor"      , ("specialization_naval_speed_factor", MsgModifierPcPosReduced, Just 1))
+        ,("specialization_nuclear_speed_factor"    , ("specialization_nuclear_speed_factor", MsgModifierPcPosReduced, Just 1))
 
         -- Equipment/Land Stats
         ,("build_cost_ic"           , ("STAT_COMMON_BUILD_COST_IC", MsgModifierPcNegReduced, Nothing))
