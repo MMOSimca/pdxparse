@@ -17,14 +17,25 @@ module HOI4.WikiTables (
     ,   focusPages
     ,   focusPageSplits
     ,   focusTagPages
+    ,   focusPage
+    ,   focusPageTag
+    ,   focusModuleOf
+    ,   focusModuleIds
+    ,   focusSuffixes
     ,   expansionOfPrefix
     ,   tagAliases
     ) where
 
+import Control.Applicative ((<|>))
+
+import Data.Char (chr)
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
+import Data.Maybe (listToMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
+
+import HOI4.Types (HOI4NationalFocus (..))
 
 -- | The expansion whose content a script file holds, named as the wiki's
 -- @Expansion@ template names it, worked out from the prefix the file's name
@@ -395,6 +406,196 @@ focusTagPages :: [(Text, Text)]
 focusTagPages =
     [ ("SPR_", "spr")
     , ("SPA_", "spa")
+    ]
+
+-- | The wiki page a focus is written up on. Which file script keeps a focus in
+-- says which page it belongs to, bar three files the wiki writes up over two
+-- pages each: Spain's two sides are told apart by the tag their ids carry, and
+-- Germany's and the Soviet Union's halves each run in one stretch, so the focus
+-- the second half opens with says where the break falls.
+focusPage :: HashMap Text HOI4NationalFocus -> HOI4NationalFocus -> Maybe Text
+focusPage focuses nf = byTag <|> bySplit <|> HM.lookup file focusPages
+    where
+        file = T.toLower (T.takeWhileEnd (\c -> c /= '/' && c /= chr 92) (T.pack (nf_path nf)))
+        byTag = listToMaybe
+            [ page | (tag, page) <- focusTagPages, tag `T.isPrefixOf` nf_id nf ]
+        bySplit = do
+            (before, marker, from) <- HM.lookup file focusPageSplits
+            split <- HM.lookup marker focuses
+            return (if nf_ordinal nf >= nf_ordinal split then from else before)
+
+-- | The tag the wiki's @{{Focus}}@ template looks a page's focuses up under. A
+-- page is its own tag, bar the two trees the wiki writes over two pages each:
+-- both halves of Germany's are looked up as @ger@ and both of the Soviet
+-- Union's as @sov@, each half keeping its own page.
+focusPageTag :: Text -> Text
+focusPageTag page = HM.findWithDefault page page focusPageTags
+
+focusPageTags :: HashMap Text Text
+focusPageTags = HM.fromList
+    [ ("gerh", "ger")
+    , ("gero", "ger")
+    , ("sovi", "sov")
+    , ("sovp", "sov")
+    ]
+
+-- | The @Module:Focus/<expansion>@ submodule a tag's focuses are written in,
+-- one submodule per expansion.
+--
+-- This is the wiki's own @cfg.tags.tagset@, from @Module:Focus/config@. Nothing
+-- in the game files says which submodule the wiki files a tree under, so the
+-- pairing is kept by hand: a new expansion adds its tags here and its own id to
+-- 'focusModuleIds'.
+focusModuleOf :: Text -> Maybe Text
+focusModuleOf tag = HM.lookup tag focusModules
+
+-- | The submodules, in the order the wiki's config lists them.
+focusModuleIds :: [Text]
+focusModuleIds =
+    [ "generic", "tfv", "dod", "wtt", "mtg", "lar", "bftb", "nsb"
+    , "bba", "aat", "toa", "gtd", "goe", "ncns", "pfot", "taog"
+    ]
+
+focusModules :: HashMap Text Text
+focusModules = HM.fromList
+    [ ("generic", "generic"), ("warlord", "generic"), ("warlord2", "generic")
+    , ("hoa", "generic")
+    , ("ast", "tfv"), ("can", "tfv"), ("nzl", "tfv"), ("raj", "tfv"), ("saf", "tfv")
+    , ("cze", "dod"), ("hun", "dod"), ("rom", "dod"), ("yug", "dod")
+    , ("ger", "wtt"), ("jap", "wtt"), ("chi", "wtt"), ("prc", "wtt")
+    , ("man", "wtt"), ("chishared", "wtt")
+    , ("usa", "mtg"), ("eng", "mtg"), ("hol", "mtg"), ("mex", "mtg")
+    , ("fra", "lar"), ("por", "lar"), ("spr", "lar"), ("spa", "lar")
+    , ("vic", "lar"), ("fre", "lar")
+    , ("bul", "bftb"), ("gre", "bftb"), ("tur", "bftb")
+    , ("sov", "nsb"), ("pol", "nsb"), ("est", "nsb"), ("lat", "nsb")
+    , ("lit", "nsb"), ("baltic", "nsb")
+    , ("ita", "bba"), ("eth", "bba"), ("swi", "bba")
+    , ("den", "aat"), ("fin", "aat"), ("ice", "aat"), ("nor", "aat")
+    , ("swe", "aat"), ("nordic", "aat")
+    , ("arg", "toa"), ("bra", "toa"), ("chl", "toa"), ("par", "toa")
+    , ("urg", "toa"), ("smb", "toa"), ("guay", "toa")
+    , ("aus", "gtd"), ("bel", "gtd"), ("cog", "gtd"), ("hun2", "gtd")
+    , ("belcog", "gtd"), ("habsburg", "gtd")
+    , ("afg", "goe"), ("irq", "goe"), ("per", "goe"), ("raj2", "goe")
+    , ("ssb", "goe")
+    , ("phi", "ncns"), ("chishared2", "ncns"), ("chi2", "ncns"), ("man2", "ncns")
+    , ("prc2", "ncns"), ("warlordchi", "ncns"), ("warlordprc", "ncns")
+    , ("lingg", "ncns"), ("ma_clique", "ncns")
+    , ("cze2", "pfot")
+    , ("ast2", "taog"), ("ins", "taog"), ("sia", "taog"), ("inshol", "taog")
+    , ("abdacom", "taog")
+    ]
+
+-- | The letters the wiki tells two focuses of one tag apart by, where the game
+-- gives both the same name. The suffix goes on the end of the link and of the
+-- anchor the link lands on, so "Intervention in Spain CD" and "Intervention in
+-- Spain H" are two rows a reader can be sent to separately.
+--
+-- Which letters those are is the wiki's own choice and nothing the game files
+-- say, so they are kept here, keyed on the focus id in lower case, the way the
+-- wiki's modules key their entries. 'HOI4.FocusModules.writeHOI4FocusModules'
+-- warns when the game gives two focuses of a tag the same name and this table
+-- tells them apart in neither, and when an entry names a focus the game no
+-- longer has.
+focusSuffixes :: HashMap Text Text
+focusSuffixes = HM.fromList
+    -- Germany's two opposition trees, the base one and Gotterdammerung's.
+    [ ("ger_prepare_for_the_next_blockade_ww", "WW")
+    , ("ger_rebuild_the_nation_ww", "WW")
+    , ("ger_fan_prussian_militarism", "WW")
+    , ("ger_revive_the_kaiserreich_ww", "WW")
+    , ("ger_re_establish_free_elections_ww", "WW")
+    , ("ger_reverse_the_brain_drain_ww", "WW")
+    , ("ger_shared_rd_programs_ww", "WW")
+    , ("ger_pool_technical_know_how_ww", "WW")
+    , ("ger_the_mannheim_project_ww", "WW")
+    , ("ger_see_to_the_eastern_front_ww", "WW")
+    , ("ger_safeguard_the_baltic_ww", "WW")
+    , ("ger_danzig_for_guarantees_ww", "WW")
+    , ("ger_support_the_finns_ww", "WW")
+    , ("ger_carte_blanche_for_alsace_and_french_colonies_ww", "WW")
+    , ("ger_bypass_maginot_in_the_south_ww", "WW")
+    , ("ger_reinstate_imperial_possessions_ww", "WW")
+    , ("ger_rebuild_the_high_seas_fleet_ww", "WW")
+    , ("ger_break_anglo_french_colonial_hegemony_ww", "WW")
+    , ("ger_our_place_in_the_sun_ww", "WW")
+    , ("ger_schlieffen_once_more_ww", "WW")
+    , ("ger_prepare_italian_coup_ww", "WW")
+    , ("ger_assassinate_mussolini_ww", "WW")
+    , ("ger_rekindle_imperial_sentiment_ww", "WW")
+    , ("ger_expatriate_the_communists_ww", "WW")
+    , ("ger_accept_british_naval_dominance_ww", "WW")
+    , ("ger_revive_the_kaiserreich", "B")
+    , ("ger_rebuild_the_nation", "B")
+    , ("ger_fan_the_prussian_militarism", "B")
+    , ("ger_rebuild_the_high_seas_fleet", "B")
+    , ("ger_our_place_in_the_sun", "B")
+    , ("ger_prepare_for_the_next_blockade", "B")
+    , ("ger_break_the_anglo_french_colonial_hegemony", "B")
+    , ("ger_schlieffen_once_more", "B")
+    , ("ger_prepare_italian_coup", "B")
+    , ("ger_assassinate_mussolini", "B")
+    , ("ger_rekindle_imperial_sentiment", "B")
+    , ("ger_expatriate_the_communists", "B")
+    , ("ger_accept_british_naval_dominance", "B")
+    , ("ger_carte_blanche_for_alsace_and_french_colonies", "B")
+    , ("ger_bypass_maginot_in_the_south", "B")
+    , ("ger_reinstate_imperial_possessions", "B")
+    , ("ger_see_to_the_eastern_front", "B")
+    , ("ger_danzig_for_guarantees", "B")
+    , ("ger_safeguard_the_baltic", "B")
+    , ("ger_support_the_finns", "B")
+    , ("ger_reestablish_free_elections", "B")
+    , ("ger_the_monarchy_compromise", "B")
+    , ("ger_reverse_the_brain_drain", "B")
+    , ("ger_shared_rd_programs", "B")
+    , ("ger_the_mannheim_project", "B")
+    , ("ger_pool_technical_know_how", "B")
+    -- Japan's two trees, the base one and No Compromise, No Surrender's.
+    , ("jap_the_fate_of_the_imperial_family", "b")
+    , ("jap_finish_the_fight", "b")
+    , ("jap_nationalize_the_zaibatsus", "b")
+    , ("jap_establish_the_northern_resource_area", "b")
+    , ("jap_national_defense_state", "b")
+    , ("jap_rekindle_the_old_alliance", "b")
+    , ("jap_sea_national_defense_state", "ncns")
+    , ("jap_sea_establish_the_northern_resource_area", "ncns")
+    , ("jap_sea_fate_of_the_imperial_family", "ncns")
+    , ("jap_sea_nationalize_the_zaibatsus", "c")
+    , ("jap_democratic_war_with_manchukuo", "ncns")
+    , ("jap_sea_rekindle_the_old_alliance", "ncns")
+    , ("jap_democratic_nationalize_zaibatsus", "d")
+    -- The Soviet Union's two halves, and Poland's several governments.
+    , ("sov_transformation_of_nature", "C")
+    , ("sov_transformation_of_nature_alt", "ALT")
+    , ("sov_organize_the_wreckers", "C")
+    , ("sov_organize_wreckers", "P")
+    , ("pol_pan_slavic_revanchism", "SR")
+    , ("pol_join_allies", "SC")
+    , ("pol_demand_lit_pavel", "P")
+    , ("pol_demand_slovakia_pavel", "P")
+    , ("pol_assert_eastern_claims_pavel", "P")
+    , ("pol_pan_slavism", "R")
+    , ("pol_demand_lit", "F")
+    , ("pol_assert_eastern_claims", "F")
+    , ("lit_claim_livonia", "S")
+    , ("lit_claim_livonia_monarchy", "M")
+    -- Italy's two rump states, and Ethiopia's two brigades.
+    , ("ita_independence_rds", "RDS")
+    , ("ita_independence_rsi", "RSI")
+    , ("eth_international_brigades", "M")
+    , ("eth_international_brigades_communist", "C")
+    -- The Raj's two trees, and Iran's two coastal defences.
+    , ("raj_education_efforts", "1")
+    , ("raj_education_efforts_2", "2")
+    , ("per_coastal_defense_initiative", "N")
+    -- The Chinese warlords' two trees.
+    , ("chi_sea_anti_communism", "N")
+    , ("chi_tsr_anti_communism", "RG")
+    -- Austria's two interventions in Spain.
+    , ("aus_intervention_in_spain", "CD")
+    , ("aus_spanish_intervention", "H")
     ]
 
 -- | Country tag aliases and the wiki text each stands for. An alias, defined

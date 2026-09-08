@@ -5,6 +5,8 @@ Description : Feature handler for Hearts of Iron IV national focuses
 module HOI4.NationalFocus (
         parseHOI4NationalFocuses
         ,writeHOI4NationalFocuses
+        ,focusIcon
+        ,gfxKey
     ) where
 
 import System.FilePath (takeBaseName)
@@ -60,6 +62,22 @@ iconVariant _ = Nothing
 -- wants. Script writes it either with the @GFX_@ on the front or without.
 gfxKey :: Text -> Text
 gfxKey txt = if "GFX_" `T.isPrefixOf` txt then txt else "GFX_" <> txt
+
+-- | The image a focus is drawn with.
+--
+-- The icon a focus names is the one the game draws it with, so a focus that
+-- names one is shown with it -- including the one it falls back on where it
+-- names several. Only a focus that names none of its own is shown with the icon
+-- named after it, which is the convention the game files follow but not a rule
+-- the game itself goes by.
+focusIcon :: (HOI4Info g, Monad m) => HOI4NationalFocus -> PPT g m Text
+focusIcon nf = do
+    micon <- if nf_icon nf == nf_icon newHOI4NationalFocus
+                then getGameInterfaceIfPresent ("GFX_focus_" <> nf_id nf)
+                else return Nothing
+    case micon of
+        Nothing -> getGameInterface "goal_unknown" (nf_icon nf)
+        Just idicon -> return idicon
 
 
 -- | Take the decisions scripts from game data and parse them into decision
@@ -368,18 +386,7 @@ ppNationalFocus nf = setCurrentFile (nf_path nf) $ withFocusIdents nf $ do
                         ,content_pp'd
                         ,PP.line])
             (field nf)
-    icon_pp <- do
-        -- The icon a focus names is the one the game draws it with, so a focus
-        -- that names one is shown with it -- including the one it falls back on
-        -- where it names several. Only a focus that names none of its own is
-        -- shown with the icon named after it, which is the convention the game
-        -- files follow but not a rule the game itself goes by.
-        micon <- if nf_icon nf == nf_icon newHOI4NationalFocus
-                    then getGameInterfaceIfPresent ("GFX_focus_" <> nf_id nf)
-                    else return Nothing
-        case micon of
-            Nothing -> getGameInterface "goal_unknown" (nf_icon nf)
-            Just idicon -> return idicon
+    icon_pp <- focusIcon nf
     alt_icon_pp <- do
         case nf_alt_icon nf of
             Nothing -> return ""

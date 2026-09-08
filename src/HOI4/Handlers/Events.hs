@@ -17,7 +17,6 @@ module HOI4.Handlers.Events (
     ,   reduceFocusCompletionCost
     ) where
 
-import Data.Char (chr)
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
 import Data.List (foldl')
@@ -39,7 +38,7 @@ import StatementUtils -- everything
 import HOI4.Localization
 import HOI4.Messages -- everything
 import HOI4.Types -- everything
-import HOI4.WikiTables (focusPages, focusPageSplits, focusTagPages)
+import HOI4.WikiTables (focusPage)
 
 import HOI4.Handlers.Core (getbaretraits, msgToPP, noloc, preMessage, preStatement)
 import HOI4.Handlers.Generic (textAtom, withNonlocAtom)
@@ -331,19 +330,3 @@ focusLink theid = do
         Just nf | Just page <- focusPage focuses nf -> msgToPP (MsgFocusLink page theid)
         Just nf -> msgToPP (MsgFocusNamed (nf_icon nf) theid (nf_name_loc nf))
         Nothing -> msgToPP (MsgUnprocessed (typewriterText theid))
-
--- | The wiki page a focus is written up on. Which file script keeps a focus in
--- says which page it belongs to, bar three files the wiki writes up over two
--- pages each: Spain's two sides are told apart by the tag their ids carry, and
--- Germany's and the Soviet Union's halves each run in one stretch, so the focus
--- the second half opens with says where the break falls.
-focusPage :: HashMap Text HOI4NationalFocus -> HOI4NationalFocus -> Maybe Text
-focusPage focuses nf = byTag <|> bySplit <|> HM.lookup file focusPages
-    where
-        file = T.toLower (T.takeWhileEnd (\c -> c /= '/' && c /= (chr 92)) (T.pack (nf_path nf)))
-        byTag = listToMaybe
-            [ page | (tag, page) <- focusTagPages, tag `T.isPrefixOf` nf_id nf ]
-        bySplit = do
-            (before, marker, from) <- HM.lookup file focusPageSplits
-            split <- HM.lookup marker focuses
-            return (if nf_ordinal nf >= nf_ordinal split then from else before)
