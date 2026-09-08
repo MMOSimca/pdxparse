@@ -262,13 +262,15 @@ declareWarOn stmt@[pdx| %_ = @scr |] =
         pp_declare_war :: WarGoal -> ScriptMessage
         pp_declare_war wg =
             let states = case war_generator wg of
-                    Just (Right arr) -> T.pack $ concat ["for the ", T.unpack $ plural (length arr) "state " "states " , intercalate ", " $ map T.unpack (war_states wg)]
-                    Just (Left var) -> T.pack ("for " ++ T.unpack var)
+                    Just (Right arr) -> T.pack $ concat [" for the ", T.unpack $ plural (length arr) "state " "states " , intercalate ", " $ map T.unpack (war_states wg)]
+                    Just (Left var) -> T.pack (" for " ++ T.unpack var)
                     _ -> ""
             in case (war_type wg, war_type_loc wg,
                      war_target_flag wg) of
-                (Nothing, _, _) -> preMessage stmt -- need DW type
                 (_, _, Nothing) -> preMessage stmt -- need target
+                -- Script may leave the wargoal out, declaring the war without
+                -- one; there is then no kind of war to name, only the war.
+                (Nothing, _, Just target_flag) -> MsgDeclareWarOnNoGoal target_flag states
                 (_, Just dwtype_loc, Just target_flag) -> MsgDeclareWarOn target_flag dwtype_loc states
                 (Just dwtype, Nothing, Just target_flag) -> MsgDeclareWarOn target_flag dwtype states
 declareWarOn stmt = preStatement stmt

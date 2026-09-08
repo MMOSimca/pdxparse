@@ -496,6 +496,7 @@ data ScriptMessage
     | MsgTriggerEvent {scriptMessageEvttype :: Text, scriptMessageEvtid :: Text, scriptMessageName :: Text}
     | MsgTriggerEventTime {scriptMessageEvttype :: Text, scriptMessageEvtid :: Text, scriptMessageName :: Text, scriptMessageTime :: Text}
     | MsgDeclareWarOn {scriptMessageWhom :: Text, scriptMessageWhat :: Text, scriptMessageStates :: Text}
+    | MsgDeclareWarOnNoGoal {scriptMessageWhom :: Text, scriptMessageStates :: Text}
     | MsgHasDLC {scriptMessageIcon :: Text, scriptMessageDlc :: Text}
     | MsgSetDemilitarizedZone {scriptMessageYn :: Bool}
     | MsgHasIdea {scriptMessageWhat :: Text, scriptMessageIcon :: Text, scriptMessageKey :: Text, scriptMessageLoc :: Text}
@@ -3110,7 +3111,14 @@ instance RenderMessage Script ScriptMessage where
             -> mconcat
                 [ "Declares a "
                 , toMessage (italicText _war)
-                , " war "
+                , " war"
+                , _states
+                , " against "
+                , _whom
+                ]
+        MsgDeclareWarOnNoGoal {scriptMessageWhom = _whom, scriptMessageStates = _states}
+            -> mconcat
+                [ "Declares war"
                 , _states
                 , " against "
                 , _whom
