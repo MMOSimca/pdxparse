@@ -234,7 +234,7 @@ scopeParty :: (Monad m, HOI4Info g) => PPT g m (Maybe Text)
 scopeParty = do
     chas <- getCharacters
     inscope <- getCurrentCharacter
-    let msub = cha_leader_ideology =<< (flip HM.lookup chas =<< inscope)
+    let msub = cha_leader_ideology =<< (flip lookupCharacter chas =<< inscope)
     traverse partyIcon msub
 
 addLeaderRole :: (Monad m, HOI4Info g) => StatementHandler g m
@@ -308,7 +308,7 @@ promoteCharacter stmt@[pdx| %_ = $txt |]
         subideos <- getIdeology
         case HM.lookup txt subideos of
             Just ideo -> promomessage "" txt stmt
-            _-> case HM.lookup txt chas of
+            _-> case lookupCharacter txt chas of
                 Just ccha -> promomessage txt "" stmt
                 _-> preStatement stmt
 promoteCharacter stmt = preStatement stmt
@@ -317,7 +317,7 @@ promomessage :: (Monad m, HOI4Info g) => Text
     -> Text-> StatementHandler g m
 promomessage what atom stmt = do
     chas <- getCharacters
-    let mcha = HM.lookup what chas
+    let mcha = lookupCharacter what chas
     -- The party the character comes to lead: the one the statement names, or
     -- failing that the one their own entry writes them for.
     party <- case (atom, cha_leader_ideology =<< mcha) of

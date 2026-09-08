@@ -1195,7 +1195,7 @@ ppOne' stmt lhs rhs = case lhs of
              else case rhs of
                 CompoundRhs scr -> do
                     characters <- getCharacters
-                    case HM.lookup label characters of
+                    case lookupCharacter label characters of
                         Just charid -> withCurrentIndent $ \_ -> do  -- force indent level at least 1
                             scriptMsgs <- withCurrentCharacter label $
                                             scope HOI4ScopeCharacter $ ppMany scr

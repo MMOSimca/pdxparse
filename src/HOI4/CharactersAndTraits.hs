@@ -49,7 +49,7 @@ addUnitRole role hChar
 parseHOI4Characters :: (HOI4Info g, IsGameData (GameData g), Monad m) =>
     HashMap String GenericScript -> PPT g m (HashMap Text HOI4Character, HashMap Text HOI4Advisor)
 parseHOI4Characters scripts = do
-    charmap <- keyedBy cha_id <$>
+    charmap <- keyedBy (characterKey . cha_id) <$>
         parseScriptFiles "characters"
             (\scr -> mapM character $ concatMap (\case
                 [pdx| characters = @chars |] -> chars

@@ -21,6 +21,7 @@ module HOI4.Types (
     ,   HOI4CountryHistory (..)
     ,   HOI4ScriptedLocText (..)
     ,   HOI4Character (..), HOI4Advisor (..)
+    ,   characterKey, lookupCharacter
     ,   HOI4CountryLeaderTrait (..)
     ,   HOI4UnitLeaderTrait (..)
     ,   HOI4BopRange (..)
@@ -756,6 +757,18 @@ scopeValType (ScopeValRole s _) = s
 scopeValTag :: HOI4ScopeVal -> Maybe Text
 scopeValTag (ScopeValTag tag) = Just tag
 scopeValTag _ = Nothing
+
+-- | The key a character is held under in the table of them. The game reads the
+-- names its own script calls things by without regard for the case they are
+-- written in, and script does write a character's id in one case where they are
+-- defined and another where they are used, so the table is keyed by the
+-- lowercase of the id and asked for a name the same way.
+characterKey :: Text -> Text
+characterKey = T.toLower
+
+-- | Look a character up by the name script calls them by.
+lookupCharacter :: Text -> HashMap Text HOI4Character -> Maybe HOI4Character
+lookupCharacter = HM.lookup . characterKey
 
 -- | The one country an @allowed@-style trigger block confines a feature to,
 -- where it does. Only a lone tag among the block's own statements counts:

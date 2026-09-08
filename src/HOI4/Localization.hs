@@ -856,7 +856,7 @@ getCharacterName :: (Monad m, HOI4Info g) =>
     Text -> PPT g m Text
 getCharacterName idn = do
     characters <- getCharacters
-    case HM.lookup idn characters of
+    case lookupCharacter idn characters of
         Just charid -> return $ cha_loc_name charid
         _ -> getGameL10n idn
 
@@ -869,7 +869,7 @@ getCharacterRole :: (Monad m, HOI4Info g) =>
     Text -> PPT g m Text
 getCharacterRole idn = do
     characters <- getCharacters
-    return $ case HM.lookup idn characters of
+    return $ case lookupCharacter idn characters of
         Just charid -> T.intercalate " and " (mapMaybe roleName (cha_unit_roles charid))
         _ -> ""
     where
