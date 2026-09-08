@@ -119,8 +119,16 @@ randomList stmt@[pdx| %_ = @scr |] =
                 _ -> return [])
             mod <- ppMods rm
             body <- ppMany (rm_rest rm) -- has integral indentUp
+            -- The share a weight comes to is worked out from the weights as
+            -- script writes them. Where an entry carries modifiers, the game
+            -- changes its weight before drawing, by however much the state of
+            -- the game comes to at the time, so the share written here is the
+            -- one the modifiers start from rather than the one that decides it.
+            let chance = if null (rm_mod rm)
+                    then MsgRandomChanceHOI4 (toPct (wt / total)) wt
+                    else MsgRandomChanceHOI4Base (toPct (wt / total)) wt
             liftA2 (++)
-                (msgToPP $ MsgRandomChanceHOI4 (toPct (wt / total)) wt)
+                (msgToPP chance)
                 (pure (trig ++ mod ++ body))
         -- Ugly solution for vars in random list
         fmtRandomVarList entries = withCurrentIndent $ \i ->
@@ -148,6 +156,16 @@ randomList stmt@[pdx| %_ = @scr |] =
                             Just [pdx| %_ = !factor |] -> do
                                 cond <- ppMany s'
                                 liftA2 (++) (msgToPP $ MsgRandomListModifier factor) (pure cond)
+                            -- The weight may be scaled by something the game
+                            -- works out as it runs, such as a party's
+                            -- popularity, where the script has only the name
+                            -- to say it by.
+                            Just [pdx| %_ = $vartag:$var |] -> do
+                                cond <- ppMany s'
+                                liftA2 (++) (msgToPP $ MsgRandomListModifierVar (vartag <> ":" <> var)) (pure cond)
+                            Just [pdx| %_ = $var |] -> do
+                                cond <- ppMany s'
+                                liftA2 (++) (msgToPP $ MsgRandomListModifierVar var) (pure cond)
                             _ -> case madd of
                                     Just [pdx| %_ = !add |] -> do
                                         cond <- ppMany sa'

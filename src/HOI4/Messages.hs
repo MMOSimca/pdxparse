@@ -251,6 +251,7 @@ data ScriptMessage
     | MsgRandomChance {scriptMessageChance :: Double}
     | MsgRandomVarChance {scriptMessageWhat :: Text}
     | MsgRandomChanceHOI4 {scriptMessageChance :: Double, scriptMessageAmt :: Double}
+    | MsgRandomChanceHOI4Base {scriptMessageChance :: Double, scriptMessageAmt :: Double}
     -- other messages to be sorted
     | MsgKillCountryLeader
     | MsgLeaveFaction
@@ -999,6 +1000,7 @@ data ScriptMessage
     | MsgAnyOtherCountryWithOriginalTagOf {scriptMessageWhat :: Text}
     | MsgRemoveWargoal {scriptMessageWhat :: Text, scriptMessageWhom :: Text}
     | MsgRandomListAddModifierVar {scriptMessageAmtText :: Text}
+    | MsgRandomListModifierVar {scriptMessageAmtText :: Text}
     | MsgForLoop {scriptMessageVar :: Text, scriptMessageWhat :: Text, scriptMessageWhat2 :: Text, scriptMessageAmtText :: Text}
     | MsgHasResourcesInCollection {scriptMessageWhat :: Text, scriptMessageCompare :: Text, scriptMessageAmt :: Double, scriptMessageIcon :: Text, scriptMessageWhat2 :: Text}
     | MsgHasResourcesRights {scriptMessageWhom :: Text, scriptMessageWhere :: Text, scriptMessageWhat :: Text}
@@ -1577,6 +1579,15 @@ instance RenderMessage Script ScriptMessage where
         MsgRandomChanceHOI4 {scriptMessageChance = _chance, scriptMessageAmt = _amt}
             -> mconcat
                 [ toMessage (plainPcMin _chance)
+                ," (",toMessage (plainNumMin _amt),")"
+                , " chance of:"
+                ]
+        -- What the entry's weight comes to before the modifiers under it have
+        -- had their say, since what they come to is not known outside the game.
+        MsgRandomChanceHOI4Base {scriptMessageChance = _chance, scriptMessageAmt = _amt}
+            -> mconcat
+                [ "Base "
+                , toMessage (plainPcMin _chance)
                 ," (",toMessage (plainNumMin _amt),")"
                 , " chance of:"
                 ]
@@ -6669,6 +6680,12 @@ instance RenderMessage Script ScriptMessage where
         MsgRandomListAddModifierVar {scriptMessageAmtText = _amtT}
             -> mconcat
                 [ "Chance base weight changes by '''"
+                , typewriterText _amtT
+                , "''' if:"
+                ]
+        MsgRandomListModifierVar {scriptMessageAmtText = _amtT}
+            -> mconcat
+                [ "Chance is multiplied by '''"
                 , typewriterText _amtT
                 , "''' if:"
                 ]
