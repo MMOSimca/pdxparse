@@ -157,6 +157,8 @@ modifierMSG hidden targ stmt@[pdx| $mod = !(_ :: Double) |] = let lmod = T.toLow
         | ("production_speed_" `T.isPrefixOf` lmod && "_factor" `T.isSuffixOf` lmod) ||
             ("state_production_speed_" `T.isPrefixOf` lmod && "_factor" `T.isSuffixOf` lmod) ||
             ("experience_gain_" `T.isPrefixOf` lmod && "_combat_factor" `T.isSuffixOf` lmod) ||
+            ("experience_gain_" `T.isPrefixOf` lmod && "_mission_factor" `T.isSuffixOf` lmod) ||
+            ("experience_gain_" `T.isPrefixOf` lmod && "_training_factor" `T.isSuffixOf` lmod) ||
             ("trait_" `T.isPrefixOf` lmod && "_xp_gain_factor" `T.isSuffixOf` lmod) ||
             ("repair_speed" `T.isPrefixOf` lmod && "_factor" `T.isSuffixOf` lmod) ||
             ("state_repair_speed" `T.isPrefixOf` lmod && "_factor" `T.isSuffixOf` lmod) -> --precision 2
@@ -177,7 +179,7 @@ modifierMSG hidden targ stmt@[pdx| $mod = !(_ :: Double) |] = let lmod = T.toLow
             "_design_cost_factor" `T.isSuffixOf` lmod ->
             famModNum hidden targ (familyPrecision lmod) lmod MsgModifierPcNegReduced stmt
         | ("state_resource_" `T.isPrefixOf` lmod && not ("state_resource_cost_" `T.isPrefixOf` lmod)) || --precision 0
-            ("local_resource_" `T.isPrefixOf` lmod && not ("local_resource_cost_" `T.isPrefixOf` lmod)) || --precision 0
+            ("local_resources_" `T.isPrefixOf` lmod && not ("local_resources_factor" `T.isPrefixOf` lmod)) || --precision 0
             ("country_resource_" `T.isPrefixOf` lmod && not ("country_resource_cost_" `T.isPrefixOf` lmod)) || --precision 0
             "temporary_state_resource_" `T.isPrefixOf` lmod -> --precision 0
             famModNum hidden targ (familyPrecision lmod) lmod MsgModifierColourPos stmt
@@ -224,6 +226,8 @@ modifierMSG hidden targ stmt@[pdx| $mod = $var|] =  let lmod = T.toLower mod in 
             ("state_production_speed_" `T.isPrefixOf` lmod && "_factor" `T.isSuffixOf` lmod) ||
             ("unit_" `T.isPrefixOf` lmod && "_design_cost_factor" `T.isSuffixOf` lmod) ||
             ("experience_gain_" `T.isPrefixOf` lmod && "_combat_factor" `T.isSuffixOf` lmod) ||
+            ("experience_gain_" `T.isPrefixOf` lmod && "_mission_factor" `T.isSuffixOf` lmod) ||
+            ("experience_gain_" `T.isPrefixOf` lmod && "_training_factor" `T.isSuffixOf` lmod) ||
             ("trait_" `T.isPrefixOf` lmod && "_xp_gain_factor" `T.isSuffixOf` lmod) ||
             ("repair_speed" `T.isPrefixOf` lmod && "_factor" `T.isSuffixOf` lmod) ||
             "_max_level_terrain_limit" `T.isSuffixOf` lmod ||
@@ -236,6 +240,7 @@ modifierMSG hidden targ stmt@[pdx| $mod = $var|] =  let lmod = T.toLower mod in 
             ("country_resource_" `T.isPrefixOf` lmod && not ("country_resource_cost_" `T.isPrefixOf` lmod)) ||
             "_design_cost_factor" `T.isSuffixOf` lmod ||
             "state_resource_" `T.isPrefixOf` lmod ||
+            ("local_resources_" `T.isPrefixOf` lmod && not ("local_resources_factor" `T.isPrefixOf` lmod)) ||
             "country_resource_cost_" `T.isPrefixOf` lmod ||
             "temporary_state_resource_" `T.isPrefixOf` lmod ->
             famModVar hidden targ lmod var stmt
@@ -264,7 +269,7 @@ familyPrecision lmod = Just $
             [ "experience_gain_"          -- experience_gain_<Unit>_combat_factor
             , "sp_", "specialization_"    -- <SpecialProject>_speed_factor
             , "operation_"               -- <Operation>_cost, _outcome and _risk
-            , "state_resource_", "country_resource_", "temporary_state_resource_"
+            , "state_resource_", "country_resource_", "temporary_state_resource_", 'local_resources_"
             , "production_cost_max_"     -- production_cost_max_<NavalEquipment>
             , "cat_"                     -- <IdeaCategory>_category_type_cost_factor
             , "modifier_army_sub_" ]
