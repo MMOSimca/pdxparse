@@ -21,6 +21,7 @@ module HOI4.WikiTables (
     ,   focusPageTag
     ,   focusModuleOf
     ,   focusModuleIds
+    ,   focusSuffix
     ,   focusSuffixes
     ,   expansionOfPrefix
     ,   tagAliases
@@ -498,6 +499,9 @@ focusModules = HM.fromList
 -- warns when the game gives two focuses of a tag the same name and this table
 -- tells them apart in neither, and when an entry names a focus the game no
 -- longer has.
+focusSuffix :: Text -> Maybe Text
+focusSuffix theid = HM.lookup (T.toLower theid) focusSuffixes
+
 focusSuffixes :: HashMap Text Text
 focusSuffixes = HM.fromList
     -- Germany's two opposition trees, the base one and Gotterdammerung's.
@@ -596,6 +600,37 @@ focusSuffixes = HM.fromList
     -- Austria's two interventions in Spain.
     , ("aus_intervention_in_spain", "CD")
     , ("aus_spanish_intervention", "H")
+    -- The rest the wiki has not told apart. Only the second of each pair is
+    -- named, so that the focus the wiki already links by name keeps the name it
+    -- is linked by and only the one that was unreachable gains a suffix.
+    --
+    -- The Dutch colonial focuses Thunder at Our Gates writes a second time.
+    , ("hol_a_western_capital_taog", "TAOG")
+    , ("hol_antilles_defenses_taog", "TAOG")
+    , ("hol_colonial_shipbuilding_taog", "TAOG")
+    , ("hol_continue_the_war_in_batavia_taog", "TAOG")
+    , ("hol_curtail_colonial_autonomy_taog", "TAOG")
+    , ("hol_expand_curacao_oil_refineries_taog", "TAOG")
+    , ("hol_expand_the_colonial_army_taog", "TAOG")
+    , ("hol_liberation_taog", "TAOG")
+    , ("hol_obtain_foreign_colonial_investments_taog", "TAOG")
+    , ("hol_open_second_paranam_bauxite_mine_taog", "TAOG")
+    , ("hol_pre_empt_venezuelan_aggression_taog", "TAOG")
+    , ("hol_prepare_for_our_return_taog", "TAOG")
+    , ("hol_the_east_indies_war_machine_taog", "TAOG")
+    , ("hol_the_western_possessions_taog", "TAOG")
+    -- Poland's cryptography branch, as it stands without Man the Guns.
+    , ("pol_expand_polish_intelligence_no_mtg", "noMTG")
+    , ("pol_the_bombe_no_mtg", "noMTG")
+    , ("pol_the_cyclometer_no_mtg", "noMTG")
+    , ("pol_the_long_push_home_no_mtg", "noMTG")
+    , ("pol_niech_zyje_opor_no_mtg", "noMTG")
+    -- The Soviet Union's second glory of the Red Army.
+    , ("sov_the_glory_of_the_red_army_alt", "ALT")
+    -- The continuous focus a tree focus of the same name shares a tag with. Its
+    -- link lands on the continuous focus page, which is written by hand, so the
+    -- row there has to be given this anchor for the link to find it.
+    , ("continuous_tech_share", "C")
     ]
 
 -- | Country tag aliases and the wiki text each stands for. An alias, defined

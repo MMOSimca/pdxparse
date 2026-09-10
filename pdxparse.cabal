@@ -31,6 +31,7 @@ executable pdxparse
                        HOI4.Decisions,
                        HOI4.Events,
                        HOI4.EventSources,
+                       HOI4.FocusModules,
                        HOI4.Handlers,
                        HOI4.Handlers.Characters,
                        HOI4.Handlers.Chunks,

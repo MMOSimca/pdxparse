@@ -49,6 +49,7 @@ import HOI4.Modifiers (
                     , parseHOI4DynamicModifiers, writeHOI4DynamicModifiers
                     , parseHOI4Modifiers)
 import HOI4.NationalFocus(parseHOI4NationalFocuses, writeHOI4NationalFocuses)
+import HOI4.FocusModules (writeHOI4FocusModules)
 import HOI4.Events (parseHOI4Events, writeHOI4Events)
 import HOI4.CharactersAndTraits (parseHOI4Characters, parseHOI4CountryLeaderTraits, parseHOI4UnitLeaderTraits)
 
@@ -435,6 +436,7 @@ readHOI4Scripts = do
                     "decisions" -> "common" </> "decisions"
                     "decisioncats" -> "common" </> "decisions" </> "categories"
                     "national_focus" -> "common" </> "national_focus"
+                    "continuous_focus" -> "common" </> "continuous_focus"
 
                     "country_history" -> "history" </> "countries"
                     "characters" -> "common" </> "characters"
@@ -500,10 +502,12 @@ readHOI4Scripts = do
     mioscript <- readHOI4Script "mio"
     constantscript <- readHOI4Script "script_constants"
     -- Read only to be searched: the first four for fired events and activated
-    -- decisions, the tag aliases to be checked against the hand-kept table.
+    -- decisions, the tag aliases to be checked against the hand-kept table, and
+    -- the continuous focuses to be listed with the rest of the focuses in the
+    -- wiki's lookup modules.
     extrascripts <- HM.fromList <$> forM
         ["special_projects", "operations", "raids", "resistance_compliance_modifiers"
-        ,"country_tag_aliases"]
+        ,"country_tag_aliases", "continuous_focus"]
         (\cat -> (,) cat <$> readHOI4Script cat)
     lockeys <- gets (gameL10nKeys . getSettings)
 
@@ -700,6 +704,8 @@ writeHOI4Scripts = do
         writeHOI4Decisions
         liftIO $ putStrLn "Writing national focuses."
         writeHOI4NationalFocuses
+        liftIO $ putStrLn "Writing focus modules."
+        writeHOI4FocusModules
         liftIO $ putStrLn "Writing technologies."
         writeHOI4Technologies
         liftIO $ putStrLn "Writing opinion modifiers."
