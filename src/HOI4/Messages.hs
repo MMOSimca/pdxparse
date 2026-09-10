@@ -1536,7 +1536,7 @@ instance RenderMessage Script ScriptMessage where
         MsgNot
             -> "None of:"
         MsgOr
-            -> "At least ''one'' of the following is true:"
+            -> "One of the following must be true:"
 
         MsgCountTriggers {scriptMessageAmt = _amt, scriptMessageCompare = _comp}
             -> mconcat
@@ -2640,7 +2640,7 @@ instance RenderMessage Script ScriptMessage where
                 ]
         MsgIsPuppetOf {scriptMessageWhom = _whom, scriptMessageWhat = _what}
             -> mconcat
-                [ "Is a subject of "
+                [ "Is a puppet of "
                 , _whom
                 , ifThenElseT (T.null _what) "" "<!-- ",_what," -->"
                 ]
@@ -2857,7 +2857,7 @@ instance RenderMessage Script ScriptMessage where
         MsgIsSubject {scriptMessageYn = _yn}
             -> mconcat
                 [ "Is "
-                , toMessage (ifThenElseT _yn "a subject nation" "an independent nation")
+                , toMessage (ifThenElseT _yn "a subject of another country" "fully independent")
                 ]
         MsgHasAutonomyState {scriptMessageIcon = _icon, scriptMessageWhat = _what}
             -> mconcat
@@ -5443,7 +5443,7 @@ instance RenderMessage Script ScriptMessage where
         MsgIsPuppet {scriptMessageYn = _yn}
             -> mconcat
                 [ "Is "
-                , ifThenElseT _yn " a subject" "fully independent"
+                , ifThenElseT _yn " the subject of another country" "fully independent"
                 ]
         -- The effect box that follows carries the modifier's name and image, so
         -- this only has to say that it is handed out, and for how long when the
