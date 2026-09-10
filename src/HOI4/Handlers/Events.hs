@@ -9,6 +9,7 @@ module HOI4.Handlers.Events (
         triggerEvent
     ,   focusProgress
     ,   handleFocus
+    ,   handleFocusAnchor
     ,   focusUncomplete
     ,   loadFocusTree
     ,   addHistoryEntry
@@ -38,7 +39,7 @@ import StatementUtils -- everything
 import HOI4.Localization
 import HOI4.Messages -- everything
 import HOI4.Types -- everything
-import HOI4.WikiTables (focusPage)
+import HOI4.WikiTables (focusAnchor, focusPage, focusPageTag)
 
 import HOI4.Handlers.Core (getbaretraits, msgToPP, noloc, preMessage, preStatement)
 import HOI4.Handlers.Generic (textAtom, withNonlocAtom)
@@ -204,19 +205,32 @@ focusProgress _ stmt = preStatement stmt
 handleFocus :: (HOI4Info g, Monad m) =>
     (Text -> Text -> Text -> ScriptMessage)
         -> StatementHandler g m
-handleFocus msg stmt@[pdx| $lhs = $nf |] = do
+handleFocus msg = handleFocusAnchor (\icon key loc _ -> msg icon key loc)
+
+-- | 'handleFocus' for a message that links to the row the focus stands in, and
+-- so is given that row's anchor as well. The anchor is made the way the row
+-- makes it, with 'focusAnchor': the focus's localization looked up afresh need
+-- not be the name the focus was read with, and never carries the letters that
+-- tell it from a focus of the same name. A focus of no tree we read has no row,
+-- and keeps its localized name.
+handleFocusAnchor :: (HOI4Info g, Monad m) =>
+    (Text -> Text -> Text -> Text -> ScriptMessage)
+        -> StatementHandler g m
+handleFocusAnchor msg stmt@[pdx| $lhs = $nf |] = do
+    nfs <- getNationalFocus
     mfoc <- focusIconKeyLoc nf
     case mfoc of
         Nothing -> preStatement stmt -- unknown national focus
-        Just (nfIcon, nfKey, nf_loc) -> msgToPP (msg nfIcon nfKey nf_loc)
+        Just (nfIcon, nfKey, nf_loc) ->
+            msgToPP (msg nfIcon nfKey nf_loc (maybe nf_loc focusAnchor (HM.lookup nf nfs)))
 -- | Some effects take the focus inside a block, along with fields that say how
 -- the game is to tell the player about it. The focus is the only part of that
 -- worth reading on the wiki.
-handleFocus msg stmt@[pdx| %_ = @scr |] =
+handleFocusAnchor msg stmt@[pdx| %_ = @scr |] =
     case [inner | inner@[pdx| focus = %_ |] <- scr] of
-        (focstmt : _) -> handleFocus msg focstmt
+        (focstmt : _) -> handleFocusAnchor msg focstmt
         [] -> preStatement stmt
-handleFocus _ stmt = preStatement stmt
+handleFocusAnchor _ stmt = preStatement stmt
 
 data UncFoc = UncFoc
         {   uf_focus :: Text
@@ -319,14 +333,14 @@ reduceFocusCompletionCost stmt@[pdx| %_ = @scr |] = case cost of
         addLine acc stmt = warn (UnknownSection "reduce_focus_completion_cost" stmt) acc
 reduceFocusCompletionCost stmt = preStatement stmt
 
--- | One focus written the way the wiki writes it: a template call naming the page
--- it is written up on and the focus itself. A focus on no page of the wiki falls
--- back to its icon and name written out, which is how focuses are named
--- everywhere else.
+-- | One focus written the way the wiki writes it: a template call naming the tag
+-- the wiki looks the focuses of its page up under ('focusPageTag') and the focus
+-- itself. A focus on no page of the wiki falls back to its icon and name written
+-- out, which is how focuses are named everywhere else.
 focusLink :: (HOI4Info g, Monad m) => Text -> PPT g m IndentedMessages
 focusLink theid = do
     focuses <- getNationalFocus
     case HM.lookup theid focuses of
-        Just nf | Just page <- focusPage focuses nf -> msgToPP (MsgFocusLink page theid)
+        Just nf | Just page <- focusPage focuses nf -> msgToPP (MsgFocusLink (focusPageTag page) theid)
         Just nf -> msgToPP (MsgFocusNamed (nf_icon nf) theid (nf_name_loc nf))
         Nothing -> msgToPP (MsgUnprocessed (typewriterText theid))

@@ -994,7 +994,7 @@ handlersSpecialComplex = Tr.fromList
         ,("has_completed_focus"          , handleFocus MsgHasCompletedFocus)
         ,("complete_national_focus"      , handleFocus MsgCompleteNationalFocus)
         ,("unlock_national_focus"        , handleFocus MsgUnlockNationalFocus)
-        ,("focus"                        , handleFocus MsgFocus) -- used in pre-requisite for focuses
+        ,("focus"                        , handleFocusAnchor MsgFocus) -- used in pre-requisite for focuses
         ,("activate_shine_on_focus"      , handleFocus MsgActivateShineOnFocus)
         ,("deactivate_shine_on_focus"    , handleFocus MsgDeactivateShineOnFocus)
         ,("has_shine_effect_on_focus"    , handleFocus MsgHasShineEffectOnFocus)

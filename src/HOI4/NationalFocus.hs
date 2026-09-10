@@ -43,7 +43,7 @@ import SettingsTypes ( PPT, Settings (..)
 import HOI4.Common -- everything
 import HOI4.Localization
 import HOI4.Messages (wikifyLocColours, messageText)
-import HOI4.WikiTables (focusSuffix)
+import HOI4.WikiTables (focusAnchor)
 import ParseWarnings
 
 -- | Empty national focus. Starts off Nothing/empty everywhere, except id and name
@@ -71,13 +71,6 @@ gfxKey txt = if "GFX_" `T.isPrefixOf` txt then txt else "GFX_" <> txt
 -- names several. Only a focus that names none of its own is shown with the icon
 -- named after it, which is the convention the game files follow but not a rule
 -- the game itself goes by.
--- | The anchor a focus's row carries, which is what a link to the focus lands
--- on. That is its name, and where the game gives two focuses of one country the
--- same name, the letters the wiki tells them apart by as well, see
--- 'HOI4.WikiTables.focusSuffixes'.
-focusAnchor :: HOI4NationalFocus -> Text
-focusAnchor nf = nf_name_loc nf <> maybe "" (" " <>) (focusSuffix (nf_id nf))
-
 focusIcon :: (HOI4Info g, Monad m) => HOI4NationalFocus -> PPT g m Text
 focusIcon nf = do
     micon <- if nf_icon nf == nf_icon newHOI4NationalFocus

@@ -23,6 +23,7 @@ module HOI4.WikiTables (
     ,   focusModuleIds
     ,   focusSuffix
     ,   focusSuffixes
+    ,   focusAnchor
     ,   expansionOfPrefix
     ,   tagAliases
     ) where
@@ -487,6 +488,14 @@ focusModules = HM.fromList
     , ("ast2", "taog"), ("ins", "taog"), ("sia", "taog"), ("inshol", "taog")
     , ("abdacom", "taog")
     ]
+
+-- | The anchor a focus's row carries, which is what a link to the focus lands
+-- on. That is its name, and where the game gives two focuses of one country the
+-- same name, the letters the wiki tells them apart by as well, see
+-- 'focusSuffixes'. The row and the links aimed at it both take the anchor from
+-- here, so the two cannot drift apart.
+focusAnchor :: HOI4NationalFocus -> Text
+focusAnchor nf = nf_name_loc nf <> maybe "" (" " <>) (focusSuffix (nf_id nf))
 
 -- | The letters the wiki tells two focuses of one tag apart by, where the game
 -- gives both the same name. The suffix goes on the end of the link and of the

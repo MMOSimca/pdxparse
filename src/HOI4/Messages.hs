@@ -545,7 +545,7 @@ data ScriptMessage
     | MsgPromoteToFieldMarshal
     | MsgCompleteNationalFocus {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageLoc :: Text}
     | MsgUnlockNationalFocus {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageLoc :: Text}
-    | MsgFocus {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageLoc :: Text}
+    | MsgFocus {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageLoc :: Text, scriptMessageAnchor :: Text}
     | MsgFocusProgress {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageLoc :: Text, scriptMessageCompare :: Text}
     | MsgUncompleteNationalFocus {scriptMessageIcon :: Text, scriptMessageWhat :: Text, scriptMessageLoc :: Text, scriptMessageYn :: Bool}
     | MsgHasArmySize {scriptMessageCompare :: Text, scriptMessageAmt :: Double, scriptMessageWhat :: Text}
@@ -3493,14 +3493,16 @@ instance RenderMessage Script ScriptMessage where
                 , " -->"
                 , toMessage (iquotes _loc)
                 ]
-        MsgFocus {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageLoc = _loc}
+        -- The icon links to the row the focus stands in, whose anchor is not
+        -- always its name alone; see 'HOI4.WikiTables.focusAnchor'.
+        MsgFocus {scriptMessageIcon = _icon, scriptMessageWhat = _what, scriptMessageLoc = _loc, scriptMessageAnchor = _anchor}
             -> mconcat
                 [ "[[File:"
                 , _icon
                 , ".png|x36px|alt="
                 , _loc
                 ,"|link=#"
-                , _loc
+                , _anchor
                 , "]]"
                 , " <!-- "
                 , _what
