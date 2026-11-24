@@ -72,6 +72,9 @@ expansionPrefixes = HM.fromList
     , ("ncns", "ncns")
     , ("mun",  "pfot")  -- Peace for Our Time
     , ("taog", "taog")  -- Thunder at Our Gates
+    , ("ttbe", "ttbe")  -- To The Bitter End
+    , ("tgw", "tgw")    -- The Giant Wakes
+    , ("tpop", "tpop")  -- The Price of Peace
     ]
 
 -- | The key the wiki's icon template knows each building by, for the buildings
@@ -329,6 +332,7 @@ focusPages = HM.fromList
     , ("hungary_wuw.txt"                        , "hun2")
     , ("habsburg_joint.txt"                     , "habsburg")
     , ("romania.txt"                            , "rom")
+    , ("romania_ttbe.txt"                       , "rom2")
     , ("yugoslavia.txt"                         , "yug")
     , ("japan.txt"                              , "jap")
     , ("usa.txt"                                , "usa")
@@ -456,6 +460,7 @@ focusModuleIds :: [Text]
 focusModuleIds =
     [ "generic", "tfv", "dod", "wtt", "mtg", "lar", "bftb", "nsb"
     , "bba", "aat", "toa", "gtd", "goe", "ncns", "pfot", "taog"
+    , "ttbe", "tgw", "tpop"
     ]
 
 focusModules :: HashMap Text Text
@@ -487,6 +492,7 @@ focusModules = HM.fromList
     , ("cze2", "pfot")
     , ("ast2", "taog"), ("ins", "taog"), ("sia", "taog"), ("inshol", "taog")
     , ("abdacom", "taog")
+    , ("rom2", "ttbe")
     ]
 
 -- | The anchor a focus's row carries, which is what a link to the focus lands
@@ -636,6 +642,9 @@ focusSuffixes = HM.fromList
     , ("pol_niech_zyje_opor_no_mtg", "noMTG")
     -- The Soviet Union's second glory of the Red Army.
     , ("sov_the_glory_of_the_red_army_alt", "ALT")
+    -- Australia's "At the Gates" focus, normal vs hidden; this is mostly just for completion's sake as nobody needs to reference the hidden one.
+    , ("ast_at_the_gates", "REG")
+    , ("ast_at_the_gates_hidden", "HID")
     -- The continuous focus a tree focus of the same name shares a tag with. Its
     -- link lands on the continuous focus page, which is written by hand, so the
     -- row there has to be given this anchor for the link to find it.
