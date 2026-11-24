@@ -154,6 +154,10 @@ executable pdxparse
                        -j
                        +RTS -A32m
                        -RTS
+  -- GHC 9.8 added -Wx-partial (head, tail, ...) to the default warnings; the
+  -- code predates it, and -Werror would otherwise fail the build.
+  if impl(ghc >= 9.8)
+    ghc-options:       -Wno-x-partial
 
 source-repository head
   type:            git

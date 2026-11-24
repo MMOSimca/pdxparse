@@ -271,10 +271,8 @@ eventAddSection mevt stmt = sequence (eventAddSection' <$> mevt <*> pure stmt) w
 --        _ -> throwError "bad picture"
     eventAddSection' evt stmt@[pdx| goto = %rhs |] = return evt
     eventAddSection' evt stmt@[pdx| trigger = %rhs |] = case rhs of
-        CompoundRhs [] -> return evt
-        CompoundRhs trigger_script -> case trigger_script of
-            [] -> return evt -- empty, treat as if it wasn't there
-            _ -> return evt { hoi4evt_trigger = Just trigger_script }
+        CompoundRhs [] -> return evt -- empty, treat as if it wasn't there
+        CompoundRhs trigger_script -> return evt { hoi4evt_trigger = Just trigger_script }
         _ -> throwError "bad event trigger"
     eventAddSection' evt stmt@[pdx| is_triggered_only = %rhs |] = case rhs of
         GenericRhs "yes" [] -> return evt { hoi4evt_is_triggered_only = Just True }

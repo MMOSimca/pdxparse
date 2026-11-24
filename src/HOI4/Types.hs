@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeOperators #-}
 {-|
 Module      : HOI4.Types
 Description : Types specific to Hearts of Iron IV

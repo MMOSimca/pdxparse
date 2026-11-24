@@ -61,7 +61,7 @@ import qualified Doc -- everything
 import MessageTools (typewriterText)
 import ParseWarnings (ParseWarning (..), warn)
 import QQ -- everything
-import SettingsTypes (PPT, IsGameState (..), GameState (..))
+import SettingsTypes (PPT, IsGameState (..), GameState (..), getCurrentScope)
 import StatementUtils -- everything
 
 import HOI4.Localization

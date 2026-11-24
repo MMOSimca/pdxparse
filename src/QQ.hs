@@ -144,6 +144,29 @@ data StExp
 type StExpL = StExp
 type StExpR = StExp
 
+-- | Pattern AST.
+data StPat
+    = PatHs String          -- ^ %foo => (pattern) foo
+    | PatStringlike String  -- ^ ?foo => (textRhs -> foo) (Only makes sense on RHS)
+    | PatStringOrNum String -- ^ ?!foo => (floatOrTextRhs -> foo) (Only makes sense on RHS)
+    | PatSomeGeneric StringOrCode [StringOrCode]
+        -- ^ * $foo => PatSomeGeneric (CodeNotString foo) []
+        --   * foo:bar => handled elsewhere
+        --   * $foo:bar => PatSomeGeneric (CodeNotString foo) (StringNotCode bar)
+        --   * foo:$bar => PatSomeGeneric (StringNotCode foo) (CodeNotString bar)
+        --   * $foo:bar => PatSomeGeneric (CodeNotString foo) (CodeNotString bar)
+    | PatSomeInt String     -- ^ !foo => (floatRhs -> foo) (Only makes sense on RHS)
+    | PatCompound String    -- ^ @foo => CompoundRhs foo (Only makes sense on RHS)
+    deriving (Show, Eq, Ord)
+type StPatL = StPat
+type StPatR = StPat
+
+-- The Lift instances must come before any quote that lifts these types (e.g.
+-- @[| other |]@ in 'lhs2exp'): a top-level splice splits the module into
+-- declaration groups, and GHC 9 doesn't let earlier groups see instances
+-- created by later ones.
+TL.deriveLiftMany [''StringOrCode, ''Lhs, ''Rhs, ''Operator, ''Date, ''Statement, ''StPat, ''StExp]
+
 -- | Parse a generic LHS/RHS with sigils.
 expHsGeneric :: Parser StExp
 expHsGeneric = do
@@ -268,23 +291,6 @@ pdxP s = case Ap.parseOnly (Ap.skipSpace *> statement pLhs pRhs <* Ap.skipSpace)
                 Left _ -> error "invalid statement (pattern)"
                 Right propat -> propat2pat propat
 
--- | Pattern AST.
-data StPat
-    = PatHs String          -- ^ %foo => (pattern) foo
-    | PatStringlike String  -- ^ ?foo => (textRhs -> foo) (Only makes sense on RHS)
-    | PatStringOrNum String -- ^ ?!foo => (floatOrTextRhs -> foo) (Only makes sense on RHS)
-    | PatSomeGeneric StringOrCode [StringOrCode]
-        -- ^ * $foo => PatSomeGeneric (CodeNotString foo) []
-        --   * foo:bar => handled elsewhere
-        --   * $foo:bar => PatSomeGeneric (CodeNotString foo) (StringNotCode bar)
-        --   * foo:$bar => PatSomeGeneric (StringNotCode foo) (CodeNotString bar)
-        --   * $foo:bar => PatSomeGeneric (CodeNotString foo) (CodeNotString bar)
-    | PatSomeInt String     -- ^ !foo => (floatRhs -> foo) (Only makes sense on RHS)
-    | PatCompound String    -- ^ @foo => CompoundRhs foo (Only makes sense on RHS)
-    deriving (Show, Eq, Ord)
-type StPatL = StPat
-type StPatR = StPat
-
 atomsP :: Parser StPat
 atomsP = do
     -- sepBy1 guarantees non-empty list
@@ -404,8 +410,6 @@ rhs2pat rhs = case rhs of
 ---------------------
 -- The quasiquoter --
 ---------------------
-
-TL.deriveLiftMany [''StringOrCode, ''Lhs, ''Rhs, ''Operator, ''Date, ''Statement, ''StPat, ''StExp]
 
 -- | The quasiquoter. Support is provided for expression and pattern contexts;
 -- type and declaration contexts are not meaningful and therefore not

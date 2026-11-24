@@ -67,7 +67,8 @@ import MessageTools (typewriterText)
 import ParseWarnings (ParseWarning (..), warn)
 import QQ -- everything
 import SettingsTypes (PPT, IsGameState (..), GameState (..), scope, withCurrentIndent
-                     , alsoIndent', withCurrentFile, unsnoc)
+                     , alsoIndent', withCurrentFile, unsnoc
+                     , getCurrentScope, getPrevScope, getPrevScopeCustom, setIsInEffect)
 import StatementUtils -- everything
 
 import {-# SOURCE #-} HOI4.Common (ppMany, ppOne)
